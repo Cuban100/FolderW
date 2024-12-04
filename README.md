@@ -1,4 +1,7 @@
-# FolderW - A Python Incremental Backup with Watchdog or Scheduling
+# FolderW  
+![FolderW Logo](folderW.png)
+
+# A Python Incremental Backup with Watchdog or Scheduling
 
 # Backup Automation with Tkinter GUI and Event-Driven Monitoring
 
