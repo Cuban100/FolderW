@@ -1,6 +1,7 @@
-# rsync-backups-python-incremental
+# FolderW - A Python Incremental Backup with Watchdog or Scheduling
+
 # Backup Automation with Tkinter GUI and Event-Driven Monitoring
-![Uploading a sleek, computer-like folder with a transparent background and the concept of a watchdog.png…]()
+
 
 This project is designed to simplify and automate the process of backing up files from a specified source directory to a target directory. Key features include:
 
