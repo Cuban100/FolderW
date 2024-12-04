@@ -1,7 +1,4 @@
-<div style="display: flex; align-items: center;"> 
-   <img src="https://github.com/Cuban100/FolderW/blob/main/FolderW.png" alt="FolderW Logo" width="200" height="200" style="margin-right: 10px;"> 
-<h1>FolderW</h1> </div>
-
+<div style="display: flex; align-items: center;"> <img src="https://github.com/Cuban100/FolderW/blob/main/FolderW.png" alt="FolderW Logo" width="100" height="100" style="margin-right: 10px;"> <h1>FolderW</h1> </div>
 
 # A Python Incremental Backup with Watchdog or Scheduling, Backup Automation with Tkinter GUI and Event-Driven Monitoring
 
