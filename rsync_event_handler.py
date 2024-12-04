@@ -5,12 +5,40 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from loguru import logger
 import subprocess
+import schedule
 import signal
 
 load_dotenv()
 rsync_txt = os.path.join(os.getenv('LOG_DIR'), 'rsync.txt')
 logfile = os.path.join(os.getenv('LOG_DIR'), 'rsync.log')
 src_dir = os.getenv('SRC_DIR')
+backup_interval = os.getenv('BACKUP_INTERVAL', 'hourly')  # Default to hourly
+
+def run_backup_script():
+    try:
+        python_path = '/home/caveman/Server/bin/python3'
+        script_path = os.path.join(os.path.dirname(__file__), 'rsync_incremental.py')
+        result = subprocess.run([python_path, script_path], check=True, capture_output=True, text=True)
+        logger.info(f"Backup script output: {result.stdout}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Backup script failed with error: {e.stderr}")
+
+def run_hourly_backup():
+    logger.info("Running hourly backup")
+    run_backup_script()
+
+def run_half_day_backup():
+    logger.info("Running half-day backup")
+    run_backup_script()
+
+def run_daily_backup():
+    logger.info("Running daily backup")
+    run_backup_script()
+
+def run_weekly_backup():
+    logger.info("Running weekly backup")
+    run_backup_script()
+
 class BackupHandler(FileSystemEventHandler):
     def __init__(self):
         self.last_event_time = 0
@@ -21,7 +49,7 @@ class BackupHandler(FileSystemEventHandler):
             current_time = time.time()
             if current_time - self.last_event_time > self.debounce_time:
                 logger.info(f"File modified: {event.src_path}")
-                self.run_backup_script()
+                run_backup_script()
                 self.last_event_time = current_time
 
     def on_created(self, event):
@@ -29,22 +57,12 @@ class BackupHandler(FileSystemEventHandler):
             current_time = time.time()
             if current_time - self.last_event_time > self.debounce_time:
                 logger.info(f"File created: {event.src_path}")
-                self.run_backup_script()
+                run_backup_script()
                 self.last_event_time = current_time
 
     def is_log_file(self, file_path):
-        log_files = [rsync_txt, logfile]  # Add more log files if needed
+        log_files = [rsync_txt, logfile]
         return file_path in log_files
-
-    def run_backup_script(self):
-        try:
-            # Using the full path to the Python interpreter in the same environment
-            python_path = '/home/caveman/Server/bin/python3'
-            script_path = os.path.join(os.path.dirname(__file__), 'incremental_backup.py')
-            result = subprocess.run([python_path, script_path], check=True, capture_output=True, text=True)
-            logger.info(f"Backup script output: {result.stdout}")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Backup script failed with error: {e.stderr}")
 
 def notify_stop(signum, frame):
     logger.info("Observer stopped")
@@ -52,26 +70,31 @@ def notify_stop(signum, frame):
     logger.info(f"Notification sent with result: {result}")
 
 if __name__ == "__main__":
-    # Debug logging to verify the path
-    print(f"Watching directory: {src_dir}")
     logger.info(f"Watching directory: {src_dir}")
 
     signal.signal(signal.SIGTERM, notify_stop)
-    signal.signal(signal.SIGINT, notify_stop)  # To handle keyboard interrupts as well
-    signal.signal(signal.SIGQUIT, notify_stop)  # Catch additional signals for robust handling
+    signal.signal(signal.SIGINT, notify_stop)
+    signal.signal(signal.SIGQUIT, notify_stop)
 
-    # Initialize the event handler and observer
     event_handler = BackupHandler()
     observer = Observer()
     observer.schedule(event_handler, path=src_dir, recursive=True)
-
-    # Start the observer
     observer.start()
     logger.info(f"Started watching directory: {src_dir}")
 
+    if backup_interval == 'hourly':
+        schedule.every().hour.do(run_hourly_backup)
+    elif backup_interval == 'half-day':
+        schedule.every(12).hours.do(run_half_day_backup)
+    elif backup_interval == 'daily':
+        schedule.every().day.do(run_daily_backup)
+    elif backup_interval == 'weekly':
+        schedule.every().week.do(run_weekly_backup)
+
     try:
         while True:
-            time.sleep(1)  # Keep the script running
+            schedule.run_pending()
+            time.sleep(1)
     except KeyboardInterrupt:
         observer.stop()
         notify_stop(signal.SIGINT, None)

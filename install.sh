@@ -21,14 +21,14 @@ current_dir=$(pwd)
 
 
 # Create the virtual environment
-log "Creating virtual environment in '$current_dir/$env_name'..."
+log "Creating virtual environment in '$current_dir'..."
 python3 -m venv "$current_dir"
 if [ $? -ne 0 ]; then
     log "ERROR: Failed to create virtual environment."
     exit 1
 fi
 
-log "Virtual environment created successfully in '$current_dir/$env_name'."
+log "Virtual environment created successfully in '$current_dir'."
 
 # Activate the virtual environment
 source "$current_dir/bin/activate"

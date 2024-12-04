@@ -1,8 +1,8 @@
+
 import os
 from dotenv import load_dotenv
 import sqlite3
 import subprocess
-import time
 from datetime import datetime
 from loguru import logger
 import shutil
@@ -28,7 +28,7 @@ def rsync():
         with open(rsync_txt, 'w') as log_f:
             process = subprocess.run(rsync_command, stdout=log_f, stderr=log_f, text=True)
         logger.success(f"Rsync output captured successfully.")
-        logger.debug(f"Rsync command return code: {process.returncode}")
+        #logger.debug(f"Rsync command return code: {process.returncode}")
         if process.returncode != 0:
             logger.error(f"Rsync command failed with return code {process.returncode}")
         elif process.returncode == 0:
@@ -44,7 +44,7 @@ def parse_logfile(rsync_txt):
     try:
         with open(rsync_txt, 'r') as f:
             for line in f:
-                logger.debug(f"Reading line from rsync_txt: {line.strip()}")
+                #logger.debug(f"Reading line from rsync_txt: {line.strip()}")
                 line = line.strip()
                 if "sending incremental file list" in line:
                     capturing = True
@@ -160,12 +160,14 @@ def store_changes_in_db(changes):
         logger.error(f"Error storing changes in database: {e}")
 
 def generate_incremental_folder():
-    now = datetime.now()
-    month_day_year = now.strftime('%b-%d-%y')
+    now = datetime.now() 
+    month = now.strftime('%B') 
+    day = now.strftime('%d') 
+    hour = now.strftime('%I') # Hour in 12-hour format am_pm = now.strftime('%p') # AM/PM
     hour = now.strftime('%I').lstrip('0')  # Remove leading zeros
     minute = now.strftime('%M')
     am_pm = now.strftime('%p')
-    folder = f"{month_day_year} {hour}:{minute} {am_pm}"
+    folder = f"{month}/{day}/{hour}:{minute}-{am_pm}"
     logger.debug(f"Generated incremental folder name: {folder}")
     return folder
 
@@ -175,18 +177,18 @@ def copy_files():
     last_session = get_last_session_number(database)
     if last_session > 1:
         logger.info(f"Folder Created: {folder}")
-        logger.info(f"Paths to be copied: {paths}")
+        #logger.info(f"Paths to be copied: {paths}")
         for path in paths:
             src_path = os.path.join(src_dir, path)
             dst_path = os.path.join(base_dir, folder, path)
             try:
                 if os.path.isdir(src_path):
                     shutil.copytree(src_path, dst_path, dirs_exist_ok=True)  # dirs_exist_ok=True handles existing directories
-                    logger.success(f"Copied directory {src_path} to {dst_path}")
+                    #logger.success(f"Copied directory {src_path} to {dst_path}")
                 else:
                     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
                     shutil.copy2(src_path, dst_path)
-                    logger.success(f"Copied file {src_path} to {dst_path}")
+                    #logger.success(f"Copied file {src_path} to {dst_path}")
             except Exception as e:
                 logger.error(f"Error copying {src_path} to {dst_path}: {e}")
     else:

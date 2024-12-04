@@ -36,6 +36,8 @@ def start_event_backup():
 # Function to start the appropriate backup method
 def start_backup():
     logger.debug(f"start_backup called with MONITOR_SOURCE_FOLDER = {MONITOR_SOURCE_FOLDER}")
+    # Perform an immediate regular backup upon startup
+    run_regular_backup()
     if MONITOR_SOURCE_FOLDER == '1':
         logger.info("Detected MONITOR_SOURCE_FOLDER as '1'. Starting event-driven backup.")
         start_event_backup()
@@ -45,6 +47,7 @@ def start_backup():
 
 if __name__ == "__main__":
     logger.info("Starting backup process.")
+    
     # Perform an immediate backup upon startup
     start_backup()
 

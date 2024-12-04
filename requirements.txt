@@ -1,7 +1,9 @@
-
 schedule==1.1.0
 watchdog==2.1.9
 python-dotenv==1.0.0
 loguru==0.5.3
 pillow==11.0.0
 ttkthemes==3.2.2
+setuptools==75.6.0
+schedule==1.1.0
+datetime==5.5
