@@ -1,13 +1,9 @@
 <div style="display: flex; align-items: center;"> 
-   <img src="https://github.com/Cuban100/FolderW/blob/main/FolderW.png" alt="FolderW Logo" width="100" height="100" style="margin-right: 10px;"> 
+   <img src="https://github.com/Cuban100/FolderW/blob/main/FolderW.png" alt="FolderW Logo" width="200" height="200" style="margin-right: 10px;"> 
 <h1>FolderW</h1> </div>
 
-# FolderW  
 
-
-# A Python Incremental Backup with Watchdog or Scheduling
-
-# Backup Automation with Tkinter GUI and Event-Driven Monitoring
+# A Python Incremental Backup with Watchdog or Scheduling, Backup Automation with Tkinter GUI and Event-Driven Monitoring
 
 
 This project is designed to simplify and automate the process of backing up files from a specified source directory to a target directory. Key features include:
