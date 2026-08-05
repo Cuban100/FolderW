@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.db
+logs/rsync.log
+logs/rsync.txt
+pyvenv.cfg
+venv/
+.venv/

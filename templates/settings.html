@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup Configuration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" type="text/css" href="/static/index.css">
+    <script>
+        function submitForm(data) {
+            if (data.option === 'monitor') {
+                data.interval = "";  // Ensure the interval field is included and empty
+                data.monitor = true; // Set monitor to active
+            } else if (data.option === 'interval') {
+                data.interval = "your_interval_value";  // Set your interval value
+                data.monitor = false;  // Ensure monitor is not active
+            }
+            // Submit the adjusted data
+            sendDataToServer(data);
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            const monitorCheckbox = document.getElementById('monitor');
+            const scheduleFields = document.getElementById('schedule-fields');
+            
+            function toggleScheduleFields() {
+                if (monitorCheckbox.checked) {
+                    scheduleFields.style.display = 'none';
+                } else {
+                    scheduleFields.style.display = 'block';
+                }
+            }
+            
+            // Initial check
+            toggleScheduleFields();
+            
+            // Listen for changes
+            monitorCheckbox.addEventListener('change', toggleScheduleFields);
+        });
+    </script>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-gradient-to-b from-gray-800 to-gray-900 text-white p-6 shadow-xl">
+            <div class="mb-10">
+                <h2 class="text-2xl font-bold text-center mb-4">Backup Tool</h2>
+                <div class="border-b border-gray-700 mb-6"></div>
+            </div>
+
+            <nav>
+                <ul class="space-y-2">
+                    {% set menu_items = [
+                        ('/', 'Dashboard', 'home'),
+                        ('/statistics', 'Statistics', 'chart-bar'),
+                        ('/backup-history', 'Backup History', 'clock'),
+                        ('/settings', 'Settings', 'cog'),
+                        ('/goals', 'Goals', 'target'),
+                        ('/logout', 'Log out', 'logout')
+                    ] %}
+
+                    {% for href, label, icon in menu_items %}
+                    <li>
+                        <a href="{{ href }}" class="
+                            flex 
+                            items-center 
+                            p-3 
+                            rounded 
+                            hover:bg-gray-700 
+                            transition-colors 
+                            {{ 'bg-gray-700' if href == '/settings' else '' }}
+                        ">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                {% if icon == 'home' %}
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                                {% elif icon == 'chart-bar' %}
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                {% elif icon == 'clock' %}
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                {% elif icon == 'cog' %}
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                {% elif icon == 'target' %}
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                {% elif icon == 'logout' %}
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                {% endif %}
+                            </svg>
+                            {{ label }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+        </div>
+            <!-- Main Content -->
+            <div class="flex-grow p-10">
+                <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
+                    <h1 class="text-3xl font-bold mb-6 text-gray-800">Backup Configuration</h1>
+                    
+                    <!-- Error and success messages -->
+                    {% if error %}
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
+                        {{ error }}
+                    </div>
+                    {% endif %}
+                    
+                    {% if success %}
+                    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6" role="alert">
+                        {{ success }}
+                    </div>
+                    {% endif %}
+                    
+                    <form method="post" action="/submit/" class="space-y-6">
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="log_dir" class="text-gray-700 font-medium">Log Directory:</label>
+                            <input type="text" id="log_dir" name="log_dir" class="col-span-2 border-2 border-gray-300 rounded-lg px-3 py-2" value="{{ log_dir or '' }}">
+                            <div class="explanation">Specify the directory where the rsync log file, typically named 'rsync.log', will be stored.</div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="src_dir" class="text-gray-700 font-medium">Source Directory:</label>
+                            <input type="text" id="src_dir" name="src_dir" class="col-span-2 border-2 border-gray-300 rounded-lg px-3 py-2" value="{{ src_dir or '' }}">
+                            <div class="explanation">Specify the path of the folder or device you want to back up. Example: /home/user/Documents</div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="base_dir" class="text-gray-700 font-medium">Base Backup Directory:</label>
+                            <input type="text" id="base_dir" name="base_dir" class="col-span-2 border-2 border-gray-300 rounded-lg px-3 py-2" value="{{ base_dir or '' }}">
+                            <div class="explanation">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="database" class="text-gray-700 font-medium">Database File:</label>
+                            <input type="text" id="database" name="database" class="col-span-2 border-2 border-gray-300 rounded-lg px-3 py-2" value="{{ database or '' }}">
+                            <div class="explanation">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="full_name" class="text-gray-700 font-medium">Full Folder Name:</label>
+                            <input type="text" id="full_name" name="full_name" class="col-span-2 border-2 border-gray-300 rounded-lg px-3 py-2" value="{{ full_name or '' }}">
+                            <div class="explanation">Specify a unique name for the folder that will contain the full backup data.</div>
+                        </div>
+                        
+                        <!-- Monitor Source Folder -->
+                        <div class="flex items-center space-x-4">
+                            <input type="checkbox" id="monitor" name="monitor" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if monitor_checked %}checked{% endif %}>
+                            <label for="monitor" class="text-gray-700">Monitor Source Folder</label>
+                            <div class="explanation">Enable this option to monitor changes in the source directory continuously.</div>
+                        </div>
+                        
+                        <!-- Schedule Fields -->
+                        <div id="schedule-fields" style="display: {% if interval %}block{% else %}none{% endif %};">
+                            <div>
+                                <label for="interval" class="block text-gray-700 font-medium mb-2">Backup Interval:</label>
+                                <div class="flex space-x-4">
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="interval" name="interval" value="hourly" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'hourly' %}checked{% endif %}>
+                                        <span class="ml-2 text-gray-700">Hourly</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="interval" name="interval" value="half-day" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'half-day' %}checked{% endif %}>
+                                        <span class="ml-2 text-gray-700">Half-Day</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="interval" name="interval" value="daily" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'daily' %}checked{% endif %}>
+                                        <span class="ml-2 text-gray-700">Daily</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="interval" name="interval" value="weekly" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'weekly' %}checked{% endif %}>
+                                        <span class="ml-2 text-gray-700">Weekly</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-6">
+                            <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300 transform hover:-translate-y-1 shadow-lg">
+                                Save Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </body>
+        </html>
+        

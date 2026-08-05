@@ -1,0 +1,8 @@
+__pycache__
+.log
+rsync.log
+rsync.txt
+logs/
+lib
+.cache/
+overlay2/

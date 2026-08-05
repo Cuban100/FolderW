@@ -1,0 +1,441 @@
+from fastapi import FastAPI, Request, WebSocket, Form
+from pydantic import BaseModel
+import subprocess
+import os
+import threading
+import queue
+from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables
+from loguru import logger
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+import uvicorn
+
+# Initialize FastAPI app
+app = FastAPI()
+
+# Initialize Jinja2 templates
+app.mount("/static", StaticFiles(directory="static"), name="static")
+logo = '/static/logo.png'
+templates = Jinja2Templates(directory="templates")
+
+# Define the form data model
+class FormData(BaseModel):
+    server_port: int
+    src_dir: str
+    base_dir: str
+    database: str
+    full_name: str
+    monitor: bool
+    backup_interval: str
+
+status = {
+    "backup_running": False,
+    "message": "",
+    "src_size": 0,
+    "dest_space": 0,
+    "can_backup": False
+}
+
+@app.get("/check-evaluation", response_class=HTMLResponse)
+async def validate_conditions(request: Request):
+    logger.info("Response received from Front End for /check-evaluation")
+    src_dir = load_env_value('SRC_DIR')
+    base_dir = load_env_value('BASE_DIR')
+    database = load_env_value('DATABASE')
+    full_name = load_env_value('FULL_NAME')
+    monitor = load_env_value('MONITOR')
+    backup_interval = load_env_value('BACKUP_INTERVAL')
+    validation_status, validation_message = validate_all_conditions(src_dir, base_dir) 
+    settings_sent, settings, missing_vars = check_env_variables() 
+    src_size, dest_space, can_backup, evaluation_message = evaluation_of_resources()
+
+    status.update({
+        "src_size": src_size,
+        "dest_space": dest_space,
+        "can_backup": can_backup
+    })
+
+    if can_backup:
+        success_message = "All settings, validations, and evaluations are correct. READY"
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "success_message": success_message,
+            "settings_sent": settings_sent,
+            "validation_status": validation_status,
+            "validation_message": validation_message,
+            "evaluation_status": can_backup,
+            "evaluation_message": evaluation_message,
+            "logo": logo,
+            "settings": settings,
+            "src_dir": src_dir,
+            "base_dir": base_dir,
+            "database": database,
+            "full_name": full_name,
+            "monitor": monitor,
+            "interval": backup_interval,
+            "src_size": src_size,  # Human-readable format
+            "dest_space": dest_space,  # Human-readable format
+            "can_backup": 'Yes' if can_backup else 'No'
+        })
+    else:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "logo": logo,
+            "missing_settings": missing_vars,
+            "settings_sent": settings_sent,
+            "validation_status": validation_status,
+            "validation_message": validation_message,
+            "evaluation_status": can_backup,
+            "evaluation_message": evaluation_message,
+            "src_size": src_size,  # Human-readable format
+            "dest_space": dest_space,  # Human-readable format
+            "can_backup": 'No'
+        })
+
+
+
+@app.get("/check-settings", response_class=HTMLResponse)
+async def check_settings(request: Request):
+    logger.info("Response received from Front End for /check-settings")
+    src_dir = load_env_value('SRC_DIR')
+    base_dir = load_env_value('BASE_DIR')
+    database = load_env_value('DATABASE')
+    full_name = load_env_value('FULL_NAME')
+    monitor = load_env_value('MONITOR')
+    backup_interval = load_env_value('BACKUP_INTERVAL')
+    settings_sent, settings, missing_vars = check_env_variables()
+    logger.info(f"settings_send: {settings_sent}, missing_vars: {missing_vars}")
+    # If settings_sent is True, all variables are set correctly
+    if settings_sent == True:
+        success_message = "All settings are present."
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "logo": logo,
+            "settings": settings,
+            "success_message": success_message,
+            "settings_sent": settings_sent,
+            "src_dir": src_dir,
+            "base_dir": base_dir,
+            "database": database,
+            "full_name": full_name,
+            "monitor": monitor,
+            "interval": backup_interval
+
+        })
+    else:
+        # If there are missing variables, show which ones are missing
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "logo": logo,
+            "missing_vars": missing_vars,
+            "settings_sent": settings_sent
+        })
+
+@app.get("/run-all-steps", response_class=HTMLResponse)
+async def run_all_steps(request: Request):
+    logger.info("Response received from Front End for /run-all-steps")
+    src_dir = load_env_value('SRC_DIR')
+    base_dir = load_env_value('BASE_DIR')
+    database = load_env_value('DATABASE')
+    full_name = load_env_value('FULL_NAME')
+    monitor = load_env_value('MONITOR')
+    backup_interval = load_env_value('BACKUP_INTERVAL')
+    settings_sent, settings, missing_vars = check_env_variables()
+    if not settings_sent:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "logo": logo,
+            "setting": settings,
+            "missing_settings": missing_vars,
+            "settings_sent": settings_sent
+        })
+
+    validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
+    if not validation_status:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "logo": logo,
+            "settings": settings,
+            "missing_settings": missing_vars,
+            "settings_sent": settings_sent,
+            "validation_status": validation_status,
+            "validation_message": validation_message
+        })
+
+    src_size, dest_space, can_backup, evaluation_message = evaluation_of_resources()
+    if not can_backup:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "logo": logo,
+            "missing_settings": missing_vars,
+            "settings_sent": settings_sent,
+            "validation_status": validation_status,
+            "validation_message": validation_message,
+            "evaluation_status": can_backup,
+            "evaluation_message": evaluation_message,
+            "src_size": src_size,
+            "dest_space": dest_space
+        })
+
+    success_message = "All settings, validations, and evaluations are correct. READY"
+    
+    try:
+        subprocess.Popen(["python", "main_backup.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        backup_status = "Backup process started successfully."
+    except Exception as e:
+        backup_status = f"Failed to start backup process: {str(e)}"
+    
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "logo": logo,
+        "success_message": success_message,
+        "settings_sent": settings_sent,
+        "validation_status": validation_status,
+        "validation_message": validation_message,
+        "evaluation_status": can_backup,
+        "evaluation_message": "",
+        "src_dir": src_dir,
+        "base_dir": base_dir,
+        "database": database,
+        "full_name": full_name,
+        "monitor": monitor,
+        "interval": backup_interval,
+        "backup_status": backup_status,
+        "src_size": src_size,
+        "dest_space": dest_space,
+        "can_backup": can_backup
+    })
+@app.get("/check-validation", response_class=HTMLResponse)
+async def validate_conditions(request: Request):
+    logger.info("Response received from Front End for /check-validation")
+    src_dir = load_env_value('SRC_DIR')
+    base_dir = load_env_value('BASE_DIR')
+    database = load_env_value('DATABASE')
+    full_name = load_env_value('FULL_NAME')
+    monitor = load_env_value('MONITOR')
+    backup_interval = load_env_value('BACKUP_INTERVAL')
+    settings_sent, settings, missing_vars = check_env_variables()
+
+    validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
+
+
+    if validation_status:
+        success_message = "All settings and Validations are correct."
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "logo": logo,
+            "settings": settings,
+            "success_message": success_message,
+            "settings_sent": settings_sent,
+            "validation_status": validation_status,
+            "validation_message": validation_message,
+            "src_dir": src_dir,
+            "base_dir": base_dir,
+            "database": database,
+            "full_name": full_name,
+            "monitor": monitor,
+            "interval": backup_interval
+        })
+    else:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "logo": logo,
+            "settings": settings,
+            "missing_settings": missing_vars,
+            "settings_sent": settings_sent,
+            "validation_status": validation_status,
+            "validation_message": validation_message
+        })
+
+@app.get("/", response_class=HTMLResponse) 
+async def root(request: Request):
+    src_dir = load_env_value('SRC_DIR')
+    base_dir = load_env_value('BASE_DIR')
+    database = load_env_value('DATABASE')
+    full_name = load_env_value('FULL_NAME')
+    monitor = load_env_value('MONITOR')
+    backup_interval = load_env_value('BACKUP_INTERVAL') 
+    return templates.TemplateResponse("index.html", 
+        { "request": request, 
+        "logo": logo, 
+        "src_dir": src_dir, 
+        "base_dir": base_dir, 
+        "database": database, 
+        "full_name": full_name, 
+        "monitor": monitor, 
+        "interval": backup_interval
+        })
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    logfile = load_other_variables('logfile')
+    monitor = load_env_value('MONITOR')
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "log_dir": os.path.dirname(logfile),
+        "src_dir": load_env_value('SRC_DIR'),
+        "base_dir": load_env_value('BASE_DIR'),
+        "database": load_env_value('DATABASE'),
+        "full_name": load_env_value('FULL_NAME'),
+        "monitor_checked": monitor == '1',
+        "interval": load_env_value('BACKUP_INTERVAL')
+    })
+
+
+@app.post("/submit/", response_class=HTMLResponse)
+async def submit_settings(
+    request: Request,
+    src_dir: str = Form(""),
+    base_dir: str = Form(""),
+    database: str = Form(""),
+    full_name: str = Form(""),
+    interval: str = Form(""),
+    monitor: str = Form(None)
+):
+    logger.info("Response received from Front End for /submit/")
+    monitor_enabled = monitor is not None
+
+    new_values = {
+        "SRC_DIR": src_dir.strip() or load_env_value('SRC_DIR'),
+        "BASE_DIR": base_dir.strip() or load_env_value('BASE_DIR'),
+        "DATABASE": database.strip() or load_env_value('DATABASE'),
+        "FULL_NAME": full_name.strip() or load_env_value('FULL_NAME'),
+        "MONITOR": "1" if monitor_enabled else "0",
+        "BACKUP_INTERVAL": "False" if monitor_enabled else (interval or load_env_value('BACKUP_INTERVAL') or "hourly")
+    }
+    save_env_values(new_values)
+
+    if new_values["DATABASE"]:
+        create_all_tables(new_values["DATABASE"])
+
+    logfile = load_other_variables('logfile')
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "success": "Settings saved successfully.",
+        "log_dir": os.path.dirname(logfile),
+        "src_dir": new_values["SRC_DIR"],
+        "base_dir": new_values["BASE_DIR"],
+        "database": new_values["DATABASE"],
+        "full_name": new_values["FULL_NAME"],
+        "monitor_checked": monitor_enabled,
+        "interval": new_values["BACKUP_INTERVAL"]
+    })
+
+
+def is_sqlite_file(path):
+    try:
+        with open(path, 'rb') as f:
+            return f.read(16) == b'SQLite format 3\x00'
+    except (OSError, IOError):
+        return False
+
+
+def list_previous_databases():
+    active_database = os.path.abspath(load_env_value('DATABASE') or "")
+    db_dir = os.path.dirname(active_database) or "."
+    if not os.path.isdir(db_dir):
+        return []
+    previous = []
+    for filename in os.listdir(db_dir):
+        full_path = os.path.abspath(os.path.join(db_dir, filename))
+        if full_path == active_database:
+            continue
+        if is_sqlite_file(full_path):
+            previous.append(filename)
+    return previous
+
+
+@app.get("/backup-history", response_class=HTMLResponse)
+async def backup_history(request: Request):
+    return templates.TemplateResponse("backup-history.html", {
+        "request": request,
+        "previous_databases": list_previous_databases()
+    })
+
+
+@app.post("/delete-old-database/", response_class=HTMLResponse)
+async def delete_old_database(request: Request, database_to_delete: str = Form(...)):
+    active_database = os.path.abspath(load_env_value('DATABASE') or "")
+    db_dir = os.path.dirname(active_database) or "."
+    target = os.path.abspath(os.path.join(db_dir, os.path.basename(database_to_delete)))
+
+    error = None
+    success = None
+    if target == active_database:
+        error = "Cannot delete the currently active database."
+    elif not is_sqlite_file(target):
+        error = "Selected file is not a valid database."
+    else:
+        try:
+            os.remove(target)
+            success = f"Deleted {database_to_delete}."
+            logger.info(f"Deleted old database: {target}")
+        except OSError as e:
+            error = f"Failed to delete database: {e}"
+            logger.error(error)
+
+    return templates.TemplateResponse("backup-history.html", {
+        "request": request,
+        "previous_databases": list_previous_databases(),
+        "error": error,
+        "success": success
+    })
+
+
+rsync_progress_queue = queue.Queue()
+rsync_running = False
+rsync_lock = threading.Lock()
+
+
+def _run_rsync_job():
+    global rsync_running
+    from rsync_incremental import rsync, parse_logfile, copy_files
+    from db_operations import store_changes_in_db
+    try:
+        for line in rsync():
+            rsync_progress_queue.put(line)
+        rsync_txt = load_other_variables('rsync_txt')
+        changes = parse_logfile(rsync_txt)
+        store_changes_in_db(changes)
+        copy_files()
+        rsync_progress_queue.put("DONE: 100% - Backup complete")
+    except Exception as e:
+        logger.error(f"Error running backup job: {e}")
+        rsync_progress_queue.put(f"ERROR: {e}")
+    finally:
+        rsync_running = False
+
+
+@app.get("/progress", response_class=HTMLResponse)
+async def progress_page(request: Request):
+    return templates.TemplateResponse("progess.html", {"request": request})
+
+
+@app.get("/start_rsync")
+async def start_rsync():
+    global rsync_running
+    with rsync_lock:
+        if rsync_running:
+            return JSONResponse({"message": "Backup already running."})
+        rsync_running = True
+        threading.Thread(target=_run_rsync_job, daemon=True).start()
+    return JSONResponse({"message": "Backup started."})
+
+
+@app.get("/rsync_progress")
+async def rsync_progress():
+    def event_stream():
+        while True:
+            line = rsync_progress_queue.get()
+            yield f"data: {line}\n\n"
+            if line.startswith("DONE") or line.startswith("ERROR"):
+                break
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+server_port = load_env_value('SERVER_PORT')
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=int(server_port))

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="/static/index.css">
+    <style>
+        body {
+            display: flex;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #2b2b2b;
+            color: white;
+            padding: 20px;
+            position: fixed;
+            height: 100%;
+            overflow: auto;
+        }
+        .sidebar ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .sidebar a {
+            display: block;
+            color: white;
+            padding: 16px;
+            text-decoration: none;
+            margin: 5px 0;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .sidebar a:hover {
+            background-color: #575757;
+        }
+        .sidebar a.active {
+            background-color: #575757;
+        }
+        .mdi-icon {
+            margin-right: 10px;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        .logo img {
+            width: 150px;
+            height: 150px;
+            margin-right: 10px;
+        }
+        .logo-text {
+            font-size: 2xl;
+            font-weight: bold;
+            text-align: center;
+        }
+        .content {
+            margin-left: 260px;
+            padding: 20px;
+            width: calc(100% - 260px);
+            display: flex;
+            flex-direction: column;
+        }
+        .section {
+            display: flex;
+            justify-content: flex-start;
+            align-items: stretch;
+            flex-direction: row;
+            flex-wrap: nowrap;
+        }
+        .progress-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            width: 100%;
+            max-width: 600px;
+        }
+        .step {
+            padding: 10px;
+            margin: 10px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+            flex: 1;
+        }
+        .step.done {
+            background-color: #c8e6c9; /* Green for done steps */
+        }
+        .step.pending {
+            background-color: #ffcdd2; /* Red for pending steps */
+        }
+        .check-button {
+            margin-top: 10px;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #2196f3;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .check-button:hover {
+            background-color: #1976d2;
+        }
+        .right-section {
+            margin-left: 40px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 500px;
+        }
+        
+        
+        .message {
+            margin: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .message.success {
+            background-color: #c8e6c9; /* Green for success */
+        }
+        .message.error {
+            background-color: #ffcdd2; /* Red for errors */
+        }
+        .env-item {
+            display: flex; /* Ensures both elements are in the same row */
+            justify-content: space-between; /* Distribute space between the elements */
+            align-items: center; /* Vertically align both the label and span to the middle */
+            width: 100%; /* Ensure the env-item takes up the full width */
+            box-sizing: border-box; /* Include padding and borders in the width calculation */
+        }
+
+        .right {
+            margin-left: auto; /* Pushes the content to the far right */
+            white-space: nowrap; /* Prevents wrapping of the text */
+        }
+        .message-help {
+            font-size: 12px;
+            color: #666;
+            background-color: rgb(105 92 92 / 50%);
+            border-radius: 5px;
+            padding: 10px;
+            text-align: left;
+            max-width: 560px;
+        }
+        .highlight {
+            font-size: 1.5em; /* Make the text bigger */
+            font-weight: bold; /* Make the text bold */
+        }
+        /* Style for the entire evaluation container */
+        .evaluation {
+            background-color: #f4f6f9; /* Light gray background */
+            border-radius: 8px; /* Rounded corners */
+            padding: 20px;
+            width: 300px; /* Adjust width if needed */
+            margin: 20px auto; /* Center align the box */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+            font-family: Arial, sans-serif; /* Font family */
+            font-size: 16px; /* Text size */
+        }
+
+        /* Style for each paragraph */
+        .evaluation p {
+            margin: 10px 0; /* Spacing between the paragraphs */
+            padding: 5px;
+            line-height: 1.5; /* Adjust line height for readability */
+        }
+
+        /* Style for the spans that show the results */
+        .evaluation .right {
+            font-weight: bold;
+            color: #2c3e50; /* Dark blue color for the results */
+            background-color: #ecf0f1; /* Light background for contrast */
+            padding: 2px 5px; /* Padding for better spacing */
+            border-radius: 5px; /* Rounded corners for the result span */
+        }
+
+        /* Optional: Highlighting the backup status with colors */
+        #can_backup span.right {
+            color: white;
+            background-color: #27ae60; /* Green for successful backup */
+        }
+
+        #can_backup.false span.right {
+            background-color: #e74c3c; /* Red for backup failure */
+        }
+
+        /* Optional: Hover effect for the whole evaluation container */
+        .evaluation:hover {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); /* Increase shadow on hover */
+            transform: translateY(-2px); /* Lift the container slightly */
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 30px;
+            background-color: #f3f3f3;
+            border: 1px solid #ddd;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #4caf50; /* Green color */
+            transition: width 0.5s ease-in-out; /* Smooth transition */
+        }
+
+        .progress-bar-text {
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #000;
+            z-index: 10;
+        }
+        /* Enclosing div for the whole Settings section */
+        .settings {
+            background-color: #f7f9fc; /* Light background color for the entire settings block */
+            padding: 30px; /* Add padding around the content */
+            border-radius: 12px; /* Rounded corners for the enclosing div */
+            max-width: 600px; /* Optional: Limit the max width for a better layout */
+            margin: 20px auto; /* Center the settings block horizontally */
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); /* Subtle shadow for the whole block */
+        }
+
+        /* Style for the h2 header */
+        .settings h2 {
+            font-size: 28px;
+            color: #34495e;
+            text-align: center;
+            margin-bottom: 20px; /* Spacing below the header */
+        }
+
+        /* Style for the environment content (all settings rows) */
+        .env-content {
+            background-color: #fff; /* White background for the content */
+            padding: 20px;
+            border-radius: 8px; /* Rounded corners */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Soft shadow for the inner content */
+        }
+
+        /* Style for each individual item in the settings */
+        .env-item {
+            margin: 15px 0; /* Space between each setting */
+            display: flex;
+            justify-content: space-between; /* Space between the label and value */
+            align-items: center; /* Vertically align the items */
+            font-size: 16px;
+        }
+
+        /* Style for the labels */
+        .env-item label {
+            font-weight: 600;
+            color: #333;
+            width: 40%; /* Control label width */
+        }
+
+        /* Style for the values (right part) */
+        .env-item .right {
+            font-weight: bold;
+            color: #2c3e50; /* Dark color for values */
+            background-color: #ecf0f1; /* Light gray background for values */
+            padding: 3px 8px;
+            border-radius: 5px;
+            width: 55%; /* Control span width */
+            text-align: center;
+        }
+
+        /* Highlight the "Active" status in green */
+        .env-item .right.active {
+            background-color: #27ae60; /* Green background for active */
+            color: white;
+        }
+
+        /* Style for "Not Verified" values with red background */
+        .env-item .right:not(.active) {
+            background-color: #005c40; /* Red background for not verified */
+            color: white;
+        }
+
+        /* Optional hover effect for the whole content */
+        .settings:hover {
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15); /* Increase shadow on hover */
+            transform: translateY(-2px); /* Lift the container slightly */
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+    </style>
+</head>
+<body>
+   
+    <div class="sidebar">
+        <div class="logo">
+            <img src="{{ logo }}" alt="FolderW Logo">
+            <span class="logo-text">FolderW</span>
+        </div>
+        <nav>
+            <ul>
+                {% set menu_items = [
+                    ('/', 'Dashboard', 'mdi mdi-view-dashboard'),
+                    ('/statistics', 'Statistics', 'mdi mdi-chart-bar'),
+                    ('/backup-history', 'Backup History', 'mdi mdi-clock-outline'),
+                    ('/settings', 'Settings', 'mdi mdi-cogs'),
+                    ('/goals', 'Goals', 'mdi mdi-bullseye-arrow'),
+                    ('/logout', 'Log out', 'mdi mdi-logout')
+                ] %}
+                {% for href, label, icon_class in menu_items %}
+                <li>
+                    <a href="{{ href }}" class="
+                        flex 
+                        items-center 
+                        p-3 
+                        rounded 
+                        hover:bg-gray-700 
+                        transition-colors 
+                        {% if request.url.path == href %}active{% endif %}
+                    ">
+                        <span class="{{ icon_class }} mdi-icon"></span>
+                        {{ label }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </nav>
+    </div>
+
+    <div class="content">
+       
+        <div class="section">
+            <div class="message">
+                <!-- Success/Error Message Section -->
+                <div> 
+                    {% if missing_settings %} 
+                    <div class="message error" style="color: red;">
+                         Missing settings: {{ missing_settings|join(', ') }} </div> 
+                    {% elif success_message %} 
+                    <div class="message success" style="color: green;"> 
+                        {{ success_message }} 
+                    </div>
+                     {% else %}
+                    <div></div>
+                    {% endif %}
+            <div class="progress-container"> 
+                
+                <!-- Settings Check -->
+                {% if settings_sent == True %}
+                    {% set settings = 'message success' %}
+                {% else %}
+                    {% set settings = 'message error' %}
+                {% endif %}
+                <div class="{{ settings }}">
+                    <span>Settings</span>
+                    <form method="get" action="/check-settings">
+                        <button type="submit" class="check-button">Check</button>
+                    </form>
+                </div>
+
+                <!-- Validation Check -->
+                {% if validation_status == True and settings_sent == True %}
+                    {% set validation = 'message success' %}
+                {% else %}
+                    {% set validation = 'message error' %}
+                {% endif %}
+                <div class="{{ validation }}">
+                    Validation
+                    <button class="check-button" onclick="location.href='/check-validation'">Check</button>
+                </div>
+
+                <!-- Evaluation Check -->
+                {% if evaluation_status == True and settings_sent == True and validation_status == True %}
+                    {% set evaluation = 'message success' %}
+                {% else %}
+                    {% set evaluation = 'message error' %}
+                {% endif %}
+                <div class="{{ evaluation }}">
+                    Evaluation
+                    <button class="check-button" onclick="location.href='/check-evaluation'">Check</button>
+                </div>
+                    
+                    
+                
+                <!-- Start Backup -->
+                {% if evaluation_status == True and validation_status == True and settings_sent == True %}
+                    {% set start = 'message success' %}
+                {% else %}
+                    {% set start = 'message error' %}
+                {% endif %}
+                <div class="{{ start }}">
+                    <button class="check-button" onclick="startBackup()">START BACKUP</button>
+                </div>
+
+            </div>
+            <div class=message-help>
+                {%if settings_sent %}
+                <p class="show"><span class="highlight">Settings Step:</span> All items from the initial .env file setup will be thoroughly checked.
+                The primary goal is to ensure that the Setup step has stored the values accurately.</p>
+                {%else%}
+                <p class="show">You can verify each item individually (recommended), or simply click the Start Backup button to complete all steps automatically.</p>
+                {% endif %}
+                {% if validation_status %}
+                <p class="show"><span class="highlight">Validation step:</span>Involves checking the source and destination paths specified in your settings.
+                This step ensures that the paths exist and are accessible, confirming that the source directory contains the data to be backed up, and the destination directory is ready to receive the backup. By verifying these paths, we prevent potential issues during the backup process, such as missing files or inaccessible directories.</p>
+                {% endif %}
+                {%if evaluation_status %}
+                <p class="show"><span class="highlight">Evaluation step:</span> Involves assessing the available space on both the source and destination directories.
+                This step ensures that there is enough space on the destination directory to accommodate the backup and that the source directory has the necessary space to complete the backup process. By verifying these space requirements, we prevent potential issues during the backup, such as insufficient storage space or data overflow, ensuring a smooth and successful backup process.</p>
+                {% if monitor == '1' %}
+                    <p class="show"> <span class="highlight"> Watchdog Future (FolderW) is enabled: </span> Enabling the monitoring feature activates the watchdog functionality. This means that the system will continuously watch the source directory for any changes or updates. By choosing to enable monitoring, the watchdog ensures that any new or modified files in the source directory are automatically detected and prepared for backup. This process is incremental, organizing backups by month, day, and time, which means all versions of the same file will be stored in a very organized manner. This ensures your backup is always up-to-date without manual intervention, and you can easily track and retrieve specific versions of your files as needed.</p>
+                {% endif %}
+                {% if interval == 'hourly' or interval == 'daily' or interval == 'weekly' %}
+                <p class="show"><span class="highlight">Interval Backup is enabled:</span> When the interval option is enabled, backups are scheduled to occur at specified time intervals. This step allows you to configure how frequently backups should take place (e.g., every hour, daily, weekly). The system will automatically initiate a backup at each specified interval, ensuring that your data is continuously protected. Each backup is incremental, meaning only the changes made since the last backup are saved. This approach optimizes storage space and organizes all versions of the same file by month, day, and time. This organized storage makes it easy to track and retrieve specific file versions as needed, providing a reliable and efficient backup solution.</p>
+                {% endif %}
+                {% endif %}
+            </div>
+            
+        </div>
+
+    </div>
+    <div class="right-section">
+        <div class="evaluation">
+            <p id="src_size">Source Size: <span class="right">{{ src_size }}</span></p> 
+            <p id="dest_space">Destination Available Space: <span class="right">{{ dest_space }}</span></p> 
+            <p id="can_backup">Backup Possible: <span class="right">{{ can_backup }}</span></p>
+        </div>
+        <div class="settings">
+            <h2>Settings</h2>
+            <div class="env-content">
+                <div class="env-item">
+                    <label>Source Directory:</label>
+                    <span class="right">{{ src_dir if src_dir else 'Not Verified' }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Base Backup Directory:</label>
+                    <span class="right">{{ base_dir if base_dir else 'Not Verified' }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Database File:</label>
+                    <span class="right">{{ database if database else 'Not Verified' }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Full Folder Name:</label>
+                    <span class="right">{{ full_name if full_name else 'Not Verified' }}</span>
+                </div>
+                {% if monitor == '1' %}
+                <div class="env-item">
+                    <label>Monitor Source Folder:</label>
+                    <span class="right active">Active</span>
+                </div>
+                {% else %}
+                <div class="env-item">
+                    <label>{{monitor}} Backup Interval:</label>
+                    <span>{{ interval }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+
+    </div>
+    </div>
+    
+    <script>
+        function startBackup() {
+            fetch('/run-all-steps')
+                .then(response => response.text())
+                .then(data => {
+                    document.body.innerHTML = data;
+                    console.log("Backup process initiated.");
+                })
+                .catch(error => console.error('Error:', error));
+        }
+        async function evaluate() {
+            const response = await fetch('/check-evaluation');
+            if (response.ok) {
+                const text = await response.text();
+                document.open();
+                document.write(text);
+                document.close();
+            } else {
+                console.error('Error fetching evaluation:', response.statusText);
+            }
+        }
+    </script>
+
+</body>
+</html>
