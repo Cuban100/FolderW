@@ -73,6 +73,11 @@ class BackupHandler(FileSystemEventHandler):
             logger.debug(f"File created: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
             self._schedule_backup()
 
+    def on_deleted(self, event):
+        if not event.is_directory and not self.is_log_file(event.src_path):
+            logger.debug(f"File deleted: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
+            self._schedule_backup()
+
     def is_log_file(self, file_path):
         log_files = [rsync_txt, logfile]
         return file_path in log_files
