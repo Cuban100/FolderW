@@ -32,6 +32,17 @@ This project is designed to simplify and automate the process of backing up file
 6. **Integration with `ttkthemes`:**
    - Enhances the Tkinter GUI with a visually appealing dark theme.
 
+## Quick Start
+
+Copy and run the commands below to deploy FolderW:
+
+```bash
+git clone https://github.com/Cuban100/FolderW.git
+cd FolderW
+chmod +x install.sh
+./install.sh
+```
+
 ## Key Components
 
 - **`install.sh`:** Bash script to create a virtual environment, install dependencies, and run the setup script.
