@@ -217,7 +217,7 @@ interval_label.grid(row=len(labels) + 1, column=0, padx=10, pady=10, sticky='e')
 interval_dropdown.grid(row=len(labels) + 1, column=1, padx=10, pady=10)
 interval_hint.grid(row=len(labels) + 1, column=2, padx=10, pady=10, sticky='w')
 
-save_button = ttk.Button(root, text="Save Paths", command=save_paths)
+save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
 save_button.grid(row=len(labels) + 2, column=1, pady=25)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
