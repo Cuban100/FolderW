@@ -75,7 +75,7 @@ def save_paths():
     for key, value in paths.items():
         set_key(env_path, key.upper(), value)
                 
-    result_label.config(text="Paths saved to .env file", foreground='#39FF14')  # Set to neon green
+    result_label.config(text="Configuration saved to .env", foreground='#39FF14')  # Set to neon green
 
     create_all_tables(paths['DATABASE'])
 
