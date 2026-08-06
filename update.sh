@@ -42,7 +42,13 @@ log "Code and dependencies updated successfully."
 # A running Python process keeps executing whatever code was loaded when it
 # started — pulling new files to disk has no effect on it until it restarts.
 if systemctl --user list-unit-files folderw.service &>/dev/null; then
-    if pgrep -f "main_backup.py" > /dev/null || pgrep -f "rsync_incremental.py" > /dev/null; then
+    # Deliberately only checks rsync_incremental.py, not main_backup.py:
+    # main_backup.py is the supervisor that hosts watchdog monitoring and
+    # runs for as long as event-driven mode is enabled, not just while a
+    # backup is actually executing — checking for it here would mean this
+    # never auto-restarts at all under MONITOR=1. rsync_incremental.py is
+    # the actual work: it starts and exits with each individual run.
+    if pgrep -f "rsync_incremental.py" > /dev/null; then
         log "A backup appears to be running right now — skipping automatic restart so it isn't interrupted."
         log "Once it finishes, apply the update with: systemctl --user restart folderw"
     else
