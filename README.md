@@ -34,6 +34,9 @@ This project is designed to simplify and automate the process of backing up file
 6. **Integration with `ttkthemes`:**
    - Enhances the Tkinter GUI with a visually appealing dark theme.
 
+7. **Autostart on Boot:**
+   - Optional checkbox in the setup GUI installs a systemd user service so the dashboard starts automatically on login/boot.
+
 ## Quick Start
 
 Copy and run the commands below to deploy FolderW:
@@ -62,5 +65,34 @@ chmod +x install.sh
 2. **Execution:**
    - The system can watch the source directory for changes and perform backups automatically.
    - Manual backups can also be initiated as needed.
+
+## Autostart on Boot (systemd)
+
+Checking **"Start FolderW automatically at system boot"** in the setup GUI installs and enables a systemd **user** service (`folderw.service`) that runs `server.py` on login/boot. No root/sudo is required — it's managed entirely through `systemctl --user`.
+
+The service unit lives at `~/.config/systemd/user/folderw.service`. Useful commands:
+
+```bash
+# Check whether it's running
+systemctl --user status folderw
+
+# Stop / start / restart it
+systemctl --user stop folderw
+systemctl --user start folderw
+systemctl --user restart folderw
+
+# Turn autostart off/on without deleting the unit file
+systemctl --user disable folderw
+systemctl --user enable folderw
+
+# Tail its logs
+journalctl --user -u folderw -f
+```
+
+**Note:** always use `--user` with these commands — this is a per-user service (`~/.config/systemd/user/`), not a system-wide one (`/etc/systemd/system/`), so plain `systemctl` (without `--user`) won't find it.
+
+If the dashboard doesn't come up automatically before you log in (e.g. on a headless server), you may need to run `loginctl enable-linger $USER` once so your user services can start without an active login session; setup.py attempts this automatically and prints a note if it couldn't.
+
+Unchecking the autostart box and saving again disables the service (`systemctl --user disable`), but does not delete the unit file.
 
 This project aims to streamline backup operations, providing a reliable and user-friendly solution for both regular and event-driven file backups.
