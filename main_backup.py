@@ -17,12 +17,25 @@ def run_regular_backup():
         logger.error(f"Error running rsync_incremental.py: {e}")
 
 def start_event_backup():
-    logger.info("Starting event-driven backup with rsync_event_handler.py")
-    try:
-        result = subprocess.run([sys.executable, os.path.join(BASE_DIR, "rsync_event_handler.py")], check=True)
-        logger.info(f"Event-driven backup result: {result}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error running rsync_event_handler.py: {e}")
+    # rsync_event_handler.py blocks here for as long as it runs successfully
+    # (its own watchdog Observer loop runs forever) — this call only returns
+    # at all if it exits, whether cleanly (a deliberate shutdown signal) or
+    # by crashing (e.g. a transient OS resource limit like inotify instances
+    # being exhausted by other running apps). A crash used to mean giving up
+    # on monitoring permanently and silently — retry with backoff instead,
+    # since the underlying cause is often transient and clears up on its own.
+    retry_delay = 30
+    max_retry_delay = 300
+    while True:
+        logger.info("Starting event-driven backup with rsync_event_handler.py")
+        try:
+            result = subprocess.run([sys.executable, os.path.join(BASE_DIR, "rsync_event_handler.py")], check=True)
+            logger.info(f"Event-driven backup result: {result}")
+            break
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error running rsync_event_handler.py: {e}. Retrying in {retry_delay}s.")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
 
 if __name__ == "__main__":
     monitor = load_env_value('MONITOR')
