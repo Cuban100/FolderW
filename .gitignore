@@ -7,3 +7,8 @@ logs/rsync.txt
 pyvenv.cfg
 venv/
 .venv/
+# install.sh creates the venv in place (project root), not under venv/
+/bin/
+/lib/
+/lib64
+/include/

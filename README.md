@@ -6,6 +6,8 @@
 
 This project is designed to simplify and automate the process of backing up files from a specified source directory to a target directory. Key features include:
 
+> **Platform support:** FolderW currently works on **Linux only**. It relies on `rsync` and other Linux-specific tooling, and hasn't been tested on macOS or Windows.
+
 ## Features
 
 1. **Graphical User Interface (GUI):**
