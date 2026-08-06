@@ -355,6 +355,7 @@ async def root(request: Request):
         "src_size": persisted["src_size"],
         "dest_space": persisted["dest_space"],
         "can_backup": persisted["can_backup"],
+        "backup_in_progress": is_backup_running(),
         })
 
 @app.get("/statistics", response_class=HTMLResponse)

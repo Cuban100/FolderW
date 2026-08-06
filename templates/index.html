@@ -425,9 +425,9 @@
                      {% else %}
                     <div></div>
                     {% endif %}
-                    {% if backup_status %}
-                    <div class="message {{ 'error' if backup_status.startswith('Failed') else 'success' }}" id="backup-status-message">
-                        {{ backup_status }}
+                    {% if backup_status or backup_in_progress %}
+                    <div class="message {{ 'error' if backup_status and backup_status.startswith('Failed') else 'success' }}" id="backup-status-message">
+                        {{ backup_status or "Backup in progress…" }}
                     </div>
                     <div class="progress-bar-container" id="backup-progress-container">
                         <div class="progress-bar"></div>
