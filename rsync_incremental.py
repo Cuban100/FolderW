@@ -1,4 +1,5 @@
 import os
+import stat
 from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run
 from restore_operations import cleanup_old_snapshots
 from dotenv import load_dotenv
@@ -173,6 +174,20 @@ def generate_incremental_folder():
     logger.debug(f"Generated incremental folder name: {folder}")
     return folder
 
+def _safe_copy2(source_path, destination_path):
+    """Like shutil.copy2, but tolerates a destination that already exists
+    and is read-only — e.g. immutable/content-addressed files like git
+    objects can legitimately be referenced unchanged across sessions, and
+    plain shutil.copy2 raises PermissionError trying to overwrite them.
+    Made writable first instead of failing; used directly for single files
+    and as copytree's copy_function so it also applies to every file
+    inside a copied directory tree.
+    """
+    if os.path.exists(destination_path) and not os.access(destination_path, os.W_OK):
+        os.chmod(destination_path, stat.S_IWUSR | stat.S_IRUSR)
+    shutil.copy2(source_path, destination_path)
+
+
 def copy_files():
     incremental_folder = generate_incremental_folder()
     session_items = list_items_by_session(database)
@@ -188,11 +203,11 @@ def copy_files():
             destination_path = os.path.join(base_dir, incremental_folder, item_path)
             try:
                 if os.path.isdir(source_path):
-                    shutil.copytree(source_path, destination_path, dirs_exist_ok=True)  # dirs_exist_ok=True handles existing directories
+                    shutil.copytree(source_path, destination_path, dirs_exist_ok=True, copy_function=_safe_copy2)
                     #logger.success(f"Copied directory {source_path} to {destination_path}")
                 else:
                     os.makedirs(os.path.dirname(destination_path), exist_ok=True)
-                    shutil.copy2(source_path, destination_path)
+                    _safe_copy2(source_path, destination_path)
                     #logger.success(f"Copied file {source_path} to {destination_path}")
             except Exception as e:
                 logger.error(f"Error copying {source_path} to {destination_path}: {e}")
