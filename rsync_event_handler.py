@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import threading
 from db_operations import load_env_value, load_other_variables
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -8,6 +9,11 @@ from loguru import logger
 import subprocess
 import schedule
 import signal
+
+# How long to wait after the *last* detected change before actually running
+# a backup. Resets on every new event, so a burst of saves/writes collapses
+# into a single backup once things go quiet, instead of firing repeatedly.
+BACKUP_DELAY_SECONDS = 300
 
 rsync_txt = load_other_variables('rsync_txt')
 logfile = load_other_variables('logfile')
@@ -40,25 +46,32 @@ def run_weekly_backup():
     run_backup_script()
 
 class BackupHandler(FileSystemEventHandler):
-    def __init__(self):
-        self.last_event_time = 0
-        self.debounce_time = 5  # in seconds
+    def __init__(self, delay_seconds=BACKUP_DELAY_SECONDS):
+        self.delay_seconds = delay_seconds
+        self.timer = None
+        self.lock = threading.Lock()
+
+    def _schedule_backup(self):
+        with self.lock:
+            if self.timer is not None:
+                self.timer.cancel()
+            self.timer = threading.Timer(self.delay_seconds, self._run_backup)
+            self.timer.daemon = True
+            self.timer.start()
+
+    def _run_backup(self):
+        logger.info(f"Running backup after {self.delay_seconds}s of inactivity")
+        run_backup_script()
 
     def on_modified(self, event):
         if not event.is_directory and not self.is_log_file(event.src_path):
-            current_time = time.time()
-            if current_time - self.last_event_time > self.debounce_time:
-                logger.info(f"File modified: {event.src_path}")
-                run_backup_script()
-                self.last_event_time = current_time
+            logger.debug(f"File modified: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
+            self._schedule_backup()
 
     def on_created(self, event):
         if not event.is_directory and not self.is_log_file(event.src_path):
-            current_time = time.time()
-            if current_time - self.last_event_time > self.debounce_time:
-                logger.info(f"File created: {event.src_path}")
-                run_backup_script()
-                self.last_event_time = current_time
+            logger.debug(f"File created: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
+            self._schedule_backup()
 
     def is_log_file(self, file_path):
         log_files = [rsync_txt, logfile]

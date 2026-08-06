@@ -188,10 +188,16 @@ async def check_settings(request: Request):
         })
 
 def is_backup_running():
+    # Deliberately excludes main_backup.py: in event-driven (MONITOR=1) mode
+    # it's a supervisor process that runs for as long as watchdog monitoring
+    # is active, not just while a backup is actually executing — matching it
+    # here would make the dashboard show "Backup in progress" essentially
+    # permanently. rsync_incremental.py is the actual work being done: it
+    # starts and exits with each individual backup run.
     for proc in psutil.process_iter(['cmdline']):
         try:
             cmdline = proc.info['cmdline'] or []
-            if any('main_backup.py' in part or 'rsync_incremental.py' in part for part in cmdline):
+            if any('rsync_incremental.py' in part for part in cmdline):
                 return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
