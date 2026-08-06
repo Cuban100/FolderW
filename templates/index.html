@@ -286,27 +286,40 @@
         }
 
         .progress-bar-container {
+            position: relative;
             width: 100%;
-            height: 30px;
-            background-color: #f3f3f3;
-            border: 1px solid #ddd;
+            height: 20px;
+            background-color: var(--value-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 14px;
+            display: none;
+        }
+        .progress-bar-container.active {
+            display: block;
         }
 
         .progress-bar {
+            position: absolute;
+            top: 0;
+            left: -30%;
             height: 100%;
-            width: 0%;
+            width: 30%;
             background-color: #4caf50; /* Green color */
-            transition: width 0.5s ease-in-out; /* Smooth transition */
+            border-radius: 6px;
+            animation: progress-indeterminate 1.4s ease-in-out infinite;
+        }
+        @keyframes progress-indeterminate {
+            0%   { left: -30%; }
+            100% { left: 100%; }
         }
 
         .progress-bar-text {
-            position: absolute;
-            top: 5px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 14px;
-            color: #000;
-            z-index: 10;
+            margin-top: 6px;
+            font-size: 13px;
+            color: var(--text-muted);
+            text-align: center;
         }
         /* Enclosing div for the whole Settings section */
         .settings {
@@ -441,7 +454,16 @@
                      {% else %}
                     <div></div>
                     {% endif %}
-            <div class="progress-container"> 
+                    {% if backup_status %}
+                    <div class="message {{ 'error' if backup_status.startswith('Failed') else 'success' }}" id="backup-status-message">
+                        {{ backup_status }}
+                    </div>
+                    <div class="progress-bar-container" id="backup-progress-container">
+                        <div class="progress-bar"></div>
+                    </div>
+                    <div class="progress-bar-text" id="backup-progress-text">Backup running&hellip;</div>
+                    {% endif %}
+            <div class="progress-container">
                 
                 <!-- Settings Check -->
                 {% if settings_sent == True %}
@@ -575,6 +597,35 @@
                 console.error('Error fetching evaluation:', response.statusText);
             }
         }
+
+        // If a backup was just started, poll for whether it's still running
+        // and show/hide an indeterminate progress bar accordingly. There's no
+        // reliable byte/percent progress for a detached background process,
+        // so this reflects real running state rather than faking a number.
+        (function pollBackupStatus() {
+            const statusMessage = document.getElementById('backup-status-message');
+            const progressContainer = document.getElementById('backup-progress-container');
+            const progressText = document.getElementById('backup-progress-text');
+            if (!statusMessage || statusMessage.textContent.trim().startsWith('Failed')) {
+                return;
+            }
+
+            progressContainer.classList.add('active');
+
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch('/backup-status');
+                    const data = await response.json();
+                    if (!data.running) {
+                        clearInterval(interval);
+                        progressContainer.classList.remove('active');
+                        progressText.textContent = 'Backup complete.';
+                    }
+                } catch (error) {
+                    console.error('Error checking backup status:', error);
+                }
+            }, 2000);
+        })();
     </script>
 
 </body>

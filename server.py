@@ -6,6 +6,7 @@ import sys
 import threading
 import queue
 import webbrowser
+import psutil
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables
 from loguru import logger
@@ -139,6 +140,20 @@ async def check_settings(request: Request):
             "settings_sent": settings_sent
         })
 
+def is_backup_running():
+    for proc in psutil.process_iter(['cmdline']):
+        try:
+            cmdline = proc.info['cmdline'] or []
+            if any('main_backup.py' in part or 'rsync_incremental.py' in part for part in cmdline):
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    return False
+
+@app.get("/backup-status")
+async def backup_status_endpoint():
+    return JSONResponse({"running": is_backup_running()})
+
 @app.get("/run-all-steps", response_class=HTMLResponse)
 async def run_all_steps(request: Request):
     logger.info("Response received from Front End for /run-all-steps")
@@ -201,7 +216,7 @@ async def run_all_steps(request: Request):
             stderr=backup_log,
             start_new_session=True,
         )
-        backup_status = "Backup process started successfully."
+        backup_status = "Backup started."
     except Exception as e:
         backup_status = f"Failed to start backup process: {str(e)}"
     
