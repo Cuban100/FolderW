@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, WebSocket, Form
 from pydantic import BaseModel
 import subprocess
 import os
+import sys
 import threading
 import queue
 import webbrowser
@@ -183,7 +184,7 @@ async def run_all_steps(request: Request):
     success_message = "All settings, validations, and evaluations are correct. READY"
     
     try:
-        subprocess.Popen(["python", "main_backup.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.Popen([sys.executable, "main_backup.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         backup_status = "Backup process started successfully."
     except Exception as e:
         backup_status = f"Failed to start backup process: {str(e)}"
