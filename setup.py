@@ -23,8 +23,16 @@ class Logger:
         pass  # No need to do anything on flush
 
 def upgrade_packages(requirements_file='requirements.txt'):
-    print(f"Installing pinned versions from {requirements_file}")
-    subprocess.run(["pip", "install", "-r", requirements_file])
+    print(f"Installing pinned versions from {requirements_file}\n")
+    process = subprocess.Popen(
+        ["pip", "install", "-r", requirements_file],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    for line in process.stdout:
+        print(line, end="")
+    process.wait()
 
 def toggle_backup_options():
     if monitor_var.get() == 1:
