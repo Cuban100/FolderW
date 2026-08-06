@@ -423,6 +423,11 @@ async def submit_settings(
 
 
 def is_sqlite_file(path):
+    if not os.path.isfile(path):
+        # Skip directories, sockets, FIFOs, devices, etc. — opening a FIFO
+        # for reading blocks indefinitely waiting for a writer, which would
+        # hang this request (and the whole event loop) forever.
+        return False
     try:
         with open(path, 'rb') as f:
             return f.read(16) == b'SQLite format 3\x00'
