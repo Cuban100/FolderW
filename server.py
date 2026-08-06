@@ -9,6 +9,7 @@ import webbrowser
 import psutil
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space, get_folder_size_du
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session
+from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
@@ -323,6 +324,46 @@ async def statistics_page(request: Request):
         "last_session": last_session,
         "last_session_files": last_session_files,
     })
+
+@app.get("/restore", response_class=HTMLResponse)
+async def restore_page(request: Request):
+    return templates.TemplateResponse("restore.html", {
+        "request": request,
+        "backups": list_backups(),
+    })
+
+@app.get("/restore/browse/{backup_id:path}", response_class=HTMLResponse)
+async def restore_browse(request: Request, backup_id: str):
+    backup_path = get_backup_path(backup_id)
+    if backup_path is None:
+        return templates.TemplateResponse("restore.html", {
+            "request": request,
+            "backups": list_backups(),
+            "error": f"Backup not found: {backup_id}",
+        })
+    files, truncated = list_files_in_backup(backup_path)
+    return templates.TemplateResponse("restore_browse.html", {
+        "request": request,
+        "backup_id": backup_id,
+        "files": files,
+        "truncated": truncated,
+    })
+
+@app.post("/restore/execute", response_class=HTMLResponse)
+async def restore_execute(request: Request, backup_id: str = Form(...), selected_paths: list[str] = Form(default=[])):
+    try:
+        dest_root, file_count = restore_backup(backup_id, selected_paths or None)
+        return templates.TemplateResponse("restore.html", {
+            "request": request,
+            "backups": list_backups(),
+            "success": f"Restored {file_count} file(s) to {dest_root}",
+        })
+    except ValueError as e:
+        return templates.TemplateResponse("restore.html", {
+            "request": request,
+            "backups": list_backups(),
+            "error": str(e),
+        })
 
 
 @app.get("/settings", response_class=HTMLResponse)
