@@ -6,3 +6,4 @@ logs/
 lib
 .cache/
 overlay2/
+FolderW.png

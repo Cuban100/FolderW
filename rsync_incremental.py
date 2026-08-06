@@ -21,10 +21,10 @@ logger.add(logfile, level="INFO", format="{time} - {level} - {message}")
 
 def ensure_backup_folder_icon():
     """Drop the FolderW icon into the backup destination folder so it's
-    visually identifiable when browsed manually. Placed at the root of
-    full_backup, which sits outside the subtree rsync --delete manages
-    (rsync mirrors src_dir under its own basename), so it's never wiped
-    by a later sync.
+    visually identifiable when browsed manually. rsync --delete manages
+    the entire full_backup directory (src_dir's contents are mirrored
+    directly into it), so FolderW.png is listed in the rsync exclude
+    file to keep it from being wiped as an "extra" file on every sync.
     """
     icon_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'FolderW.png')
     icon_dest = os.path.join(full_backup, 'FolderW.png')
@@ -34,7 +34,10 @@ def ensure_backup_folder_icon():
         logger.info(f"Added FolderW icon to backup folder: {icon_dest}")
 
 def rsync():
-    rsync_command = ["rsync", "-av", "--delete", f'--exclude-from={exclude_file}', src_dir, full_backup]
+    # Trailing slash on the source makes rsync copy src_dir's *contents*
+    # into full_backup, instead of nesting it as full_backup/<src_dir basename>/.
+    src_dir_contents = src_dir.rstrip('/') + '/'
+    rsync_command = ["rsync", "-av", "--delete", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
     logger.warning(f"Executing rsync command {rsync_command}")
         
     try:
@@ -99,12 +102,10 @@ def copy_files():
     if last_session_number > 1:
         logger.info(f"Folder Created: {incremental_folder}")
         #logger.info(f"Paths to be copied: {session_items}")
-        # rsync logs paths relative to the parent of src_dir (it includes src_dir's
-        # own basename as the first component), so source paths must be resolved
-        # from there rather than from src_dir itself.
-        src_parent = os.path.dirname(src_dir.rstrip('/'))
+        # With the trailing slash on the rsync source, item_path is already
+        # relative to src_dir itself (no basename prefix to strip).
         for item_path in session_items:
-            source_path = os.path.join(src_parent, item_path)
+            source_path = os.path.join(src_dir, item_path)
             destination_path = os.path.join(base_dir, incremental_folder, item_path)
             try:
                 if os.path.isdir(source_path):
