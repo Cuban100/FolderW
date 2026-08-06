@@ -43,6 +43,9 @@ This project is designed to simplify and automate the process of backing up file
 9. **Snapshot Retention:**
    - Optional limit on how many incremental snapshots to keep — oldest ones are deleted automatically after each backup. The full backup is never affected.
 
+10. **Branded Backup Folder:**
+    - The full backup folder shows the FolderW logo as its own folder icon in GNOME Files/Nemo (verified) via `gio set metadata::custom-icon`, so it's recognizable at a glance in your file manager — not just a plain folder with a PNG inside it.
+
 ## Quick Start
 
 Copy and run the commands below to deploy FolderW:

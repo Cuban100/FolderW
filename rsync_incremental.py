@@ -66,11 +66,21 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
     record_backup_run(last_session_number, backup_type, label, total_files_processed)
 
 def ensure_backup_folder_icon():
-    """Drop the FolderW icon into the backup destination folder so it's
-    visually identifiable when browsed manually. rsync --delete manages
-    the entire full_backup directory (src_dir's contents are mirrored
-    directly into it), so FolderW.png is listed in the rsync exclude
-    file to keep it from being wiped as an "extra" file on every sync.
+    """Make the backup destination folder itself show the FolderW logo as
+    its icon in the file manager, rather than just containing a PNG a user
+    has to open to notice. rsync --delete manages the entire full_backup
+    directory (src_dir's contents are mirrored directly into it), so both
+    files below are listed in the rsync exclude file to keep them from
+    being wiped as "extra" files on every sync.
+
+    Two mechanisms, since no single one covers every file manager:
+    - gio set metadata::custom-icon: what GNOME Files/Nemo (GTK/GVFS-based)
+      actually use — verified empirically, since the older .directory
+      convention below is silently ignored by current Nemo/Nautilus.
+    - .directory (freedesktop.org convention): still honored by some other
+      file managers (e.g. KDE Dolphin), and travels with the folder itself
+      rather than living in a per-user GVFS metadata database, so it's kept
+      as a portable fallback even though it's inert on this desktop.
     """
     icon_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'FolderW.png')
     icon_dest = os.path.join(full_backup, 'FolderW.png')
@@ -78,6 +88,21 @@ def ensure_backup_folder_icon():
     if os.path.exists(icon_source) and not os.path.exists(icon_dest):
         shutil.copy2(icon_source, icon_dest)
         logger.info(f"Added FolderW icon to backup folder: {icon_dest}")
+
+    directory_file = os.path.join(full_backup, '.directory')
+    if not os.path.exists(directory_file):
+        with open(directory_file, 'w') as f:
+            f.write(f"[Desktop Entry]\nIcon={icon_dest}\n")
+        logger.info(f"Set folder icon via {directory_file}")
+
+    try:
+        subprocess.run(
+            ["gio", "set", full_backup, "metadata::custom-icon", f"file://{icon_dest}"],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        logger.info(f"Set folder icon via gio metadata::custom-icon: {full_backup}")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        logger.warning(f"Could not set folder icon via gio (non-fatal): {e}")
 
 def rsync():
     # Trailing slash on the source makes rsync copy src_dir's *contents*
