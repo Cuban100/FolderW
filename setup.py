@@ -224,6 +224,9 @@ if monitor_value is not None:
 else:
     monitor_var.set(0)  # Default to 0 if MONITOR is not set
 
+# Sync the interval widgets' visibility with the loaded monitor value
+toggle_backup_options()
+
 # Configure the root window background color
 root.configure(bg='#1a1a1a')
 
