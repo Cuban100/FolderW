@@ -188,7 +188,19 @@ async def run_all_steps(request: Request):
     success_message = "All settings, validations, and evaluations are correct. READY"
     
     try:
-        subprocess.Popen([sys.executable, os.path.join(BASE_DIR, "main_backup.py")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # start_new_session detaches main_backup.py from this process's session,
+        # so it survives server.py restarting or its terminal closing. stdout=PIPE
+        # without ever being read risks the child blocking once the OS pipe buffer
+        # fills, so redirect to a log file instead.
+        log_dir = os.path.join(BASE_DIR, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        backup_log = open(os.path.join(log_dir, "main_backup.log"), "a")
+        subprocess.Popen(
+            [sys.executable, os.path.join(BASE_DIR, "main_backup.py")],
+            stdout=backup_log,
+            stderr=backup_log,
+            start_new_session=True,
+        )
         backup_status = "Backup process started successfully."
     except Exception as e:
         backup_status = f"Failed to start backup process: {str(e)}"

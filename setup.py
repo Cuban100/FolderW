@@ -140,7 +140,20 @@ def save_paths():
 
     configure_systemd_autostart(autostart_var.get() == 1)
 
-    subprocess.Popen([sys.executable, os.path.join(APP_DIR, "server.py")])
+    # start_new_session detaches server.py from this terminal's session, so
+    # closing the terminal (which sends SIGHUP) doesn't kill the dashboard.
+    # stdout/stderr are redirected to a log file rather than inherited from
+    # the terminal, since writes to a closed terminal's tty would fail once
+    # it's gone.
+    log_dir = os.path.join(APP_DIR, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    server_log = open(os.path.join(log_dir, "server.log"), "a")
+    subprocess.Popen(
+        [sys.executable, os.path.join(APP_DIR, "server.py")],
+        stdout=server_log,
+        stderr=server_log,
+        start_new_session=True,
+    )
     root.destroy()
 
      

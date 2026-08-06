@@ -4,6 +4,8 @@ __pycache__/
 *.db
 logs/rsync.log
 logs/rsync.txt
+logs/server.log
+logs/main_backup.log
 pyvenv.cfg
 venv/
 .venv/
