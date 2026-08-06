@@ -42,6 +42,52 @@ def toggle_backup_options():
         for widget in interval_widgets:
             widget.grid()
 
+SERVICE_NAME = "folderw.service"
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def configure_systemd_autostart(enable):
+    service_dir = os.path.join(os.path.expanduser("~"), ".config", "systemd", "user")
+    service_path = os.path.join(service_dir, SERVICE_NAME)
+
+    if enable:
+        print(f"Configuring systemd to start FolderW at boot ({service_path})")
+        service_content = (
+            "[Unit]\n"
+            "Description=FolderW Backup Dashboard\n"
+            "After=network.target\n\n"
+            "[Service]\n"
+            "Type=simple\n"
+            f"WorkingDirectory={APP_DIR}\n"
+            f"ExecStart={sys.executable} {os.path.join(APP_DIR, 'server.py')}\n"
+            "Restart=on-failure\n"
+            "RestartSec=5\n\n"
+            "[Install]\n"
+            "WantedBy=default.target\n"
+        )
+        try:
+            os.makedirs(service_dir, exist_ok=True)
+            with open(service_path, "w") as f:
+                f.write(service_content)
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+            subprocess.run(["systemctl", "--user", "enable", SERVICE_NAME], check=True)
+            print("Autostart enabled. FolderW will start automatically on login/boot.")
+            linger = subprocess.run(
+                ["loginctl", "enable-linger", os.environ.get("USER", "")],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            if linger.returncode != 0:
+                print("Note: could not enable linger automatically. If FolderW doesn't start "
+                      "before you log in, run: loginctl enable-linger $USER")
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"Could not configure systemd autostart: {e}")
+    else:
+        if os.path.exists(service_path):
+            print("Disabling systemd autostart")
+            try:
+                subprocess.run(["systemctl", "--user", "disable", SERVICE_NAME], check=True)
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                print(f"Could not disable systemd autostart: {e}")
+
 def browse_directory(entry):
     directory = filedialog.askdirectory()
     entry.delete(0, tk.END)
@@ -64,6 +110,7 @@ def save_paths():
         'FULL_NAME': full_folder_name_entry.get(),
         'SERVER_PORT': server_port_entry.get(),
         'MONITOR': str(monitor_var.get()),
+        'AUTOSTART': str(autostart_var.get()),
     }
 
 
@@ -91,7 +138,9 @@ def save_paths():
 
     upgrade_packages()
 
-    subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.py")])
+    configure_systemd_autostart(autostart_var.get() == 1)
+
+    subprocess.Popen([sys.executable, os.path.join(APP_DIR, "server.py")])
     root.destroy()
 
      
@@ -100,11 +149,11 @@ def show_terminal():
     log_text.tag_configure("neon_green", foreground="#39FF14") 
     log_text.config(state=tk.NORMAL)
     sys.stdout = Logger(log_text)
-    log_text.place(x=180, y=430, width=400, height=150)
+    log_text.place(x=180, y=480, width=400, height=150)
     log_text.config(state=tk.NORMAL)
-    new_height = 600
+    new_height = 660
     new_width = 700
-    root.geometry(f"{new_width}x{new_height}") 
+    root.geometry(f"{new_width}x{new_height}")
 
 
 # Function to set placeholders in Entry fields, if corresponding .env value is empty
@@ -220,11 +269,22 @@ interval_label.grid(row=len(labels) + 1, column=0, padx=10, pady=10, sticky='e')
 interval_dropdown.grid(row=len(labels) + 1, column=1, padx=10, pady=10)
 interval_hint.grid(row=len(labels) + 1, column=2, padx=10, pady=10, sticky='w')
 
+# Autostart on boot checkbox setup
+autostart_var = tk.IntVar(value=0)
+autostart_checkbox = tk.Checkbutton(root, text="Start FolderW automatically at system boot", variable=autostart_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71')
+autostart_checkbox.grid(row=len(labels) + 2, column=1, padx=10, pady=10, sticky='w')
+
+autostart_hint = tk.Label(root, text="Installs a systemd user service that runs the dashboard on login.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+autostart_hint.grid(row=len(labels) + 2, column=2, padx=10, pady=10, sticky='w')
+
+autostart_label = tk.Label(root, text="Autostart:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
+autostart_label.grid(row=len(labels) + 2, column=0, padx=0, pady=10, sticky='e')
+
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 2, column=1, pady=25)
+save_button.grid(row=len(labels) + 3, column=1, pady=25)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 3, column=1, pady=25)
+result_label.grid(row=len(labels) + 4, column=1, pady=25)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')
@@ -232,6 +292,10 @@ if monitor_value is not None:
     monitor_var.set(int(monitor_value))
 else:
     monitor_var.set(0)  # Default to 0 if MONITOR is not set
+
+# Safely set the autostart variable
+autostart_value = os.getenv('AUTOSTART')
+autostart_var.set(int(autostart_value)) if autostart_value is not None else autostart_var.set(0)
 
 # Sync the interval widgets' visibility with the loaded monitor value
 toggle_backup_options()
