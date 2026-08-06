@@ -591,6 +591,15 @@
                         clearInterval(interval);
                         progressContainer.classList.remove('active');
                         progressText.textContent = 'Backup complete.';
+                        statusMessage.textContent = 'Backup complete.';
+                        // Briefly confirm completion, then hide the whole
+                        // banner/progress group rather than leaving stale
+                        // "Backup in progress…"/"Backup started." text (or
+                        // the progress bar itself) sitting on screen forever.
+                        setTimeout(() => {
+                            statusMessage.style.display = 'none';
+                            progressText.style.display = 'none';
+                        }, 4000);
                     }
                 } catch (error) {
                     console.error('Error checking backup status:', error);
