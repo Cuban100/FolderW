@@ -199,7 +199,7 @@ monitor_checkbox = tk.Checkbutton(root, text="Monitor source folder for automate
 monitor_checkbox.grid(row=len(labels), column=1, padx=10, pady=10, sticky='w')  # Aligned with other fields
 
 # Short hint: monitoring and scheduled backups are mutually exclusive
-monitor_hint = tk.Label(root, text="Backs up as soon as a file changes. Turn off to back up on a fixed schedule instead.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+monitor_hint = tk.Label(root, text="Backs up as soon as a file changes.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
 monitor_hint.grid(row=len(labels), column=2, padx=10, pady=10, sticky='w')
 
 # Create the label next to the checkbox
@@ -210,10 +210,12 @@ monitor_label.grid(row=len(labels), column=0, padx=0, pady=10, sticky='e')  # Pl
 interval_var = StringVar(value='hourly')
 interval_label = tk.Label(root, text="Backup Interval:", foreground='#ffffff', bg='#1a1a1a')
 interval_dropdown = ttk.Combobox(root, textvariable=interval_var, values=["hourly", "half-day", "daily", "weekly"])
-interval_widgets = [interval_label, interval_dropdown]
+interval_hint = tk.Label(root, text="Backs up on this fixed schedule instead.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+interval_widgets = [interval_label, interval_dropdown, interval_hint]
 
 interval_label.grid(row=len(labels) + 1, column=0, padx=10, pady=10, sticky='e')
 interval_dropdown.grid(row=len(labels) + 1, column=1, padx=10, pady=10)
+interval_hint.grid(row=len(labels) + 1, column=2, padx=10, pady=10, sticky='w')
 
 save_button = ttk.Button(root, text="Save Paths", command=save_paths)
 save_button.grid(row=len(labels) + 2, column=1, pady=25)
