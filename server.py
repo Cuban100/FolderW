@@ -8,7 +8,7 @@ import queue
 import webbrowser
 import psutil
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space, get_folder_size_du
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
@@ -46,6 +46,37 @@ status = {
     "can_backup": False
 }
 
+# Persisted check results, so the dashboard remembers Settings/Validation/
+# Evaluation already passed instead of showing everything unchecked again
+# on every page load. Cleared whenever settings actually change.
+CHECK_KEYS = {
+    "settings_sent": "SETTINGS_CHECK_PASSED",
+    "validation_status": "VALIDATION_CHECK_PASSED",
+    "evaluation_status": "EVALUATION_CHECK_PASSED",
+}
+
+def persist_check_results(**results):
+    for key, value in results.items():
+        if key in CHECK_KEYS:
+            set_database_value(CHECK_KEYS[key], '1' if value else '0')
+        else:
+            set_database_value(key, value)
+
+def load_persisted_checks():
+    checked = {key: get_database_value(db_key, 'settings') == '1' for key, db_key in CHECK_KEYS.items()}
+    src_size = get_database_value('LAST_SRC_SIZE', 'settings')
+    dest_space = get_database_value('LAST_DEST_SPACE', 'settings')
+    return {
+        **checked,
+        "src_size": src_size,
+        "dest_space": dest_space,
+        "can_backup": 'Yes' if checked["evaluation_status"] else ('No' if src_size else None),
+    }
+
+def clear_persisted_checks():
+    for db_key in CHECK_KEYS.values():
+        set_database_value(db_key, '0')
+
 @app.get("/check-evaluation", response_class=HTMLResponse)
 async def validate_conditions(request: Request):
     logger.info("Response received from Front End for /check-evaluation")
@@ -64,6 +95,13 @@ async def validate_conditions(request: Request):
         "dest_space": dest_space,
         "can_backup": can_backup
     })
+    persist_check_results(
+        settings_sent=settings_sent,
+        validation_status=validation_status,
+        evaluation_status=can_backup,
+        LAST_SRC_SIZE=src_size,
+        LAST_DEST_SPACE=dest_space,
+    )
 
     if can_backup:
         success_message = "All settings, validations, and evaluations are correct. READY"
@@ -115,6 +153,7 @@ async def check_settings(request: Request):
     backup_interval = load_env_value('BACKUP_INTERVAL')
     settings_sent, settings, missing_vars = check_env_variables()
     logger.info(f"settings_send: {settings_sent}, missing_vars: {missing_vars}")
+    persist_check_results(settings_sent=settings_sent)
     # If settings_sent is True, all variables are set correctly
     if settings_sent == True:
         success_message = "All settings are present."
@@ -187,6 +226,13 @@ async def run_all_steps(request: Request):
         })
 
     src_size, dest_space, can_backup, evaluation_message = evaluation_of_resources()
+    persist_check_results(
+        settings_sent=settings_sent,
+        validation_status=validation_status,
+        evaluation_status=can_backup,
+        LAST_SRC_SIZE=src_size,
+        LAST_DEST_SPACE=dest_space,
+    )
     if not can_backup:
         return templates.TemplateResponse("index.html", {
             "request": request,
@@ -253,7 +299,7 @@ async def validate_conditions(request: Request):
     settings_sent, settings, missing_vars = check_env_variables()
 
     validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
-
+    persist_check_results(settings_sent=settings_sent, validation_status=validation_status)
 
     if validation_status:
         success_message = "All settings and Validations are correct."
@@ -283,23 +329,32 @@ async def validate_conditions(request: Request):
             "validation_message": validation_message
         })
 
-@app.get("/", response_class=HTMLResponse) 
+@app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
     database = load_env_value('DATABASE')
     full_name = load_env_value('FULL_NAME')
     monitor = load_env_value('MONITOR')
-    backup_interval = load_env_value('BACKUP_INTERVAL') 
-    return templates.TemplateResponse("index.html", 
-        { "request": request, 
-        "logo": logo, 
-        "src_dir": src_dir, 
-        "base_dir": base_dir, 
-        "database": database, 
-        "full_name": full_name, 
-        "monitor": monitor, 
-        "interval": backup_interval
+    backup_interval = load_env_value('BACKUP_INTERVAL')
+    # Restore the last known Settings/Validation/Evaluation check results,
+    # so returning to the dashboard doesn't require re-running them.
+    persisted = load_persisted_checks()
+    return templates.TemplateResponse("index.html",
+        { "request": request,
+        "logo": logo,
+        "src_dir": src_dir,
+        "base_dir": base_dir,
+        "database": database,
+        "full_name": full_name,
+        "monitor": monitor,
+        "interval": backup_interval,
+        "settings_sent": persisted["settings_sent"],
+        "validation_status": persisted["validation_status"],
+        "evaluation_status": persisted["evaluation_status"],
+        "src_size": persisted["src_size"],
+        "dest_space": persisted["dest_space"],
+        "can_backup": persisted["can_backup"],
         })
 
 @app.get("/statistics", response_class=HTMLResponse)
@@ -407,6 +462,8 @@ async def submit_settings(
 
     if new_values["DATABASE"]:
         create_all_tables(new_values["DATABASE"])
+        # Settings changed — old check results no longer reflect reality
+        clear_persisted_checks()
 
     logfile = load_other_variables('logfile')
     return templates.TemplateResponse("settings.html", {
@@ -494,7 +551,7 @@ rsync_lock = threading.Lock()
 
 def _run_rsync_job():
     global rsync_running
-    from rsync_incremental import rsync, parse_logfile, copy_files
+    from rsync_incremental import rsync, parse_logfile, copy_files, record_backup_statistics
     from db_operations import store_changes_in_db
     try:
         for line in rsync():
@@ -502,7 +559,8 @@ def _run_rsync_job():
         rsync_txt = load_other_variables('rsync_txt')
         changes = parse_logfile(rsync_txt)
         store_changes_in_db(changes)
-        copy_files()
+        last_session_number, incremental_folder = copy_files()
+        record_backup_statistics(changes, last_session_number, incremental_folder)
         rsync_progress_queue.put("DONE: 100% - Backup complete")
     except Exception as e:
         logger.error(f"Error running backup job: {e}")

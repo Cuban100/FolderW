@@ -50,11 +50,11 @@ def validate_all_conditions(src_dir, base_dir):
 
     if not os.path.exists(src_dir):
         unmet_conditions.append("Source directory does not exist: {}".format(src_dir))
-        return unmet_conditions
+        return False, unmet_conditions
 
     if not os.path.exists(base_dir):
         unmet_conditions.append("Base backup directory does not exist: {}".format(base_dir))
-        return unmet_conditions
+        return False, unmet_conditions
 
     return True, unmet_conditions
 

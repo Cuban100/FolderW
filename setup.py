@@ -1,6 +1,6 @@
 import os
 import subprocess
-from db_operations import create_all_tables
+from db_operations import create_all_tables, set_database_value
 import tkinter as tk
 from tkinter import filedialog, Label, PhotoImage
 from tkinter import ttk, StringVar
@@ -133,6 +133,11 @@ def save_paths():
     result_label.config(text="Configuration saved to .env", foreground='#39FF14')  # Set to neon green
 
     create_all_tables(paths['DATABASE'])
+    # Config saved/changed here — clear any previously persisted check
+    # results so the dashboard doesn't show stale Settings/Validation/
+    # Evaluation results from before this save.
+    for check_key in ('SETTINGS_CHECK_PASSED', 'VALIDATION_CHECK_PASSED', 'EVALUATION_CHECK_PASSED'):
+        set_database_value(check_key, '0')
 
     show_terminal()
 

@@ -1,5 +1,5 @@
 import os
-from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value
+from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run
 from dotenv import load_dotenv
 import sqlite3
 import subprocess
@@ -18,6 +18,51 @@ full_name = load_env_value("FULL_NAME")
 logger.add(logfile, level="INFO", format="{time} - {level} - {message}")
 
 
+
+def record_backup_statistics(changes, last_session_number, incremental_folder):
+    """Record that this backup run happened — the full backup (session 1)
+    or a specific incremental snapshot — plus per-run numeric stats.
+    Recording the run itself matters even when 0 files changed, which is
+    why this is separate from (and unconditional on) the numeric stats
+    below. Deliberately doesn't re-walk the whole source tree (could be
+    huge, e.g. a home directory), so this stays cheap on every run: only
+    sums the sizes of files that actually changed this session.
+    """
+    total_files_processed = len(changes)
+    total_size_processed = 0
+    for _, rel_path in changes:
+        fp = os.path.join(src_dir, rel_path)
+        if os.path.isfile(fp):
+            try:
+                total_size_processed += os.path.getsize(fp)
+            except OSError:
+                pass
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO statistics (timestamp, total_files_processed, total_size_processed, source_size, destination_size, deleted_empty_folders, average_speed)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            total_files_processed,
+            total_size_processed,
+            None,
+            None,
+            0,
+            None,
+        ))
+        conn.commit()
+        conn.close()
+        logger.success(f"Recorded backup statistics: {total_files_processed} file(s), {total_size_processed} bytes.")
+    except sqlite3.Error as e:
+        logger.error(f"Error recording backup statistics: {e}")
+
+    if last_session_number <= 1:
+        backup_type, label = 'full', 'Full Backup'
+    else:
+        backup_type, label = 'incremental', incremental_folder
+    record_backup_run(last_session_number, backup_type, label, total_files_processed)
 
 def ensure_backup_folder_icon():
     """Drop the FolderW icon into the backup destination folder so it's
@@ -120,6 +165,8 @@ def copy_files():
     else:
         logger.info("No files to copy.")
 
+    return last_session_number, incremental_folder
+
 
 if __name__ == "__main__":
     logger.info(f"Full Backup is: {full_name}")
@@ -129,4 +176,5 @@ if __name__ == "__main__":
 
     changes = parse_logfile(rsync_txt)
     store_changes_in_db(changes)
-    copy_files()
+    last_session_number, incremental_folder = copy_files()
+    record_backup_statistics(changes, last_session_number, incremental_folder)

@@ -86,6 +86,17 @@ def get_database_value(name, table):
         logger.error(f"Error retrieving {name} from table {table}: {e}")
         return None
 
+def set_database_value(name, value, table='settings'):
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute(f"REPLACE INTO {table} (name, value) VALUES (?, ?)", (name, str(value)))
+        conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
+        logger.error(f"Error saving {name} to table {table}: {e}")
+
 def check_connection(database):
     try:
         conn = sqlite3.connect(database)
@@ -147,6 +158,19 @@ def create_all_tables(database):
             );
         ''')
         logger.info("Table 'settings' created successfully.")
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS backup_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                session INTEGER,
+                backup_type TEXT,
+                label TEXT,
+                files_changed INTEGER,
+                status TEXT
+            );
+        ''')
+        logger.info("Table 'backup_runs' created successfully.")
 
         connection.commit()
         connection.close()
@@ -215,6 +239,33 @@ def store_changes_in_db(changes):
     except sqlite3.Error as e:
         logger.error(f"Error storing changes in database: {e}")
 
+
+def record_backup_run(session, backup_type, label, files_changed, status='completed'):
+    """Log that a backup run happened — the full backup or a specific
+    incremental snapshot — independent of how many files changed. This is
+    the source of truth for "was this backup executed", separate from the
+    numeric per-run stats in the statistics table.
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO backup_runs (timestamp, session, backup_type, label, files_changed, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            session,
+            backup_type,
+            label,
+            files_changed,
+            status,
+        ))
+        conn.commit()
+        conn.close()
+        logger.success(f"Recorded backup run: {backup_type} '{label}' (session {session}, {files_changed} file(s) changed).")
+    except sqlite3.Error as e:
+        logger.error(f"Error recording backup run: {e}")
 
 def save_settings_to_db(log_directory, source_directory, base_backup_directory, database_file, full_folder_name, monitor_source_folder, backup_interval):
     try:
