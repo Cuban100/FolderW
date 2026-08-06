@@ -1,9 +1,28 @@
 import os
+import re
 import shutil
 from datetime import datetime
 from db_operations import load_env_value, load_other_variables
 from statistics_operations import human_readable_size
 from loguru import logger
+
+_MONTH_NAMES = {
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+}
+_TIME_FOLDER_RE = re.compile(r'^\d{1,2}:\d{2}-(AM|PM)$')
+
+
+def _is_month_folder(name):
+    return name in _MONTH_NAMES
+
+
+def _is_day_folder(name):
+    return name.isdigit() and 1 <= int(name) <= 31
+
+
+def _is_time_folder(name):
+    return bool(_TIME_FOLDER_RE.match(name))
 
 
 def _summarize_folder(path):
@@ -42,18 +61,27 @@ def list_backups():
     if not os.path.isdir(base_dir):
         return backups
 
-    skip = {full_name, 'Restored'}
+    # BASE_DIR may be a shared destination with other, unrelated folders
+    # (cloud sync clients, photo libraries, etc.) sitting next to FolderW's
+    # own snapshots. Only ever descend into folders whose *names* actually
+    # match FolderW's own Month/Day/Time convention — anything else is
+    # skipped without being listed at all, so a huge unrelated directory
+    # tree can't turn this into a multi-minute (or hanging) recursive walk.
     for month in sorted(os.listdir(base_dir)):
-        if month in skip:
+        if not _is_month_folder(month):
             continue
         month_path = os.path.join(base_dir, month)
         if not os.path.isdir(month_path):
             continue
         for day in sorted(os.listdir(month_path)):
+            if not _is_day_folder(day):
+                continue
             day_path = os.path.join(month_path, day)
             if not os.path.isdir(day_path):
                 continue
             for time_folder in sorted(os.listdir(day_path)):
+                if not _is_time_folder(time_folder):
+                    continue
                 snapshot_path = os.path.join(day_path, time_folder)
                 if not os.path.isdir(snapshot_path):
                     continue
