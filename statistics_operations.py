@@ -5,15 +5,6 @@ import subprocess
 import shutil
 from loguru import logger
 
-database = load_env_value('DATABASE')
-base_dir = load_env_value('BASE_DIR')
-src_dir = load_env_value('SRC_DIR')
-full_backup = load_other_variables('full_backup')
-server_port = load_env_value('SERVER_PORT')
-monitor = load_env_value('MONITOR')
-backup_interval = load_env_value('BACKUP_INTERVAL')
-full_name = load_env_value('FULL_NAME')
-
 def get_disk_usage(base_dir):
     total, used, free = shutil.disk_usage(base_dir)
     return {
@@ -79,13 +70,13 @@ def get_device_for_path(path):
 def check_env_variables():
     logger.info(f"Checking settings...")
     settings = {
-        'DATABASE': database,
-        'SRC_DIR': src_dir,
-        'BASE_DIR': base_dir,
-        'FULL_NAME': full_name,
-        'SERVER_PORT': server_port,
-        'MONITOR': monitor,
-        'BACKUP_INTERVAL': backup_interval
+        'DATABASE': load_env_value('DATABASE'),
+        'SRC_DIR': load_env_value('SRC_DIR'),
+        'BASE_DIR': load_env_value('BASE_DIR'),
+        'FULL_NAME': load_env_value('FULL_NAME'),
+        'SERVER_PORT': load_env_value('SERVER_PORT'),
+        'MONITOR': load_env_value('MONITOR'),
+        'BACKUP_INTERVAL': load_env_value('BACKUP_INTERVAL')
     }
             
     missing_vars = []
@@ -141,7 +132,7 @@ def destination_space():
 
 
 def evaluation_of_resources():
-    src_size = get_folder_size(src_dir)
+    src_size = get_folder_size(load_env_value('SRC_DIR'))
     total, used, free = destination_space()
     if total is None:
         return (
