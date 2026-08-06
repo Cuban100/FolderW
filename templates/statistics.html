@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Statistics</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" type="text/css" href="/static/index.css">
 </head>
-<body class="bg-gray-100 font-sans antialiased">
+<body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
     <div class="flex min-h-screen">
         <!-- Sidebar -->
         <div class="w-64 bg-gradient-to-b from-gray-800 to-gray-900 text-white p-6 shadow-xl">
@@ -65,50 +66,50 @@
 
         <!-- Main content -->
         <div class="flex-1 p-8">
-            <h2 class="text-2xl font-bold mb-6 text-gray-800">Statistics</h2>
+            <h2 class="text-2xl font-bold mb-6 text-[var(--text)]">Statistics</h2>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <p class="text-sm text-gray-500 mb-1">Source Folder Size</p>
-                    <p class="text-2xl font-bold text-gray-800">{{ src_size }}</p>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-6">
+                    <p class="text-sm text-[var(--text-muted)] mb-1">Source Folder Size</p>
+                    <p class="text-2xl font-bold text-[var(--text)]">{{ src_size }}</p>
                 </div>
-                <div class="bg-white rounded-lg shadow p-6">
-                    <p class="text-sm text-gray-500 mb-1">Current Backup Size</p>
-                    <p class="text-2xl font-bold text-gray-800">{{ current_backup_size }}</p>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-6">
+                    <p class="text-sm text-[var(--text-muted)] mb-1">Current Backup Size</p>
+                    <p class="text-2xl font-bold text-[var(--text)]">{{ current_backup_size }}</p>
                 </div>
-                <div class="bg-white rounded-lg shadow p-6">
-                    <p class="text-sm text-gray-500 mb-1">Backup Possible</p>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-6">
+                    <p class="text-sm text-[var(--text-muted)] mb-1">Backup Possible</p>
                     <p class="text-2xl font-bold {{ 'text-green-600' if can_backup else 'text-red-600' }}">
                         {{ "Yes" if can_backup else "No" }}
                     </p>
                 </div>
             </div>
 
-            <h3 class="text-lg font-semibold mb-4 text-gray-700">Destination Disk</h3>
+            <h3 class="text-lg font-semibold mb-4 text-[var(--text)]">Destination Disk</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <p class="text-sm text-gray-500 mb-1">Total</p>
-                    <p class="text-xl font-bold text-gray-800">{{ dest_total }}</p>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-6">
+                    <p class="text-sm text-[var(--text-muted)] mb-1">Total</p>
+                    <p class="text-xl font-bold text-[var(--text)]">{{ dest_total }}</p>
                 </div>
-                <div class="bg-white rounded-lg shadow p-6">
-                    <p class="text-sm text-gray-500 mb-1">Used</p>
-                    <p class="text-xl font-bold text-gray-800">{{ dest_used }}</p>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-6">
+                    <p class="text-sm text-[var(--text-muted)] mb-1">Used</p>
+                    <p class="text-xl font-bold text-[var(--text)]">{{ dest_used }}</p>
                 </div>
-                <div class="bg-white rounded-lg shadow p-6">
-                    <p class="text-sm text-gray-500 mb-1">Free</p>
-                    <p class="text-xl font-bold text-gray-800">{{ dest_free }}</p>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-6">
+                    <p class="text-sm text-[var(--text-muted)] mb-1">Free</p>
+                    <p class="text-xl font-bold text-[var(--text)]">{{ dest_free }}</p>
                 </div>
             </div>
 
-            <h3 class="text-lg font-semibold mb-4 text-gray-700">Last Backup Session</h3>
+            <h3 class="text-lg font-semibold mb-4 text-[var(--text)]">Last Backup Session</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <p class="text-sm text-gray-500 mb-1">Session Number</p>
-                    <p class="text-xl font-bold text-gray-800">{{ last_session }}</p>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-6">
+                    <p class="text-sm text-[var(--text-muted)] mb-1">Session Number</p>
+                    <p class="text-xl font-bold text-[var(--text)]">{{ last_session }}</p>
                 </div>
-                <div class="bg-white rounded-lg shadow p-6">
-                    <p class="text-sm text-gray-500 mb-1">Files Changed</p>
-                    <p class="text-xl font-bold text-gray-800">{{ last_session_files }}</p>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-6">
+                    <p class="text-sm text-[var(--text-muted)] mb-1">Files Changed</p>
+                    <p class="text-xl font-bold text-[var(--text)]">{{ last_session_files }}</p>
                 </div>
             </div>
         </div>

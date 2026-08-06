@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restore &ndash; {{ backup_id }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" type="text/css" href="/static/index.css">
 </head>
-<body class="bg-gray-100 font-sans antialiased">
+<body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
     <div class="flex min-h-screen">
         <!-- Sidebar -->
         <div class="w-64 bg-gradient-to-b from-gray-800 to-gray-900 text-white p-6 shadow-xl">
@@ -66,7 +67,7 @@
         <!-- Main content -->
         <div class="flex-1 p-8">
             <a href="/restore" class="text-blue-600 hover:underline text-sm">&larr; Back to Restore</a>
-            <h2 class="text-2xl font-bold mt-2 mb-2 text-gray-800">{{ backup_id }}</h2>
+            <h2 class="text-2xl font-bold mt-2 mb-2 text-[var(--text)]">{{ backup_id }}</h2>
 
             {% if truncated %}
             <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-6">
@@ -75,7 +76,7 @@
             {% endif %}
 
             {% if not files %}
-            <div class="bg-white rounded-lg shadow p-6 text-gray-500">
+            <div class="bg-[var(--surface)] rounded-lg shadow p-6 text-[var(--text-muted)]">
                 This backup is empty.
             </div>
             {% else %}
@@ -85,23 +86,23 @@
                     <button type="button" onclick="setAll(true)" class="text-sm text-blue-600 hover:underline">Select all</button>
                     <button type="button" onclick="setAll(false)" class="text-sm text-blue-600 hover:underline">Select none</button>
                 </div>
-                <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
+                <div class="bg-[var(--surface)] rounded-lg shadow overflow-hidden mb-6">
+                    <table class="min-w-full divide-y divide-[var(--border)]">
+                        <thead class="bg-[var(--surface-alt)]">
                             <tr>
                                 <th class="px-6 py-3 w-10"></th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">File</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">File</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Size</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200">
+                        <tbody class="divide-y divide-[var(--border)]">
                             {% for file in files %}
                             <tr>
                                 <td class="px-6 py-3">
                                     <input type="checkbox" class="file-checkbox" name="selected_paths" value="{{ file.path }}">
                                 </td>
-                                <td class="px-6 py-3 text-gray-800 font-mono text-sm">{{ file.path }}</td>
-                                <td class="px-6 py-3 text-gray-500">{{ file.size }}</td>
+                                <td class="px-6 py-3 text-[var(--text)] font-mono text-sm">{{ file.path }}</td>
+                                <td class="px-6 py-3 text-[var(--text-muted)]">{{ file.size }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
