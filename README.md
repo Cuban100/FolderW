@@ -57,9 +57,24 @@ chmod +x install.sh
 ./install.sh
 ```
 
+## Updating
+
+Already have FolderW installed and just want the latest version? Run `update.sh` from inside your existing installation folder:
+
+```bash
+cd FolderW
+chmod +x update.sh
+./update.sh
+```
+
+It pulls the latest code, updates dependencies, and — if the autostart systemd service is set up — restarts it automatically so the update actually takes effect (a running Python process keeps running whatever code it started with until it's restarted; `git pull` alone doesn't affect it). If a backup happens to be running at the moment, the automatic restart is skipped so it isn't interrupted — restart manually once it finishes.
+
+**Your `.env` file and database are never touched.** Both are already excluded from version control, so `git pull` doesn't even see them — nothing about the update process can overwrite your settings or backup history.
+
 ## Key Components
 
 - **`install.sh`:** Bash script to create a virtual environment, install dependencies, and run the setup script.
+- **`update.sh`:** Bash script to update an existing installation to the latest version. See [Updating](#updating) below.
 - **`setup.py`:** Tkinter-based GUI for configuring backup settings and initializing the environment.
 - **`rsync_incremental.py`:** Python script utilizing `rsync` for performing backups.
 - **`main_backup.py`:** Script triggered to start the backup process.
