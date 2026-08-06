@@ -198,6 +198,10 @@ monitor_var = tk.IntVar(value=1)
 monitor_checkbox = tk.Checkbutton(root, text="Monitor source folder for automated backups on changes", variable=monitor_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71', command=toggle_backup_options)
 monitor_checkbox.grid(row=len(labels), column=1, padx=10, pady=10, sticky='w')  # Aligned with other fields
 
+# Short hint: monitoring and scheduled backups are mutually exclusive
+monitor_hint = tk.Label(root, text="Backs up as soon as a file changes. Turn off to back up on a fixed schedule instead.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+monitor_hint.grid(row=len(labels), column=2, padx=10, pady=10, sticky='w')
+
 # Create the label next to the checkbox
 monitor_label = tk.Label(root, text="Watchdog Future:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
 monitor_label.grid(row=len(labels), column=0, padx=0, pady=10, sticky='e')  # Place it in the same row as the checkbox, to the left (column 0)
