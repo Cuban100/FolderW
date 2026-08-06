@@ -37,6 +37,9 @@ This project is designed to simplify and automate the process of backing up file
 7. **Autostart on Boot:**
    - Optional checkbox in the setup GUI installs a systemd user service so the dashboard starts automatically on login/boot.
 
+8. **Restore:**
+   - Dashboard page listing the full backup and every incremental snapshot, with the ability to restore an entire backup or hand-pick individual files.
+
 ## Quick Start
 
 Copy and run the commands below to deploy FolderW:
@@ -94,5 +97,19 @@ journalctl --user -u folderw -f
 If the dashboard doesn't come up automatically before you log in (e.g. on a headless server), you may need to run `loginctl enable-linger $USER` once so your user services can start without an active login session; setup.py attempts this automatically and prints a note if it couldn't.
 
 Unchecking the autostart box and saving again disables the service (`systemctl --user disable`), but does not delete the unit file.
+
+## Restore
+
+The **Restore** page (`/restore` in the dashboard) lists two kinds of backups:
+
+- **Full Backup (latest):** the continuously-synced mirror at `BASE_DIR/FULL_NAME`, always reflecting the current state of `SRC_DIR`.
+- **Incremental snapshots:** one entry per backup session that changed files, named by when it ran (e.g. `August 06, 1:09-PM`), each containing only the files that changed in that session.
+
+For any backup you can either:
+
+- **Restore Entire Backup** — copies everything in it, or
+- **Browse Files** — drills into that one backup and lets you select individual files to restore.
+
+Restoring **never overwrites `SRC_DIR`**. Files are always copied into a new, timestamped folder at `BASE_DIR/Restored/<timestamp>_<backup>/` for you to review and move back into place yourself — a wrong pick can't clobber current data.
 
 This project aims to streamline backup operations, providing a reliable and user-friendly solution for both regular and event-driven file backups.
