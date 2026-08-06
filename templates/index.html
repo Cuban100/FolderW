@@ -562,13 +562,7 @@
     
     <script>
         function startBackup() {
-            fetch('/run-all-steps')
-                .then(response => response.text())
-                .then(data => {
-                    document.body.innerHTML = data;
-                    console.log("Backup process initiated.");
-                })
-                .catch(error => console.error('Error:', error));
+            window.location.href = '/run-all-steps';
         }
         async function evaluate() {
             const response = await fetch('/check-evaluation');
