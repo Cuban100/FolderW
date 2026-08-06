@@ -4,6 +4,7 @@ import subprocess
 import os
 import threading
 import queue
+import webbrowser
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables
 from loguru import logger
@@ -436,6 +437,14 @@ async def rsync_progress():
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+def open_dashboard_in_browser(port):
+    try:
+        webbrowser.open(f"http://127.0.0.1:{port}")
+    except Exception as e:
+        logger.warning(f"Could not auto-open the dashboard in a browser: {e}")
+
 server_port = load_env_value('SERVER_PORT')
 if __name__ == "__main__":
+    # Give uvicorn a moment to bind before opening the dashboard in the browser
+    threading.Timer(1.0, open_dashboard_in_browser, args=[server_port]).start()
     uvicorn.run(app, host="0.0.0.0", port=int(server_port))
