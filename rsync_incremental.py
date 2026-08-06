@@ -85,8 +85,12 @@ def copy_files():
     if last_session_number > 1:
         logger.info(f"Folder Created: {incremental_folder}")
         #logger.info(f"Paths to be copied: {session_items}")
+        # rsync logs paths relative to the parent of src_dir (it includes src_dir's
+        # own basename as the first component), so source paths must be resolved
+        # from there rather than from src_dir itself.
+        src_parent = os.path.dirname(src_dir.rstrip('/'))
         for item_path in session_items:
-            source_path = os.path.join(src_dir, item_path)
+            source_path = os.path.join(src_parent, item_path)
             destination_path = os.path.join(base_dir, incremental_folder, item_path)
             try:
                 if os.path.isdir(source_path):

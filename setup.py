@@ -1,6 +1,6 @@
 import os
 import subprocess
-from db_operations import create_all_tables, database
+from db_operations import create_all_tables
 import tkinter as tk
 from tkinter import filedialog, Label, PhotoImage
 from tkinter import ttk, StringVar

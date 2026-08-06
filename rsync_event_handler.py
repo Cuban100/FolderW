@@ -1,6 +1,7 @@
 import os
+import sys
 import time
-from db_operations import rsync_txt, logfile, src_dir, backup_interval
+from db_operations import load_env_value, load_other_variables
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from loguru import logger
@@ -8,9 +9,14 @@ import subprocess
 import schedule
 import signal
 
+rsync_txt = load_other_variables('rsync_txt')
+logfile = load_other_variables('logfile')
+src_dir = load_env_value('SRC_DIR')
+backup_interval = load_env_value('BACKUP_INTERVAL')
+
 def run_backup_script():
     try:
-        python_path = '/home/caveman/Server/bin/python3'
+        python_path = sys.executable
         script_path = os.path.join(os.path.dirname(__file__), 'rsync_incremental.py')
         result = subprocess.run([python_path, script_path], check=True, capture_output=True, text=True)
         logger.info(f"Backup script output: {result.stdout}")
@@ -58,17 +64,23 @@ class BackupHandler(FileSystemEventHandler):
         log_files = [rsync_txt, logfile]
         return file_path in log_files
 
-def notify_stop(signum, frame):
+def notify_stop():
     logger.info("Observer stopped")
-    result = subprocess.run(['/usr/bin/notify-send', 'Observer Stopped', 'The file system observer has been stopped.'], env=dict(os.environ, DISPLAY=":0"))
-    logger.info(f"Notification sent with result: {result}")
+    try:
+        result = subprocess.run(['/usr/bin/notify-send', 'Observer Stopped', 'The file system observer has been stopped.'], env=dict(os.environ, DISPLAY=":0"))
+        logger.info(f"Notification sent with result: {result}")
+    except (FileNotFoundError, OSError) as e:
+        logger.debug(f"Desktop notification unavailable, skipping: {e}")
+
+def handle_shutdown_signal(signum, frame):
+    raise SystemExit(0)
 
 if __name__ == "__main__":
     logger.info(f"Watching directory: {src_dir}")
 
-    signal.signal(signal.SIGTERM, notify_stop)
-    signal.signal(signal.SIGINT, notify_stop)
-    signal.signal(signal.SIGQUIT, notify_stop)
+    signal.signal(signal.SIGTERM, handle_shutdown_signal)
+    signal.signal(signal.SIGINT, handle_shutdown_signal)
+    signal.signal(signal.SIGQUIT, handle_shutdown_signal)
 
     event_handler = BackupHandler()
     observer = Observer()
@@ -89,12 +101,9 @@ if __name__ == "__main__":
         while True:
             schedule.run_pending()
             time.sleep(1)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         observer.stop()
-        notify_stop(signal.SIGINT, None)
-    except SystemExit:
-        observer.stop()
-        notify_stop(signal.SIGTERM, None)
+        notify_stop()
 
     observer.join()
 
