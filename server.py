@@ -76,6 +76,13 @@ def load_persisted_checks():
 def clear_persisted_checks():
     for db_key in CHECK_KEYS.values():
         set_database_value(db_key, '0')
+    # Also clear the last computed src/dest sizes — otherwise these stick
+    # around from whatever the previous check computed (potentially a much
+    # earlier setup reusing the same database file) even though the pass/
+    # fail flags above correctly reset, showing stale numbers on the
+    # dashboard until a fresh check happens to be run.
+    set_database_value('LAST_SRC_SIZE', '')
+    set_database_value('LAST_DEST_SPACE', '')
 
 @app.get("/check-evaluation", response_class=HTMLResponse)
 async def validate_conditions(request: Request):

@@ -144,10 +144,15 @@ def save_paths():
 
     create_all_tables(paths['DATABASE'])
     # Config saved/changed here — clear any previously persisted check
-    # results so the dashboard doesn't show stale Settings/Validation/
-    # Evaluation results from before this save.
+    # results (including src/dest sizes from a prior check) so the
+    # dashboard doesn't show stale Settings/Validation/Evaluation results
+    # from before this save. create_all_tables() only ever CREATEs TABLE
+    # IF NOT EXISTS, so a reused database file's old rows would otherwise
+    # survive into what looks like a "fresh" setup.
     for check_key in ('SETTINGS_CHECK_PASSED', 'VALIDATION_CHECK_PASSED', 'EVALUATION_CHECK_PASSED'):
         set_database_value(check_key, '0')
+    for stale_key in ('LAST_SRC_SIZE', 'LAST_DEST_SPACE'):
+        set_database_value(stale_key, '')
 
     show_terminal()
 
