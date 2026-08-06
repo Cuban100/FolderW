@@ -83,7 +83,7 @@ def save_paths():
 
     upgrade_packages()
 
-    subprocess.run([sys.executable, "server.py"])
+    subprocess.Popen([sys.executable, "server.py"])
     root.destroy()
 
      
