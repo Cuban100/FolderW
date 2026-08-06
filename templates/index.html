@@ -128,6 +128,27 @@
         .check-button:hover {
             background-color: #1976d2;
         }
+        .manual-snapshot-banner {
+            background-color: var(--success-bg);
+            border-radius: 10px;
+            padding: 32px;
+            text-align: center;
+            margin: 24px 0;
+        }
+        .manual-snapshot-button {
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 18px 40px;
+            font-size: 1.3em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .manual-snapshot-button:hover {
+            background-color: #1976d2;
+        }
         .right-section {
             margin: 24px 0 0;
             padding: 20px;
@@ -434,8 +455,14 @@
                     </div>
                     <div class="progress-bar-text" id="backup-progress-text">Backup running&hellip;</div>
                     {% endif %}
+            {% set all_checks_passed = settings_sent == True and validation_status == True and evaluation_status == True %}
+            {% if all_checks_passed %}
+            <div class="manual-snapshot-banner">
+                <button class="manual-snapshot-button" onclick="startBackup()">Create a Manual Snapshot</button>
+            </div>
+            {% else %}
             <div class="progress-container">
-                
+
                 <!-- Settings Check -->
                 {% if settings_sent == True %}
                     {% set settings = 'message success' %}
@@ -470,9 +497,9 @@
                     Evaluation
                     <button class="check-button" onclick="location.href='/check-evaluation'">Check</button>
                 </div>
-                    
-                    
-                
+
+
+
                 <!-- Start Backup -->
                 {% if evaluation_status == True and validation_status == True and settings_sent == True %}
                     {% set start = 'message success' %}
@@ -506,7 +533,8 @@
                 {% endif %}
                 {% endif %}
             </div>
-            
+            {% endif %}
+
         </div>
 
     </div>
