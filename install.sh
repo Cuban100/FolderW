@@ -58,3 +58,4 @@ if [ $? -ne 0 ]; then
 fi
 
 log "Setup script ran successfully. Setup completed!"
+log "The dashboard is starting in the background and will open in your default browser in a few seconds."
