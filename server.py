@@ -17,10 +17,14 @@ import uvicorn
 # Initialize FastAPI app
 app = FastAPI()
 
+# Resolve relative to this file, not the process's working directory, so
+# templates/static still load correctly no matter where server.py is launched from
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Initialize Jinja2 templates
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 logo = '/static/logo.png'
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # Define the form data model
 class FormData(BaseModel):
@@ -184,7 +188,7 @@ async def run_all_steps(request: Request):
     success_message = "All settings, validations, and evaluations are correct. READY"
     
     try:
-        subprocess.Popen([sys.executable, "main_backup.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.Popen([sys.executable, os.path.join(BASE_DIR, "main_backup.py")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         backup_status = "Backup process started successfully."
     except Exception as e:
         backup_status = f"Failed to start backup process: {str(e)}"

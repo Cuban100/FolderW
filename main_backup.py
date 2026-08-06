@@ -6,10 +6,12 @@ import schedule
 import time
 from loguru import logger
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def run_regular_backup():
     logger.info("Running regular backup with rsync_incremental.py")
     try:
-        result = subprocess.run([sys.executable, "rsync_incremental.py"], check=True)
+        result = subprocess.run([sys.executable, os.path.join(BASE_DIR, "rsync_incremental.py")], check=True)
         logger.info(f"Backup result: {result}")
     except subprocess.CalledProcessError as e:
         logger.error(f"Error running rsync_incremental.py: {e}")
@@ -17,7 +19,7 @@ def run_regular_backup():
 def start_event_backup():
     logger.info("Starting event-driven backup with rsync_event_handler.py")
     try:
-        result = subprocess.run([sys.executable, "rsync_event_handler.py"], check=True)
+        result = subprocess.run([sys.executable, os.path.join(BASE_DIR, "rsync_event_handler.py")], check=True)
         logger.info(f"Event-driven backup result: {result}")
     except subprocess.CalledProcessError as e:
         logger.error(f"Error running rsync_event_handler.py: {e}")

@@ -91,7 +91,7 @@ def save_paths():
 
     upgrade_packages()
 
-    subprocess.Popen([sys.executable, "server.py"])
+    subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.py")])
     root.destroy()
 
      
