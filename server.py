@@ -7,8 +7,8 @@ import threading
 import queue
 import webbrowser
 import psutil
-from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables
+from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space, get_folder_size_du
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
@@ -300,6 +300,29 @@ async def root(request: Request):
         "monitor": monitor, 
         "interval": backup_interval
         })
+
+@app.get("/statistics", response_class=HTMLResponse)
+async def statistics_page(request: Request):
+    database = load_env_value('DATABASE')
+    full_backup = load_other_variables('full_backup')
+
+    src_size, dest_free, can_backup, _ = evaluation_of_resources()
+    total, used, free = destination_space()
+    current_backup_size = get_folder_size_du(full_backup)
+    last_session = get_last_session_number(database)
+    last_session_files = len(list_items_by_session(database))
+
+    return templates.TemplateResponse("statistics.html", {
+        "request": request,
+        "src_size": src_size,
+        "dest_total": f"{total:.2f} GB" if total is not None else "N/A",
+        "dest_used": f"{used:.2f} GB" if used is not None else "N/A",
+        "dest_free": dest_free,
+        "can_backup": can_backup,
+        "current_backup_size": current_backup_size or "N/A",
+        "last_session": last_session,
+        "last_session_files": last_session_files,
+    })
 
 
 @app.get("/settings", response_class=HTMLResponse)
