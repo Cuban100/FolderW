@@ -19,6 +19,20 @@ logger.add(logfile, level="INFO", format="{time} - {level} - {message}")
 
 
 
+def ensure_backup_folder_icon():
+    """Drop the FolderW icon into the backup destination folder so it's
+    visually identifiable when browsed manually. Placed at the root of
+    full_backup, which sits outside the subtree rsync --delete manages
+    (rsync mirrors src_dir under its own basename), so it's never wiped
+    by a later sync.
+    """
+    icon_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'FolderW.png')
+    icon_dest = os.path.join(full_backup, 'FolderW.png')
+    os.makedirs(full_backup, exist_ok=True)
+    if os.path.exists(icon_source) and not os.path.exists(icon_dest):
+        shutil.copy2(icon_source, icon_dest)
+        logger.info(f"Added FolderW icon to backup folder: {icon_dest}")
+
 def rsync():
     rsync_command = ["rsync", "-av", "--delete", f'--exclude-from={exclude_file}', src_dir, full_backup]
     logger.warning(f"Executing rsync command {rsync_command}")
@@ -108,6 +122,7 @@ def copy_files():
 
 if __name__ == "__main__":
     logger.info(f"Full Backup is: {full_name}")
+    ensure_backup_folder_icon()
     for progress in rsync():
         logger.info(f"Progress: {progress}")
 
