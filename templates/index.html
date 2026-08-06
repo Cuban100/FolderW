@@ -61,7 +61,8 @@
         .content {
             margin-left: 260px;
             padding: 20px;
-            width: calc(100% - 260px);
+            flex: 1 1 auto;
+            min-width: 0;
             display: flex;
             flex-direction: column;
         }
@@ -113,14 +114,17 @@
             border-radius: 5px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             width: 500px;
+            flex-shrink: 0;
         }
-        
-        
+
+
         .message {
             margin: 20px;
             padding: 10px;
             border-radius: 5px;
             text-align: center;
+            min-width: 0;
+            flex: 1 1 auto;
         }
         .message.success {
             background-color: #c8e6c9; /* Green for success */
@@ -272,6 +276,11 @@
             border-radius: 5px;
             width: 55%; /* Control span width */
             text-align: center;
+            display: inline-block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
         }
 
         /* Highlight the "Active" status in green */
@@ -435,15 +444,15 @@
             <div class="env-content">
                 <div class="env-item">
                     <label>Source Directory:</label>
-                    <span class="right">{{ src_dir if src_dir else 'Not Verified' }}</span>
+                    <span class="right" title="{{ src_dir }}">{{ src_dir if src_dir else 'Not Verified' }}</span>
                 </div>
                 <div class="env-item">
                     <label>Base Backup Directory:</label>
-                    <span class="right">{{ base_dir if base_dir else 'Not Verified' }}</span>
+                    <span class="right" title="{{ base_dir }}">{{ base_dir if base_dir else 'Not Verified' }}</span>
                 </div>
                 <div class="env-item">
                     <label>Database File:</label>
-                    <span class="right">{{ database if database else 'Not Verified' }}</span>
+                    <span class="right" title="{{ database }}">{{ database if database else 'Not Verified' }}</span>
                 </div>
                 <div class="env-item">
                     <label>Full Folder Name:</label>
@@ -456,7 +465,7 @@
                 </div>
                 {% else %}
                 <div class="env-item">
-                    <label>{{monitor}} Backup Interval:</label>
+                    <label>Backup Interval:</label>
                     <span>{{ interval }}</span>
                 </div>
                 {% endif %}
