@@ -9,7 +9,7 @@ import webbrowser
 import psutil
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space, get_folder_size_du
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value
-from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup
+from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, cleanup_old_snapshots
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
@@ -433,7 +433,8 @@ async def settings_page(request: Request):
         "database": load_env_value('DATABASE'),
         "full_name": load_env_value('FULL_NAME'),
         "monitor_checked": monitor == '1',
-        "interval": load_env_value('BACKUP_INTERVAL')
+        "interval": load_env_value('BACKUP_INTERVAL'),
+        "max_snapshots": load_env_value('MAX_SNAPSHOTS')
     })
 
 
@@ -445,10 +446,27 @@ async def submit_settings(
     database: str = Form(""),
     full_name: str = Form(""),
     interval: str = Form(""),
+    max_snapshots: str = Form(""),
     monitor: str = Form(None)
 ):
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
+
+    max_snapshots = max_snapshots.strip()
+    if max_snapshots and (not max_snapshots.isdigit() or int(max_snapshots) <= 0):
+        logfile = load_other_variables('logfile')
+        return templates.TemplateResponse("settings.html", {
+            "request": request,
+            "error": "Snapshots to Keep must be a positive whole number, or left blank.",
+            "log_dir": os.path.dirname(logfile),
+            "src_dir": load_env_value('SRC_DIR'),
+            "base_dir": load_env_value('BASE_DIR'),
+            "database": load_env_value('DATABASE'),
+            "full_name": load_env_value('FULL_NAME'),
+            "monitor_checked": monitor_enabled,
+            "interval": load_env_value('BACKUP_INTERVAL'),
+            "max_snapshots": max_snapshots
+        })
 
     new_values = {
         "SRC_DIR": src_dir.strip() or load_env_value('SRC_DIR'),
@@ -456,7 +474,8 @@ async def submit_settings(
         "DATABASE": database.strip() or load_env_value('DATABASE'),
         "FULL_NAME": full_name.strip() or load_env_value('FULL_NAME'),
         "MONITOR": "1" if monitor_enabled else "0",
-        "BACKUP_INTERVAL": "False" if monitor_enabled else (interval or load_env_value('BACKUP_INTERVAL') or "hourly")
+        "BACKUP_INTERVAL": "False" if monitor_enabled else (interval or load_env_value('BACKUP_INTERVAL') or "hourly"),
+        "MAX_SNAPSHOTS": max_snapshots
     }
     save_env_values(new_values)
 
@@ -475,7 +494,8 @@ async def submit_settings(
         "database": new_values["DATABASE"],
         "full_name": new_values["FULL_NAME"],
         "monitor_checked": monitor_enabled,
-        "interval": new_values["BACKUP_INTERVAL"]
+        "interval": new_values["BACKUP_INTERVAL"],
+        "max_snapshots": new_values["MAX_SNAPSHOTS"]
     })
 
 
@@ -561,6 +581,7 @@ def _run_rsync_job():
         store_changes_in_db(changes)
         last_session_number, incremental_folder = copy_files()
         record_backup_statistics(changes, last_session_number, incremental_folder)
+        cleanup_old_snapshots(load_env_value('MAX_SNAPSHOTS'))
         rsync_progress_queue.put("DONE: 100% - Backup complete")
     except Exception as e:
         logger.error(f"Error running backup job: {e}")

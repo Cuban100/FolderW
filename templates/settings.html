@@ -172,6 +172,12 @@
                             </div>
                         </div>
                         
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="max_snapshots" class="text-[var(--text)] font-medium">Snapshots to Keep:</label>
+                            <input type="number" min="1" step="1" id="max_snapshots" name="max_snapshots" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ max_snapshots or '' }}" placeholder="Leave blank to keep all">
+                            <div class="text-sm text-[var(--text-muted)] mt-1">Oldest incremental snapshots beyond this count are deleted automatically after each backup.</div>
+                        </div>
+
                         <div class="pt-6">
                             <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300 transform hover:-translate-y-1 shadow-lg">
                                 Save Settings

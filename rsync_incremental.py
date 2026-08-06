@@ -1,5 +1,6 @@
 import os
 from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run
+from restore_operations import cleanup_old_snapshots
 from dotenv import load_dotenv
 import sqlite3
 import subprocess
@@ -119,6 +120,14 @@ def parse_logfile(rsync_txt):
                         continue
                     if "Server/" in line:
                         line = line.replace("Server/", "")
+                    if line in (".", "./"):
+                        # rsync emits this for the destination root itself
+                        # (e.g. on a deletion-only run) — it's not a real
+                        # file/subdirectory. Treating it as one would resolve
+                        # to src_dir itself and copytree the entire source
+                        # tree into what's supposed to be a small incremental
+                        # snapshot.
+                        continue
                     if line and not line.startswith("deleting"):  # Exclude deletion lines
                         changes.append(("update", line))
     except FileNotFoundError:
@@ -178,3 +187,4 @@ if __name__ == "__main__":
     store_changes_in_db(changes)
     last_session_number, incremental_folder = copy_files()
     record_backup_statistics(changes, last_session_number, incremental_folder)
+    cleanup_old_snapshots(load_env_value('MAX_SNAPSHOTS'))

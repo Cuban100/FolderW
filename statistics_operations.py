@@ -144,15 +144,15 @@ def evaluation_of_resources():
     src_size = get_folder_size(src_dir)
     total, used, free = destination_space()
     if total is None:
-        raise Exception("Cannot determine the device for the destination path.")
+        return (
+            human_readable_size(src_size),
+            "N/A",
+            False,
+            ["Cannot determine free space for the destination directory — it may not exist or isn't mounted."],
+        )
     unmet_conditions = []
     if free * (1024**3) < src_size:  # free is in GB, so we convert it back to bytes for comparison
         unmet_conditions.append(f"Not enough space in destination. Required: {human_readable_size(src_size)}, Available: {human_readable_size(free * (1024**3))}")
         return human_readable_size(src_size), human_readable_size(free * (1024**3)), False, unmet_conditions
     return human_readable_size(src_size), human_readable_size(free * (1024**3)), True, ["All conditions are met."]
 
-
-
-total, used, free = destination_space()
-logger.info(f"Destination space: {total}, {used}, {free}")
-logger.info(f"Evaluation of resources: {evaluation_of_resources()}")

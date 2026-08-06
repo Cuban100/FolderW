@@ -73,6 +73,53 @@ def list_backups():
     return backups
 
 
+def cleanup_old_snapshots(max_snapshots):
+    """Delete the oldest incremental snapshots beyond max_snapshots,
+    keeping the newest ones. Never touches the full backup — that's a
+    continuously-synced mirror, not a snapshot. A falsy/zero/negative
+    max_snapshots means "keep everything" (no cleanup).
+    """
+    try:
+        max_snapshots = int(max_snapshots)
+    except (TypeError, ValueError):
+        return []
+    if max_snapshots <= 0:
+        return []
+
+    snapshots = [b for b in list_backups() if b["id"] != "full"]
+    # list_backups() already sorts newest first
+    to_delete = snapshots[max_snapshots:]
+
+    deleted = []
+    for snapshot in to_delete:
+        path = get_backup_path(snapshot["id"])
+        if path is None:
+            continue
+        try:
+            shutil.rmtree(path)
+            deleted.append(snapshot["id"])
+            logger.success(f"Deleted old snapshot (retention limit {max_snapshots}): {snapshot['id']}")
+            _prune_empty_parents(path)
+        except OSError as e:
+            logger.error(f"Error deleting snapshot {snapshot['id']}: {e}")
+    return deleted
+
+
+def _prune_empty_parents(path):
+    """After deleting a Month/Day/Time leaf folder, remove now-empty
+    Day/Month parent folders, without ever touching BASE_DIR itself."""
+    base_real = os.path.realpath(load_env_value('BASE_DIR'))
+    parent = os.path.dirname(path)
+    while os.path.realpath(parent) != base_real:
+        try:
+            if os.listdir(parent):
+                break
+            os.rmdir(parent)
+            parent = os.path.dirname(parent)
+        except OSError:
+            break
+
+
 def get_backup_path(backup_id):
     """Resolve a backup id ('full' or 'Month/Day/Time') to an absolute path,
     validated to stay inside BASE_DIR. Returns None if invalid, unknown, or

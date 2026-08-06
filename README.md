@@ -40,6 +40,9 @@ This project is designed to simplify and automate the process of backing up file
 8. **Restore:**
    - Dashboard page listing the full backup and every incremental snapshot, with the ability to restore an entire backup or hand-pick individual files.
 
+9. **Snapshot Retention:**
+   - Optional limit on how many incremental snapshots to keep — oldest ones are deleted automatically after each backup. The full backup is never affected.
+
 ## Quick Start
 
 Copy and run the commands below to deploy FolderW:
@@ -111,5 +114,16 @@ For any backup you can either:
 - **Browse Files** — drills into that one backup and lets you select individual files to restore.
 
 Restoring **never overwrites `SRC_DIR`**. Files are always copied into a new, timestamped folder at `BASE_DIR/Restored/<timestamp>_<backup>/` for you to review and move back into place yourself — a wrong pick can't clobber current data.
+
+## Snapshot Retention
+
+Set **"Snapshots to Keep"** (in the setup GUI or the web Settings page) to a number, and after every backup FolderW deletes the oldest incremental snapshots beyond that count — keeping only the most recent N. Leave it blank to keep every snapshot forever (the default).
+
+This only ever deletes incremental snapshot folders (the `Month/Day/Time` folders under `BASE_DIR`); the full backup mirror is never touched by retention.
+
+Deleting a file from `SRC_DIR` behaves differently depending on which backup you look at:
+
+- **Full backup:** reflects `SRC_DIR` exactly, so a deleted source file is removed from the full backup on the next run (`rsync --delete`).
+- **Incremental snapshots:** deletions are never recorded in a snapshot — a deleted file simply stops appearing in *future* snapshots, but stays intact in whichever earlier snapshot last captured it, so you can still recover it from there via Restore.
 
 This project aims to streamline backup operations, providing a reliable and user-friendly solution for both regular and event-driven file backups.

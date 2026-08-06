@@ -126,10 +126,20 @@ def save_paths():
             result_label.config(text=f"Error: {key.replace('_', ' ')} is required.", foreground='#FF0000')  # Set to red
             return
 
+    # Snapshots to keep is optional — blank means "keep everything" — so it's
+    # validated separately rather than through the required-fields loop above.
+    max_snapshots = max_snapshots_entry.get().strip()
+    if "Leave blank" in max_snapshots:
+        max_snapshots = ""
+    if max_snapshots and (not max_snapshots.isdigit() or int(max_snapshots) <= 0):
+        result_label.config(text="Error: Snapshots to Keep must be a positive whole number, or left blank.", foreground='#FF0000')
+        return
+
     # Save values to .env file
     for key, value in paths.items():
         set_key(env_path, key.upper(), value)
-                
+    set_key(env_path, 'MAX_SNAPSHOTS', max_snapshots)
+
     result_label.config(text="Configuration saved to .env", foreground='#39FF14')  # Set to neon green
 
     create_all_tables(paths['DATABASE'])
@@ -298,11 +308,22 @@ autostart_hint.grid(row=len(labels) + 2, column=2, padx=10, pady=10, sticky='w')
 autostart_label = tk.Label(root, text="Autostart:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
 autostart_label.grid(row=len(labels) + 2, column=0, padx=0, pady=10, sticky='e')
 
+# Snapshot retention: optional, blank means keep every snapshot forever
+max_snapshots_label = tk.Label(root, text="Snapshots to Keep:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
+max_snapshots_label.grid(row=len(labels) + 3, column=0, padx=0, pady=10, sticky='e')
+
+max_snapshots_entry = ttk.Entry(root, width=50)
+max_snapshots_entry.grid(row=len(labels) + 3, column=1, padx=10, pady=10)
+set_placeholder(max_snapshots_entry, "Leave blank to keep all snapshots", 'MAX_SNAPSHOTS')
+
+max_snapshots_hint = tk.Label(root, text="Oldest incremental snapshots beyond this count are deleted automatically.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+max_snapshots_hint.grid(row=len(labels) + 3, column=2, padx=10, pady=10, sticky='w')
+
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 3, column=1, pady=25)
+save_button.grid(row=len(labels) + 4, column=1, pady=25)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 4, column=1, pady=25)
+result_label.grid(row=len(labels) + 5, column=1, pady=25)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')
