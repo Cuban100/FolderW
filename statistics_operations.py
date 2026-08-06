@@ -129,9 +129,8 @@ def get_device_size(mount_point):
 
 def destination_space():
     subdirectory_path = load_env_value('BASE_DIR')
-    parent_mount_point = os.path.dirname(subdirectory_path.rstrip('/'))
     try:
-        usage = psutil.disk_usage(parent_mount_point)
+        usage = psutil.disk_usage(subdirectory_path)
         total = usage.total / (1024**3)  # Convert to GB
         used = usage.used / (1024**3)  # Convert to GB
         free = usage.free / (1024**3)  # Convert to GB
