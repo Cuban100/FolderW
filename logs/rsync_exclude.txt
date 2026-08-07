@@ -7,6 +7,7 @@ lib
 .cache/
 overlay2/
 **/.docker/desktop/vms
+**/.local/share/docker
 FolderW.png
 .directory
 *.tmp
