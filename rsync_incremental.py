@@ -313,7 +313,11 @@ if __name__ == "__main__":
         logger.info(f"Destination baseline size: {size}")
 
     def _compute_source_total():
-        baselines['source_total'] = get_folder_size_bytes_du(src_dir)
+        # exclude_from matches what rsync itself will actually skip — without
+        # it, anything excluded (e.g. Docker Desktop's sparse, ~1TB-apparent
+        # VM disk) inflates this denominator far past what will ever really
+        # be transferred, understating percent for the whole run.
+        baselines['source_total'] = get_folder_size_bytes_du(src_dir, exclude_from=exclude_file)
         logger.info(f"Source total size: {baselines['source_total']}")
 
     threading.Thread(target=_compute_dest_baseline, daemon=True).start()

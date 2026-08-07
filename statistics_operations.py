@@ -90,7 +90,7 @@ def check_env_variables():
     settings_sent = len(missing_vars) == 0
     return settings_sent, settings, missing_vars
 
-def get_folder_size_bytes_du(path):
+def get_folder_size_bytes_du(path, exclude_from=None):
     """Like get_folder_size(), but shells out to `du` (much faster than a
     pure-Python os.walk on a large tree) and returns a raw byte count
     instead of a human-readable string.
@@ -100,8 +100,18 @@ def get_folder_size_bytes_du(path):
     volume configs owned by a container's internal UID) but still prints a
     valid, if slightly undercounted, total to stdout. Only treat it as a
     real failure if stdout has nothing usable at all.
+
+    exclude_from (optional): a path to an rsync-style exclude patterns file
+    (GNU du's --exclude-from uses the same glob syntax). Without this, a
+    huge excluded-from-the-backup item — e.g. a sparse virtual disk image
+    with a multi-hundred-GB apparent size — inflates the total far beyond
+    what will actually be transferred.
     """
-    result = subprocess.run(['du', '-sb', path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    command = ['du', '-sb']
+    if exclude_from:
+        command.append(f'--exclude-from={exclude_from}')
+    command.append(path)
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output = result.stdout.decode('utf-8').strip()
     if output:
         try:
