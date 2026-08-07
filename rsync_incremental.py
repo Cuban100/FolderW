@@ -1,7 +1,8 @@
 import os
 import stat
-from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run
+from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value
 from restore_operations import cleanup_old_snapshots
+from statistics_operations import get_folder_size_du
 from dotenv import load_dotenv
 import sqlite3
 import subprocess
@@ -65,6 +66,14 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
     else:
         backup_type, label = 'incremental', incremental_folder
     record_backup_run(last_session_number, backup_type, label, total_files_processed)
+
+    # Cached here (once per backup run) rather than computed on every
+    # dashboard page load — `du` walks the entire full_backup tree, which
+    # can take minutes on a large backup and would make the dashboard feel
+    # hung if run synchronously on every visit.
+    current_size = get_folder_size_du(full_backup)
+    if current_size:
+        set_database_value('CURRENT_BACKUP_SIZE', current_size)
 
 def ensure_backup_folder_icon():
     """Make the backup destination folder itself show the FolderW logo as

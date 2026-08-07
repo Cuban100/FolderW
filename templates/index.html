@@ -5,6 +5,7 @@
     <title>Dashboard</title>
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/index.css">
+    <script src="/static/sidebar.js"></script>
     <style>
         /* Theme variables (:root / prefers-color-scheme: dark) now live in
            /static/index.css, shared across every page. */
@@ -407,7 +408,12 @@
     </style>
 </head>
 <body>
-   
+    <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+    </button>
+
     <div class="sidebar">
         <div class="logo">
             <img src="{{ logo }}" alt="FolderW Logo">
@@ -417,7 +423,6 @@
             <ul>
                 {% set menu_items = [
                     ('/', 'Dashboard', 'mdi mdi-view-dashboard'),
-                    ('/statistics', 'Statistics', 'mdi mdi-chart-bar'),
                     ('/backup-history', 'Backup History', 'mdi mdi-clock-outline'),
                     ('/restore', 'Restore', 'mdi mdi-backup-restore'),
                     ('/settings', 'Settings', 'mdi mdi-cogs'),
@@ -469,9 +474,9 @@
                     </div>
                     <div class="progress-bar-text" id="backup-progress-text">Backup running&hellip;</div>
                     {% endif %}
-            {% set all_checks_passed = settings_sent == True and validation_status == True and evaluation_status == True %}
+            {% set ready_for_manual_snapshot = settings_sent == True and validation_status == True and evaluation_status == True and has_completed_backup %}
             {% set backup_active = backup_status or backup_in_progress %}
-            {% if all_checks_passed %}
+            {% if ready_for_manual_snapshot %}
             <div class="manual-snapshot-banner" id="manual-snapshot-banner" {% if backup_active %}style="display: none;"{% endif %}>
                 <button class="manual-snapshot-button" onclick="startBackup()">Create a Manual Snapshot</button>
             </div>
@@ -481,7 +486,7 @@
                 <button class="stop-monitoring-button" onclick="stopMonitoring()">Stop Monitoring</button>
             </div>
             {% endif %}
-            {% if not all_checks_passed %}
+            {% if not ready_for_manual_snapshot %}
             <div class="progress-container">
 
                 <!-- Settings Check -->
@@ -528,7 +533,7 @@
                     {% set start = 'message error' %}
                 {% endif %}
                 <div class="{{ start }}">
-                    <button class="check-button" onclick="startBackup()">START BACKUP</button>
+                    <button class="check-button" onclick="startBackup()">Start Full Backup</button>
                 </div>
 
             </div>
@@ -556,13 +561,39 @@
             </div>
             {% endif %}
 
+            <div class="settings">
+                <h2>Backup Statistics</h2>
+                <div class="env-content">
+                    <div class="env-item">
+                        <label>Current Backup Size:</label>
+                        <span class="right" title="{{ current_backup_size }}">{{ current_backup_size if current_backup_size else 'Not Available' }}</span>
+                    </div>
+                    <div class="env-item">
+                        <label>Destination Total:</label>
+                        <span class="right" title="{{ dest_total }}">{{ dest_total if dest_total else 'Not Available' }}</span>
+                    </div>
+                    <div class="env-item">
+                        <label>Destination Used:</label>
+                        <span class="right" title="{{ dest_used }}">{{ dest_used if dest_used else 'Not Available' }}</span>
+                    </div>
+                    <div class="env-item">
+                        <label>Last Backup Session:</label>
+                        <span class="right">#{{ last_session if last_session is defined else 0 }}</span>
+                    </div>
+                    <div class="env-item">
+                        <label>Files Changed (Last Session):</label>
+                        <span class="right">{{ last_session_files if last_session_files is defined else 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
     </div>
     <div class="right-section">
         <div class="evaluation">
-            <p id="src_size">Source Size: <span class="right">{{ src_size }}</span></p> 
-            <p id="dest_space">Destination Available Space: <span class="right">{{ dest_space }}</span></p> 
+            <p id="src_size">Source Size: <span class="right">{{ src_size }}</span></p>
+            <p id="dest_space">Destination Available Space: <span class="right">{{ dest_space }}</span></p>
             <p id="can_backup">Backup Possible: <span class="right">{{ can_backup }}</span></p>
         </div>
         <div class="settings">
@@ -598,10 +629,9 @@
             </div>
         </div>
 
+    </div>
+    </div>
 
-    </div>
-    </div>
-    
     <script>
         function startBackup() {
             window.location.href = '/run-all-steps';

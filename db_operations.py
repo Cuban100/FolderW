@@ -262,6 +262,24 @@ def store_changes_in_db(changes):
         logger.error(f"Error storing changes in database: {e}")
 
 
+def has_completed_backup(database):
+    """Whether at least one backup has actually finished for the current
+    backup identity. Backed by backup_runs rather than a separate flag so
+    it automatically goes back to False when reset_backup_history() clears
+    it after SRC_DIR/BASE_DIR/FULL_NAME changes — a different backup means
+    starting over, verification widgets and all.
+    """
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM backup_runs WHERE status = 'completed'")
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+    except sqlite3.Error as e:
+        logger.error(f"Error checking backup history: {e}")
+        return False
+
 def record_backup_run(session, backup_type, label, files_changed, status='completed'):
     """Log that a backup run happened — the full backup or a specific
     incremental snapshot — independent of how many files changed. This is

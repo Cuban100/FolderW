@@ -7,8 +7,8 @@ import threading
 import queue
 import webbrowser
 import psutil
-from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space, get_folder_size_du
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history
+from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, cleanup_old_snapshots
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
@@ -129,7 +129,8 @@ async def validate_conditions(request: Request):
             "interval": backup_interval,
             "src_size": src_size,  # Human-readable format
             "dest_space": dest_space,  # Human-readable format
-            "can_backup": 'Yes' if can_backup else 'No'
+            "can_backup": 'Yes' if can_backup else 'No',
+            "has_completed_backup": has_completed_backup(database),
         })
     else:
         return templates.TemplateResponse("index.html", {
@@ -143,7 +144,8 @@ async def validate_conditions(request: Request):
             "evaluation_message": evaluation_message,
             "src_size": src_size,  # Human-readable format
             "dest_space": dest_space,  # Human-readable format
-            "can_backup": 'No'
+            "can_backup": 'No',
+            "has_completed_backup": has_completed_backup(database),
         })
 
 
@@ -174,7 +176,8 @@ async def check_settings(request: Request):
             "full_name": full_name,
             "database": database,
             "monitor": monitor,
-            "interval": backup_interval
+            "interval": backup_interval,
+            "has_completed_backup": has_completed_backup(database),
 
         })
     else:
@@ -367,7 +370,8 @@ async def run_all_steps(request: Request):
         "backup_status": backup_status,
         "src_size": src_size,
         "dest_space": dest_space,
-        "can_backup": can_backup
+        "can_backup": can_backup,
+        "has_completed_backup": has_completed_backup(database),
     })
 @app.get("/check-validation", response_class=HTMLResponse)
 async def validate_conditions(request: Request):
@@ -398,7 +402,8 @@ async def validate_conditions(request: Request):
             "full_name": full_name,
             "database": database,
             "monitor": monitor,
-            "interval": backup_interval
+            "interval": backup_interval,
+            "has_completed_backup": has_completed_backup(database),
         })
     else:
         return templates.TemplateResponse("index.html", {
@@ -422,6 +427,11 @@ async def root(request: Request):
     # Restore the last known Settings/Validation/Evaluation check results,
     # so returning to the dashboard doesn't require re-running them.
     persisted = load_persisted_checks()
+    # dest_total/dest_used come from a plain statvfs-style call (cheap, safe
+    # on every page load); current_backup_size is a cached value written
+    # after each backup run (see rsync_incremental.py) rather than computed
+    # here, since a live `du` over the whole backup can take minutes.
+    total, used, _free = destination_space()
     return templates.TemplateResponse("index.html",
         { "request": request,
         "logo": logo,
@@ -439,30 +449,13 @@ async def root(request: Request):
         "can_backup": persisted["can_backup"],
         "backup_in_progress": is_backup_running(),
         "watchdog_active": is_watchdog_active(),
+        "has_completed_backup": has_completed_backup(database),
+        "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings'),
+        "dest_total": f"{total:.2f} GB" if total is not None else None,
+        "dest_used": f"{used:.2f} GB" if used is not None else None,
+        "last_session": get_last_session_number(database),
+        "last_session_files": len(list_items_by_session(database)),
         })
-
-@app.get("/statistics", response_class=HTMLResponse)
-async def statistics_page(request: Request):
-    database = load_env_value('DATABASE')
-    full_backup = load_other_variables('full_backup')
-
-    src_size, dest_free, can_backup, _ = evaluation_of_resources()
-    total, used, free = destination_space()
-    current_backup_size = get_folder_size_du(full_backup)
-    last_session = get_last_session_number(database)
-    last_session_files = len(list_items_by_session(database))
-
-    return templates.TemplateResponse("statistics.html", {
-        "request": request,
-        "src_size": src_size,
-        "dest_total": f"{total:.2f} GB" if total is not None else "N/A",
-        "dest_used": f"{used:.2f} GB" if used is not None else "N/A",
-        "dest_free": dest_free,
-        "can_backup": can_backup,
-        "current_backup_size": current_backup_size or "N/A",
-        "last_session": last_session,
-        "last_session_files": last_session_files,
-    })
 
 @app.get("/restore", response_class=HTMLResponse)
 async def restore_page(request: Request):
