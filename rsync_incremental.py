@@ -280,6 +280,7 @@ if __name__ == "__main__":
     # rsync's first progress line actually arrives.
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
     set_database_value('BACKUP_ETA', '')
+    set_database_value('CURRENT_BACKUP_SIZE', '')
     # Elapsed time is computed by the dashboard (now - this), not rsync
     # itself — rsync only ever reports ETA (time remaining), never how
     # long the run has been going.
