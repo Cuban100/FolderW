@@ -611,7 +611,7 @@
             {% endif %}
 
             <div class="stats-section">
-                <h2>Backup Statistics</h2>
+                <h2>System</h2>
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-label">CPU Usage</div>
@@ -625,6 +625,12 @@
                         <div class="stat-label">RAM Total</div>
                         <div class="stat-value">{{ ram_total if ram_total else 'Not Available' }}</div>
                     </div>
+                </div>
+            </div>
+
+            <div class="stats-section">
+                <h2>Backup Statistics</h2>
+                <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-label">Source Folder Size</div>
                         <div class="stat-value">{{ src_size if src_size else 'Not Available' }}</div>
