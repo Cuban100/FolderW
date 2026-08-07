@@ -492,44 +492,10 @@
             {% if not ready_for_manual_snapshot %}
             <div class="progress-container">
 
-                <!-- Settings Check -->
-                {% if settings_sent == True %}
-                    {% set settings = 'message success' %}
-                {% else %}
-                    {% set settings = 'message error' %}
-                {% endif %}
-                <div class="{{ settings }}">
-                    <span>Settings</span>
-                    <form method="get" action="/check-settings">
-                        <button type="submit" class="check-button">Check</button>
-                    </form>
-                </div>
-
-                <!-- Validation Check -->
-                {% if validation_status == True and settings_sent == True %}
-                    {% set validation = 'message success' %}
-                {% else %}
-                    {% set validation = 'message error' %}
-                {% endif %}
-                <div class="{{ validation }}">
-                    Validation
-                    <button class="check-button" onclick="location.href='/check-validation'">Check</button>
-                </div>
-
-                <!-- Evaluation Check -->
-                {% if evaluation_status == True and settings_sent == True and validation_status == True %}
-                    {% set evaluation = 'message success' %}
-                {% else %}
-                    {% set evaluation = 'message error' %}
-                {% endif %}
-                <div class="{{ evaluation }}">
-                    Evaluation
-                    <button class="check-button" onclick="location.href='/check-evaluation'">Check</button>
-                </div>
-
-
-
-                <!-- Start Backup -->
+                <!-- Start Backup: runs the settings/validation/evaluation
+                     checks itself server-side (see /run-all-steps) and
+                     reports back whichever one fails, so a separate
+                     button+card per step was pure redundancy. -->
                 {% if evaluation_status == True and validation_status == True and settings_sent == True %}
                     {% set start = 'message success' %}
                 {% else %}
@@ -546,25 +512,14 @@
 
             </div>
             <div class=message-help>
-                {%if settings_sent %}
-                <p class="show"><span class="highlight">Settings Step:</span> All items from the initial .env file setup will be thoroughly checked.
-                The primary goal is to ensure that the Setup step has stored the values accurately.</p>
-                {%else%}
-                <p class="show">You can verify each item individually (recommended), or simply click the Start Backup button to complete all steps automatically.</p>
+                {% if not settings_sent %}
+                <p class="show">Missing settings — finish setup, then click Start Full Backup: it checks settings, validation, and available space itself and reports back if anything needs attention.</p>
                 {% endif %}
-                {% if validation_status %}
-                <p class="show"><span class="highlight">Validation step:</span>Involves checking the source and destination paths specified in your settings.
-                This step ensures that the paths exist and are accessible, confirming that the source directory contains the data to be backed up, and the destination directory is ready to receive the backup. By verifying these paths, we prevent potential issues during the backup process, such as missing files or inaccessible directories.</p>
-                {% endif %}
-                {%if evaluation_status %}
-                <p class="show"><span class="highlight">Evaluation step:</span> Involves assessing the available space on both the source and destination directories.
-                This step ensures that there is enough space on the destination directory to accommodate the backup and that the source directory has the necessary space to complete the backup process. By verifying these space requirements, we prevent potential issues during the backup, such as insufficient storage space or data overflow, ensuring a smooth and successful backup process.</p>
                 {% if monitor == '1' %}
-                    <p class="show"> <span class="highlight"> Watchdog Future (FolderW) is enabled: </span> Enabling the monitoring feature activates the watchdog functionality. This means that the system will continuously watch the source directory for any changes or updates. By choosing to enable monitoring, the watchdog ensures that any new or modified files in the source directory are automatically detected and prepared for backup. This process is incremental, organizing backups by month, day, and time, which means all versions of the same file will be stored in a very organized manner. This ensures your backup is always up-to-date without manual intervention, and you can easily track and retrieve specific versions of your files as needed.</p>
+                <p class="show"><span class="highlight">Watchdog Future (FolderW) is enabled:</span> Enabling the monitoring feature activates the watchdog functionality. This means that the system will continuously watch the source directory for any changes or updates. By choosing to enable monitoring, the watchdog ensures that any new or modified files in the source directory are automatically detected and prepared for backup. This process is incremental, organizing backups by month, day, and time, which means all versions of the same file will be stored in a very organized manner. This ensures your backup is always up-to-date without manual intervention, and you can easily track and retrieve specific versions of your files as needed.</p>
                 {% endif %}
                 {% if interval == 'hourly' or interval == 'daily' or interval == 'weekly' %}
                 <p class="show"><span class="highlight">Interval Backup is enabled:</span> When the interval option is enabled, backups are scheduled to occur at specified time intervals. This step allows you to configure how frequently backups should take place (e.g., every hour, daily, weekly). The system will automatically initiate a backup at each specified interval, ensuring that your data is continuously protected. Each backup is incremental, meaning only the changes made since the last backup are saved. This approach optimizes storage space and organizes all versions of the same file by month, day, and time. This organized storage makes it easy to track and retrieve specific file versions as needed, providing a reliable and efficient backup solution.</p>
-                {% endif %}
                 {% endif %}
             </div>
             {% endif %}
