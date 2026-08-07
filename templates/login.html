@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log In - FolderW</title>
+    <link rel="stylesheet" type="text/css" href="/static/index.css">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        html, body {
+            min-height: 100vh;
+        }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+        }
+        .login-card {
+            width: 100%;
+            max-width: 360px;
+            background-color: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px var(--shadow);
+            padding: 40px 32px;
+        }
+        .login-logo {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .login-logo img {
+            width: 72px;
+            height: 72px;
+            margin-bottom: 12px;
+        }
+        .login-logo span {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+        .login-error {
+            background-color: var(--error-bg);
+            color: var(--error-text);
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .login-field {
+            margin-bottom: 20px;
+        }
+        .login-field label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .login-field input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 2px solid var(--border);
+            background-color: var(--surface);
+            color: var(--text);
+            font-size: 1em;
+        }
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background-color: #2196f3;
+            color: white;
+            font-size: 1.05em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .login-button:hover {
+            background-color: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-logo">
+            <img src="{{ logo }}" alt="FolderW Logo">
+            <span>FolderW</span>
+        </div>
+        {% if error %}
+        <div class="login-error">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/login">
+            <input type="hidden" name="next" value="{{ next or '/' }}">
+            <div class="login-field">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" autocomplete="current-password" autofocus required>
+            </div>
+            <button type="submit" class="login-button">Log In</button>
+        </form>
+    </div>
+</body>
+</html>

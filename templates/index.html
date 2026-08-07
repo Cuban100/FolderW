@@ -605,6 +605,10 @@
                 <h2>Backup Statistics</h2>
                 <div class="stats-grid">
                     <div class="stat-card">
+                        <div class="stat-label">Source Folder Size</div>
+                        <div class="stat-value">{{ src_size if src_size else 'Not Available' }}</div>
+                    </div>
+                    <div class="stat-card">
                         <div class="stat-label">Current Backup Size</div>
                         <div class="stat-value">{{ current_backup_size if current_backup_size else 'Not Available' }}</div>
                     </div>

@@ -1,6 +1,7 @@
 import os
 import subprocess
 from db_operations import create_all_tables, set_database_value
+from auth import hash_password
 import tkinter as tk
 from tkinter import filedialog, Label, PhotoImage
 from tkinter import ttk, StringVar
@@ -165,6 +166,12 @@ def save_paths():
     for key, value in paths.items():
         set_key(env_path, key.upper(), value)
     set_key(env_path, 'MAX_SNAPSHOTS', max_snapshots)
+
+    # Blank means "leave unchanged" (existing install) or "no login"
+    # (fresh install) — either way, never touch ADMIN_PASSWORD_HASH.
+    dashboard_password = dashboard_password_entry.get().strip()
+    if dashboard_password:
+        set_key(env_path, 'ADMIN_PASSWORD_HASH', hash_password(dashboard_password))
 
     result_label.config(text="Configuration saved to .env", foreground='#39FF14')  # Set to neon green
 
@@ -350,11 +357,23 @@ set_placeholder(max_snapshots_entry, "Leave blank to keep all snapshots", 'MAX_S
 max_snapshots_hint = tk.Label(root, text="Oldest incremental snapshots beyond this count are deleted automatically.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
 max_snapshots_hint.grid(row=len(labels) + 3, column=2, padx=10, pady=10, sticky='w')
 
+# Dashboard password: optional, never prefilled (only the hash is ever
+# stored) — leave blank on a fresh install for no login, or on an existing
+# one to keep whatever password is already set.
+dashboard_password_label = tk.Label(root, text="Dashboard Password:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
+dashboard_password_label.grid(row=len(labels) + 4, column=0, padx=0, pady=10, sticky='e')
+
+dashboard_password_entry = ttk.Entry(root, width=50, show='*')
+dashboard_password_entry.grid(row=len(labels) + 4, column=1, padx=10, pady=10)
+
+dashboard_password_hint = tk.Label(root, text="Leave blank for no login, or to keep the current password unchanged.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+dashboard_password_hint.grid(row=len(labels) + 4, column=2, padx=10, pady=10, sticky='w')
+
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 4, column=1, pady=25)
+save_button.grid(row=len(labels) + 5, column=1, pady=25)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 5, column=1, pady=25)
+result_label.grid(row=len(labels) + 6, column=1, pady=25)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')

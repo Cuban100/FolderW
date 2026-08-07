@@ -90,6 +90,12 @@ It pulls the latest code, updates dependencies, and — if the autostart systemd
    - The system can watch the source directory for changes and perform backups automatically.
    - Manual backups can also be initiated as needed.
 
+## Login
+
+The dashboard has no login page by default. Set a **Dashboard Password** (in `setup.py` or the web Settings page) to require one — only a salted, hashed version of the password is ever stored, never the plaintext. Once set, every page (including Settings) requires logging in first.
+
+Sessions last **15 days** via a signed cookie, so you won't need to log in again on the same browser until it expires or you explicitly log out. Uncheck **Require Login** in Settings to disable the login page again.
+
 ## Autostart on Boot (systemd)
 
 Checking **"Start FolderW automatically at system boot"** in the setup GUI installs and enables a systemd **user** service (`folderw.service`) that runs `server.py` on login/boot. No root/sudo is required — it's managed entirely through `systemctl --user`.

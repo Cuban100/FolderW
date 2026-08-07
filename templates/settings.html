@@ -182,6 +182,17 @@
                             <div class="text-sm text-[var(--text-muted)] mt-1">Oldest incremental snapshots beyond this count are deleted automatically after each backup.</div>
                         </div>
 
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="new_password" class="text-[var(--text)] font-medium">Dashboard Password:</label>
+                            <input type="password" id="new_password" name="new_password" autocomplete="new-password" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" placeholder="Leave blank to keep the current password">
+                            <div class="text-sm text-[var(--text-muted)] mt-1">Set or change the password required to log in to this dashboard. Leave blank to keep it unchanged.</div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <input type="checkbox" id="require_login" name="require_login" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if login_enabled %}checked{% endif %}>
+                            <label for="require_login" class="text-[var(--text)]">Require Login</label>
+                            <div class="text-sm text-[var(--text-muted)] mt-1">Uncheck to disable the login page entirely.</div>
+                        </div>
+
                         <div class="pt-6">
                             <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300 transform hover:-translate-y-1 shadow-lg">
                                 Save Settings

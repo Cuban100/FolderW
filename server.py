@@ -10,10 +10,12 @@ import psutil
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, cleanup_old_snapshots
+from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
 
 # Initialize FastAPI app
@@ -27,6 +29,54 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 logo = '/static/logo.png'
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+SESSION_MAX_AGE = 15 * 24 * 60 * 60  # 15 days
+PUBLIC_PATHS = {"/login"}
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    # Login is opt-in: with no password configured (fresh/existing installs
+    # that haven't set one via Settings), the dashboard stays open exactly
+    # like before this feature existed.
+    admin_hash = load_env_value('ADMIN_PASSWORD_HASH')
+    path = request.url.path
+    if admin_hash and path not in PUBLIC_PATHS and not path.startswith("/static/"):
+        if not request.session.get('authenticated'):
+            return RedirectResponse(url=f"/login?next={path}")
+    return await call_next(request)
+
+# Deliberately added *after* the middleware above: Starlette treats the
+# most-recently-added middleware as outermost, so SessionMiddleware ends up
+# wrapping require_login and populates request.session before it's read.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=get_or_create_secret_key(),
+    session_cookie="folderw_session",
+    max_age=SESSION_MAX_AGE,
+)
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, next: str = "/"):
+    return templates.TemplateResponse("login.html", {"request": request, "next": next, "logo": logo})
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_submit(request: Request, password: str = Form(...), next: str = Form("/")):
+    admin_hash = load_env_value('ADMIN_PASSWORD_HASH')
+    if admin_hash and verify_password(password, admin_hash):
+        request.session['authenticated'] = True
+        return RedirectResponse(url=next or "/", status_code=303)
+    logger.warning("Failed login attempt.")
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "next": next,
+        "logo": logo,
+        "error": "Incorrect password.",
+    })
+
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login")
 
 # Define the form data model
 class FormData(BaseModel):
@@ -511,7 +561,8 @@ async def settings_page(request: Request):
         "database": load_env_value('DATABASE'),
         "monitor_checked": monitor == '1',
         "interval": load_env_value('BACKUP_INTERVAL'),
-        "max_snapshots": load_env_value('MAX_SNAPSHOTS')
+        "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
+        "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
     })
 
 
@@ -524,7 +575,9 @@ async def submit_settings(
     database: str = Form(""),
     interval: str = Form(""),
     max_snapshots: str = Form(""),
-    monitor: str = Form(None)
+    monitor: str = Form(None),
+    new_password: str = Form(""),
+    require_login: str = Form(None),
 ):
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
@@ -551,8 +604,20 @@ async def submit_settings(
             "database": load_env_value('DATABASE'),
             "monitor_checked": monitor_enabled,
             "interval": load_env_value('BACKUP_INTERVAL'),
-            "max_snapshots": max_snapshots
+            "max_snapshots": max_snapshots,
+            "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
         })
+
+    require_login_enabled = require_login is not None
+    new_password = new_password.strip()
+    if new_password:
+        # Typing a new password always (re-)enables login, regardless of
+        # the checkbox — setting a password is an unambiguous "yes".
+        admin_password_hash = hash_password(new_password)
+    elif not require_login_enabled:
+        admin_password_hash = ""  # Unchecked with no new password: disable login.
+    else:
+        admin_password_hash = load_env_value('ADMIN_PASSWORD_HASH') or ""
 
     new_values = {
         "SRC_DIR": src_dir.strip() or load_env_value('SRC_DIR'),
@@ -561,7 +626,8 @@ async def submit_settings(
         "DATABASE": database.strip() or load_env_value('DATABASE'),
         "MONITOR": "1" if monitor_enabled else "0",
         "BACKUP_INTERVAL": "False" if monitor_enabled else (interval or load_env_value('BACKUP_INTERVAL') or "hourly"),
-        "MAX_SNAPSHOTS": max_snapshots
+        "MAX_SNAPSHOTS": max_snapshots,
+        "ADMIN_PASSWORD_HASH": admin_password_hash,
     }
     save_env_values(new_values)
 
@@ -589,7 +655,8 @@ async def submit_settings(
         "database": new_values["DATABASE"],
         "monitor_checked": monitor_enabled,
         "interval": new_values["BACKUP_INTERVAL"],
-        "max_snapshots": new_values["MAX_SNAPSHOTS"]
+        "max_snapshots": new_values["MAX_SNAPSHOTS"],
+        "login_enabled": bool(new_values["ADMIN_PASSWORD_HASH"]),
     })
 
 
