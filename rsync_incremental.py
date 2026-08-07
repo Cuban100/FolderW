@@ -165,8 +165,21 @@ def rsync(result_holder=None):
         
     try:
         with open(rsync_txt, 'w') as log_f:
-            # Run the rsync command and capture output in real-time
-            process = subprocess.Popen(rsync_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            # Run the rsync command and capture output in real-time.
+            # stderr=STDOUT (not its own PIPE): found live, the hard way —
+            # a separate stderr pipe that nothing ever reads deadlocks the
+            # whole process once it fills. rsync hitting a real but
+            # ordinarily-recoverable error (a permission-denied file, say)
+            # writes a warning to stderr and moves on; with an unread pipe,
+            # that write() itself blocks forever the moment the OS pipe
+            # buffer (~64KB) fills up from accumulated warnings — confirmed
+            # via strace: rsync's sender stuck mid-write() to fd 2, every
+            # sub-process idle in pselect6 waiting on each other, the
+            # dashboard showing a stall with no error surfaced anywhere.
+            # Merging into the one stream we already read continuously
+            # keeps it permanently drained, and as a bonus surfaces error
+            # lines in the activity log/panel instead of losing them.
+            process = subprocess.Popen(rsync_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             for line in process.stdout:
                 log_f.write(line)
                 if "%" in line:
