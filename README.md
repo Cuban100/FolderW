@@ -8,6 +8,8 @@ This project is designed to simplify and automate the process of backing up file
 
 > **Platform support:** FolderW currently works on **Linux only**. It relies on `rsync` and other Linux-specific tooling, and hasn't been tested on macOS or Windows.
 
+> **Source scope:** For now, `SRC_DIR` must be a local path — either on the machine's internal drive or an external/USB drive, as long as it's already mounted before FolderW starts. Network shares and remote/cloud sources aren't currently supported.
+
 ## Features
 
 1. **Graphical User Interface (GUI):**
