@@ -552,8 +552,14 @@ async def root(request: Request):
     database = load_env_value('DATABASE')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
-    # Restore the last known Settings/Validation/Evaluation check results,
-    # so returning to the dashboard doesn't require re-running them.
+    # Restore the last known Validation/Evaluation check results, so
+    # returning to the dashboard doesn't require re-running them — those
+    # involve real filesystem/disk-usage checks, worth caching. Settings is
+    # different: it's just reading already-loaded env vars (cheap, no I/O),
+    # and a persisted flag defaults to false on a brand-new database with
+    # nothing ever checked yet — showing "Missing settings" on a fresh
+    # install's first load even with a fully filled-in .env. Always fresh.
+    settings_sent, _settings, missing_vars = check_env_variables()
     persisted = load_persisted_checks()
     return templates.TemplateResponse("index.html",
         { "request": request,
@@ -564,7 +570,8 @@ async def root(request: Request):
         "database": database,
         "monitor": monitor,
         "interval": backup_interval,
-        "settings_sent": persisted["settings_sent"],
+        "settings_sent": settings_sent,
+        "missing_settings": missing_vars,
         "validation_status": persisted["validation_status"],
         "evaluation_status": persisted["evaluation_status"],
         "src_size": persisted["src_size"],
