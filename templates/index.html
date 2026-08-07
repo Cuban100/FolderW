@@ -164,6 +164,36 @@
         .stop-monitoring-button:hover {
             background-color: var(--error-bg);
         }
+        .stats-section {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .stats-section h2 {
+            font-size: 22px;
+            color: var(--text);
+            margin-bottom: 16px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+        .stat-card {
+            background-color: var(--surface);
+            border-radius: 10px;
+            box-shadow: 0 2px 10px var(--shadow);
+            padding: 20px;
+        }
+        .stat-card .stat-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+        .stat-card .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text);
+        }
         .right-section {
             margin: 24px 0 0;
             padding: 20px;
@@ -561,28 +591,28 @@
             </div>
             {% endif %}
 
-            <div class="settings" style="margin-top: 10px;">
+            <div class="stats-section">
                 <h2>Backup Statistics</h2>
-                <div class="env-content">
-                    <div class="env-item">
-                        <label>Current Backup Size:</label>
-                        <span class="right" title="{{ current_backup_size }}">{{ current_backup_size if current_backup_size else 'Not Available' }}</span>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Current Backup Size</div>
+                        <div class="stat-value">{{ current_backup_size if current_backup_size else 'Not Available' }}</div>
                     </div>
-                    <div class="env-item">
-                        <label>Destination Total:</label>
-                        <span class="right" title="{{ dest_total }}">{{ dest_total if dest_total else 'Not Available' }}</span>
+                    <div class="stat-card">
+                        <div class="stat-label">Destination Total</div>
+                        <div class="stat-value">{{ dest_total if dest_total else 'Not Available' }}</div>
                     </div>
-                    <div class="env-item">
-                        <label>Destination Used:</label>
-                        <span class="right" title="{{ dest_used }}">{{ dest_used if dest_used else 'Not Available' }}</span>
+                    <div class="stat-card">
+                        <div class="stat-label">Destination Used</div>
+                        <div class="stat-value">{{ dest_used if dest_used else 'Not Available' }}</div>
                     </div>
-                    <div class="env-item">
-                        <label>Last Backup Session:</label>
-                        <span class="right">#{{ last_session if last_session is defined else 0 }}</span>
+                    <div class="stat-card">
+                        <div class="stat-label">Last Backup Session</div>
+                        <div class="stat-value">#{{ last_session if last_session is defined else 0 }}</div>
                     </div>
-                    <div class="env-item">
-                        <label>Files Changed (Last Session):</label>
-                        <span class="right">{{ last_session_files if last_session_files is defined else 0 }}</span>
+                    <div class="stat-card">
+                        <div class="stat-label">Files Changed (Last Session)</div>
+                        <div class="stat-value">{{ last_session_files if last_session_files is defined else 0 }}</div>
                     </div>
                 </div>
             </div>
