@@ -60,7 +60,19 @@ def configure_systemd_autostart(enable):
             f"WorkingDirectory={APP_DIR}\n"
             f"ExecStart={sys.executable} {os.path.join(APP_DIR, 'server.py')}\n"
             "Restart=on-failure\n"
-            "RestartSec=5\n\n"
+            "RestartSec=5\n"
+            # Without this, systemd's default KillMode=control-group sends
+            # the stop/restart signal to every process in this service's
+            # cgroup — including main_backup.py, even though it's launched
+            # with start_new_session=True specifically to survive dashboard
+            # restarts. That start_new_session flag only detaches it from
+            # the *terminal* session (protects against SIGHUP on terminal
+            # close); it does nothing against systemd's own cgroup-wide
+            # kill. KillMode=process makes systemd only ever signal the
+            # single tracked PID (server.py) on stop/restart/update, so the
+            # watchdog and any in-progress backup are never silently killed
+            # just because the dashboard restarted.
+            "KillMode=process\n\n"
             "[Install]\n"
             "WantedBy=default.target\n"
         )
