@@ -129,6 +129,12 @@
         .check-button:hover {
             background-color: #1976d2;
         }
+        .check-button.stop {
+            background-color: #e53935;
+        }
+        .check-button.stop:hover {
+            background-color: #c62828;
+        }
         .manual-snapshot-banner {
             background-color: var(--success-bg);
             border-radius: 10px;
@@ -563,7 +569,11 @@
                     {% set start = 'message error' %}
                 {% endif %}
                 <div class="{{ start }}">
+                    {% if backup_active %}
+                    <button class="check-button stop" onclick="stopMonitoring()">Stop Full Backup</button>
+                    {% else %}
                     <button class="check-button" onclick="startBackup()">Start Full Backup</button>
+                    {% endif %}
                 </div>
 
             </div>
