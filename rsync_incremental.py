@@ -295,11 +295,21 @@ if __name__ == "__main__":
     # (baseline + transferred-this-run) / true-source-total instead. Both
     # numbers come from `du`, run in background threads so neither blocks
     # rsync from starting and both run concurrently with each other.
-    baselines = {'dest_baseline': None, 'source_total': None}
+    # transferred_offset is the value of transferred_bytes (rsync's own
+    # running counter, read in the main loop below) at the moment
+    # dest_baseline was last measured. The live per-progress-line estimate
+    # is dest_baseline + (transferred_bytes - transferred_offset) rather
+    # than dest_baseline + transferred_bytes: both get re-anchored together
+    # on every real `du` scan (initial and periodic, below), so the fast
+    # estimate keeps converging back to ground truth instead of drifting
+    # further from it, unbounded, for the rest of the run.
+    baselines = {'dest_baseline': None, 'source_total': None, 'transferred_offset': 0, 'last_transferred': 0}
 
     def _compute_dest_baseline():
-        baselines['dest_baseline'] = get_folder_size_bytes_du(full_backup)
-        logger.info(f"Destination baseline size: {baselines['dest_baseline']}")
+        size = get_folder_size_bytes_du(full_backup)
+        baselines['dest_baseline'] = size
+        baselines['transferred_offset'] = baselines['last_transferred']
+        logger.info(f"Destination baseline size: {size}")
 
     def _compute_source_total():
         baselines['source_total'] = get_folder_size_bytes_du(src_dir)
@@ -308,13 +318,13 @@ if __name__ == "__main__":
     threading.Thread(target=_compute_dest_baseline, daemon=True).start()
     threading.Thread(target=_compute_source_total, daemon=True).start()
 
-    # CURRENT_BACKUP_SIZE (set below, per progress line) is a live estimate
-    # of dest_baseline + transferred-this-run — cheap and immediate, but it
-    # double-counts modified files: the old version's bytes are already in
-    # the one-time baseline above, and the new version's size gets added on
-    # top too, so the estimate drifts upward as more files change (not just
-    # new ones get added). This loop periodically re-`du`s the real
-    # destination and overwrites the estimate with ground truth.
+    # CURRENT_BACKUP_SIZE and BACKUP_PROGRESS_PERCENT (set below, per
+    # progress line) are a live estimate off dest_baseline — cheap and
+    # immediate, but it double-counts modified files: the old version's
+    # bytes are already in the baseline, and the new version's size gets
+    # added on top too. It also has no idea about deletions (--delete is
+    # on). This loop periodically re-`du`s the real destination and
+    # re-anchors both dest_baseline and the estimate to ground truth.
     # Self-rescheduling — waits 60s after each scan *completes*, not on a
     # fixed clock — so scans on a huge tree can never overlap or pile up.
     stop_size_refresh = threading.Event()
@@ -329,6 +339,11 @@ if __name__ == "__main__":
             size_bytes = get_folder_size_bytes_du(full_backup)
             if size_bytes is not None:
                 set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(size_bytes))
+                baselines['dest_baseline'] = size_bytes
+                baselines['transferred_offset'] = baselines['last_transferred']
+                source_total = baselines['source_total']
+                if source_total:
+                    set_database_value('BACKUP_PROGRESS_PERCENT', str(min(100, round(size_bytes / source_total * 100))))
             stop_size_refresh.wait(60)
 
     threading.Thread(target=_refresh_current_size_periodically, daemon=True).start()
@@ -345,11 +360,12 @@ if __name__ == "__main__":
         if not match:
             continue
         transferred_bytes = int(match.group(1).replace(',', ''))
+        baselines['last_transferred'] = transferred_bytes
         eta = match.group(3)
         dest_baseline = baselines['dest_baseline']
         source_total = baselines['source_total']
         if dest_baseline is not None and source_total:
-            current_total = dest_baseline + transferred_bytes
+            current_total = dest_baseline + (transferred_bytes - baselines['transferred_offset'])
             percent = min(100, round(current_total / source_total * 100))
             set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(current_total))
         else:

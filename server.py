@@ -345,6 +345,7 @@ async def backup_status_endpoint():
         "percent": percent or None,
         "eta": eta or None,
         "elapsed_seconds": elapsed_seconds,
+        "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings') or None,
     })
 
 @app.post("/stop-backup")

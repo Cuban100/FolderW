@@ -555,7 +555,7 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Current Backup Size</div>
-                        <div class="stat-value">{{ current_backup_size if current_backup_size else 'Not Available' }}</div>
+                        <div class="stat-value" id="current-backup-size-value">{{ current_backup_size if current_backup_size else 'Not Available' }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Destination Total</div>
@@ -675,6 +675,7 @@
             const progressContainer = document.getElementById('backup-progress-container');
             const progressBar = progressContainer ? progressContainer.querySelector('.progress-bar') : null;
             const progressText = document.getElementById('backup-progress-text');
+            const currentSizeValue = document.getElementById('current-backup-size-value');
             if (!statusMessage || statusMessage.textContent.trim().startsWith('Failed')) {
                 return;
             }
@@ -685,6 +686,9 @@
                 try {
                     const response = await fetch('/backup-status');
                     const data = await response.json();
+                    if (currentSizeValue && data.current_backup_size) {
+                        currentSizeValue.textContent = data.current_backup_size;
+                    }
                     if (data.running) {
                         const parts = [];
                         if (data.elapsed_seconds !== null && data.elapsed_seconds !== undefined) {
