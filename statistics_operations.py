@@ -94,10 +94,20 @@ def get_folder_size_bytes_du(path):
     """Like get_folder_size(), but shells out to `du` (much faster than a
     pure-Python os.walk on a large tree) and returns a raw byte count
     instead of a human-readable string.
+
+    `du` exits non-zero whenever it can't read even a single subdirectory
+    (permission-denied is common and expected on a large tree — e.g. Docker
+    volume configs owned by a container's internal UID) but still prints a
+    valid, if slightly undercounted, total to stdout. Only treat it as a
+    real failure if stdout has nothing usable at all.
     """
     result = subprocess.run(['du', '-sb', path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode == 0:
-        return int(result.stdout.decode('utf-8').split()[0])
+    output = result.stdout.decode('utf-8').strip()
+    if output:
+        try:
+            return int(output.split()[0])
+        except (ValueError, IndexError):
+            pass
     logger.info(f"Error: {result.stderr.decode()}")
     return None
 
