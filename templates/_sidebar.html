@@ -1,0 +1,32 @@
+<button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+</button>
+
+<div class="sidebar">
+    <div class="logo">
+        <img src="{{ logo }}" alt="FolderW Logo">
+        <span class="logo-text">FolderW</span>
+    </div>
+    <nav>
+        <ul>
+            {% set menu_items = [
+                ('/', 'Dashboard', 'mdi mdi-view-dashboard'),
+                ('/backup-history', 'Backup History', 'mdi mdi-clock-outline'),
+                ('/restore', 'Restore', 'mdi mdi-backup-restore'),
+                ('/settings', 'Settings', 'mdi mdi-cogs'),
+                ('/goals', 'Goals', 'mdi mdi-bullseye-arrow'),
+                ('/logout', 'Log out', 'mdi mdi-logout')
+            ] %}
+            {% for href, label, icon_class in menu_items %}
+            <li>
+                <a href="{{ href }}" class="{{ 'active' if request.url.path == href else '' }}">
+                    <span class="{{ icon_class }} mdi-icon"></span>
+                    {{ label }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </nav>
+</div>

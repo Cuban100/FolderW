@@ -76,14 +76,71 @@ html.sidebar-collapsed .content {
     margin-left: 0 !important;
 }
 
-.app-sidebar {
-    transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease, opacity 0.15s ease;
-    overflow: hidden;
+/* Sidebar itself — shared by every page via templates/_sidebar.html, so
+   there's one source of truth instead of each page styling its own copy
+   (previously index.html had this look while every other page used a
+   plain-text, logo-less Tailwind sidebar — a real inconsistency). */
+.sidebar {
+    width: 250px;
+    background-color: #2b2b2b;
+    color: white;
+    padding: 20px;
+    position: fixed;
+    height: 100%;
+    overflow: auto;
+    box-sizing: border-box;
+    z-index: 10;
 }
-html.sidebar-collapsed .app-sidebar {
-    width: 0 !important;
-    min-width: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    opacity: 0;
+.sidebar ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+.sidebar a {
+    display: block;
+    color: white;
+    padding: 16px;
+    text-decoration: none;
+    margin: 5px 0;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+.sidebar a:hover {
+    background-color: #575757;
+}
+.sidebar a.active {
+    background-color: #575757;
+}
+.sidebar .mdi-icon {
+    margin-right: 10px;
+}
+.sidebar .logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+.sidebar .logo img {
+    width: 150px;
+    height: 150px;
+    margin-right: 10px;
+}
+.sidebar .logo-text {
+    font-size: 1.5em;
+    font-weight: bold;
+    text-align: center;
+}
+.content {
+    margin-left: 250px;
+    box-sizing: border-box;
+}
+@media (max-width: 900px) {
+    .sidebar {
+        position: static;
+        width: 100%;
+        height: auto;
+    }
+    .content {
+        margin-left: 0;
+    }
 }

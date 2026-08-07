@@ -22,55 +22,9 @@
             background-color: var(--bg);
             color: var(--text);
         }
-        .sidebar {
-            width: 250px;
-            background-color: #2b2b2b;
-            color: white;
-            padding: 20px;
-            position: fixed;
-            height: 100%;
-            overflow: auto;
-        }
-        .sidebar ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        .sidebar a {
-            display: block;
-            color: white;
-            padding: 16px;
-            text-decoration: none;
-            margin: 5px 0;
-            border-radius: 5px;
-            transition: background-color 0.3s;
-        }
-        .sidebar a:hover {
-            background-color: #575757;
-        }
-        .sidebar a.active {
-            background-color: #575757;
-        }
-        .mdi-icon {
-            margin-right: 10px;
-        }
-        .logo {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 10px;
-        }
-        .logo img {
-            width: 150px;
-            height: 150px;
-            margin-right: 10px;
-        }
-        .logo-text {
-            font-size: 2xl;
-            font-weight: bold;
-            text-align: center;
-        }
+        /* Sidebar/logo styling now lives in /static/index.css, shared via
+           templates/_sidebar.html across every page. */
         .content {
-            margin-left: 250px;
             padding: 24px 32px;
             flex: 1 1 auto;
             min-width: 0;
@@ -211,13 +165,7 @@
         }
         @media (max-width: 900px) {
             .content {
-                margin-left: 0;
                 padding: 16px;
-            }
-            .sidebar {
-                position: static;
-                width: 100%;
-                height: auto;
             }
         }
 
@@ -453,46 +401,7 @@
     </style>
 </head>
 <body>
-    <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-    </button>
-
-    <div class="sidebar">
-        <div class="logo">
-            <img src="{{ logo }}" alt="FolderW Logo">
-            <span class="logo-text">FolderW</span>
-        </div>
-        <nav>
-            <ul>
-                {% set menu_items = [
-                    ('/', 'Dashboard', 'mdi mdi-view-dashboard'),
-                    ('/backup-history', 'Backup History', 'mdi mdi-clock-outline'),
-                    ('/restore', 'Restore', 'mdi mdi-backup-restore'),
-                    ('/settings', 'Settings', 'mdi mdi-cogs'),
-                    ('/goals', 'Goals', 'mdi mdi-bullseye-arrow'),
-                    ('/logout', 'Log out', 'mdi mdi-logout')
-                ] %}
-                {% for href, label, icon_class in menu_items %}
-                <li>
-                    <a href="{{ href }}" class="
-                        flex 
-                        items-center 
-                        p-3 
-                        rounded 
-                        hover:bg-gray-700 
-                        transition-colors 
-                        {% if request.url.path == href %}active{% endif %}
-                    ">
-                        <span class="{{ icon_class }} mdi-icon"></span>
-                        {{ label }}
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
-        </nav>
-    </div>
+    {% include "_sidebar.html" %}
 
     <div class="content">
        

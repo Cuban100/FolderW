@@ -549,6 +549,7 @@ async def root(request: Request):
 async def restore_page(request: Request):
     return templates.TemplateResponse("restore.html", {
         "request": request,
+        "logo": logo,
         "backups": list_backups(),
     })
 
@@ -558,12 +559,14 @@ async def restore_browse(request: Request, backup_id: str):
     if backup_path is None:
         return templates.TemplateResponse("restore.html", {
             "request": request,
+            "logo": logo,
             "backups": list_backups(),
             "error": f"Backup not found: {backup_id}",
         })
     files, truncated = list_files_in_backup(backup_path)
     return templates.TemplateResponse("restore_browse.html", {
         "request": request,
+        "logo": logo,
         "backup_id": backup_id,
         "files": files,
         "truncated": truncated,
@@ -575,12 +578,14 @@ async def restore_execute(request: Request, backup_id: str = Form(...), selected
         dest_root, file_count = restore_backup(backup_id, selected_paths or None)
         return templates.TemplateResponse("restore.html", {
             "request": request,
+            "logo": logo,
             "backups": list_backups(),
             "success": f"Restored {file_count} file(s) to {dest_root}",
         })
     except ValueError as e:
         return templates.TemplateResponse("restore.html", {
             "request": request,
+            "logo": logo,
             "backups": list_backups(),
             "error": str(e),
         })
@@ -592,6 +597,7 @@ async def settings_page(request: Request):
     monitor = load_env_value('MONITOR')
     return templates.TemplateResponse("settings.html", {
         "request": request,
+        "logo": logo,
         "log_dir": os.path.dirname(logfile),
         "src_dir": load_env_value('SRC_DIR'),
         "base_dir": load_env_value('BASE_DIR'),
@@ -658,6 +664,7 @@ async def submit_settings(
         logfile = load_other_variables('logfile')
         return templates.TemplateResponse("settings.html", {
             "request": request,
+            "logo": logo,
             "error": "Snapshots to Keep must be a positive whole number, or left blank.",
             "log_dir": os.path.dirname(logfile),
             "src_dir": load_env_value('SRC_DIR'),
@@ -711,6 +718,7 @@ async def submit_settings(
     logfile = load_other_variables('logfile')
     return templates.TemplateResponse("settings.html", {
         "request": request,
+        "logo": logo,
         "success": "Settings saved successfully.",
         "log_dir": os.path.dirname(logfile),
         "src_dir": new_values["SRC_DIR"],
@@ -757,6 +765,7 @@ def list_previous_databases():
 async def backup_history(request: Request):
     return templates.TemplateResponse("backup-history.html", {
         "request": request,
+        "logo": logo,
         "previous_databases": list_previous_databases()
     })
 
@@ -784,6 +793,7 @@ async def delete_old_database(request: Request, database_to_delete: str = Form(.
 
     return templates.TemplateResponse("backup-history.html", {
         "request": request,
+        "logo": logo,
         "previous_databases": list_previous_databases(),
         "error": error,
         "success": success
