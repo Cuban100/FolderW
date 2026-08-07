@@ -127,15 +127,19 @@ def rsync():
     src_dir_contents = src_dir.rstrip('/') + '/'
     # --info=progress2 reports overall transfer progress (a single running
     # percentage across the whole run) rather than per-file progress, which
-    # is what a single dashboard progress bar needs. --no-inc-recursive
-    # disables rsync's default incremental recursion so it builds the
-    # complete file list upfront instead of discovering files as it goes —
-    # without it, --info=progress2's percentage is "bytes sent so far /
-    # bytes discovered so far", which understates true progress for a long
-    # time on large, deep trees (the denominator keeps growing). The
-    # trade-off is a pause upfront, proportional to file count, before any
-    # progress shows at all.
-    rsync_command = ["rsync", "-av", "--delete", "--info=progress2", "--no-inc-recursive", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
+    # is what a single dashboard progress bar needs.
+    #
+    # Deliberately WITHOUT --no-inc-recursive: that flag makes the
+    # percentage numerically accurate by forcing rsync to build the
+    # complete file list upfront, but on a large/deep source (e.g. an
+    # entire home directory with hundreds of thousands of files) that
+    # upfront scan can take many minutes with zero output — and unlike a
+    # one-time cost, it repeats on every single run, including incremental
+    # backups triggered by one changed file. Kept on the default
+    # incremental recursion instead: the percentage understates true
+    # progress for a while on such trees (denominator keeps growing as
+    # rsync discovers more), but transferring starts immediately every time.
+    rsync_command = ["rsync", "-av", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
     logger.warning(f"Executing rsync command {rsync_command}")
         
     try:
