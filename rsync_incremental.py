@@ -1,9 +1,10 @@
 import os
 import re
 import stat
+import threading
 from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value
 from restore_operations import cleanup_old_snapshots
-from statistics_operations import get_folder_size_du
+from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
 from dotenv import load_dotenv
 import sqlite3
 import subprocess
@@ -261,17 +262,56 @@ def copy_files():
 if __name__ == "__main__":
     logger.info(f"Full Backup is: {full_backup}")
     ensure_backup_folder_icon()
-    # Cleared up front so a stale percentage from a previous run can't be
-    # shown on the dashboard during the icon-setup gap before rsync's first
-    # progress line actually arrives.
+    # Cleared up front so a stale percentage/size from a previous run can't
+    # be shown on the dashboard during the icon-setup gap before rsync's
+    # first progress line actually arrives.
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
+
+    # rsync's own --info=progress2 percentage only counts bytes it actually
+    # transfers this run — a file that already matches at the destination
+    # is skipped and never counted, so on a resumed/interrupted backup its
+    # percentage badly understates true progress (verified empirically: a
+    # run that only needed to send one small new file into an otherwise
+    # complete 50MB destination reported "0%" throughout). Computing our
+    # own baseline — what's already at the destination — lets us report
+    # (baseline + transferred-this-run) / true-source-total instead. Both
+    # numbers come from `du`, run in background threads so neither blocks
+    # rsync from starting and both run concurrently with each other.
+    baselines = {'dest_baseline': None, 'source_total': None}
+
+    def _compute_dest_baseline():
+        baselines['dest_baseline'] = get_folder_size_bytes_du(full_backup)
+        logger.info(f"Destination baseline size: {baselines['dest_baseline']}")
+
+    def _compute_source_total():
+        baselines['source_total'] = get_folder_size_bytes_du(src_dir)
+        logger.info(f"Source total size: {baselines['source_total']}")
+
+    threading.Thread(target=_compute_dest_baseline, daemon=True).start()
+    threading.Thread(target=_compute_source_total, daemon=True).start()
+
     last_percent = None
     for progress in rsync():
         logger.info(f"Progress: {progress}")
-        match = re.search(r'(\d+)%', progress)
-        if match and match.group(1) != last_percent:
-            last_percent = match.group(1)
-            set_database_value('BACKUP_PROGRESS_PERCENT', last_percent)
+        match = re.search(r'^([\d,]+)\s+(\d+)%', progress)
+        if not match:
+            continue
+        transferred_bytes = int(match.group(1).replace(',', ''))
+        dest_baseline = baselines['dest_baseline']
+        source_total = baselines['source_total']
+        if dest_baseline is not None and source_total:
+            current_total = dest_baseline + transferred_bytes
+            percent = min(100, round(current_total / source_total * 100))
+            set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(current_total))
+        else:
+            # Baselines not ready yet — fall back to rsync's own
+            # percentage rather than blocking the progress bar on the
+            # (potentially slow) du scans above.
+            percent = int(match.group(2))
+        percent_str = str(percent)
+        if percent_str != last_percent:
+            last_percent = percent_str
+            set_database_value('BACKUP_PROGRESS_PERCENT', percent_str)
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
 
     changes = parse_logfile(rsync_txt)

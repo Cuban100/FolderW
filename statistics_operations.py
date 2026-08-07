@@ -90,15 +90,20 @@ def check_env_variables():
     settings_sent = len(missing_vars) == 0
     return settings_sent, settings, missing_vars
 
-def get_folder_size_du(full_backup):
-    result = subprocess.run(['du', '-sb', full_backup], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    
+def get_folder_size_bytes_du(path):
+    """Like get_folder_size(), but shells out to `du` (much faster than a
+    pure-Python os.walk on a large tree) and returns a raw byte count
+    instead of a human-readable string.
+    """
+    result = subprocess.run(['du', '-sb', path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode == 0:
-        size_in_bytes = int(result.stdout.decode('utf-8').split()[0])
-        return human_readable_size(size_in_bytes)
-    else:
-        logger.info(f"Error: {result.stderr.decode()}")
-        return None
+        return int(result.stdout.decode('utf-8').split()[0])
+    logger.info(f"Error: {result.stderr.decode()}")
+    return None
+
+def get_folder_size_du(full_backup):
+    size_in_bytes = get_folder_size_bytes_du(full_backup)
+    return human_readable_size(size_in_bytes) if size_in_bytes is not None else None
 
 def human_readable_size(size_in_bytes):
     """
