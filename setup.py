@@ -1,5 +1,7 @@
 import os
+import shutil
 import subprocess
+import tempfile
 from db_operations import create_all_tables, set_database_value
 from auth import hash_password
 import tkinter as tk
@@ -122,6 +124,74 @@ def configure_systemd_autostart(enable):
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
                 print(f"Could not disable systemd autostart: {e}")
 
+RSYNC_SUDOERS_DROPIN = "/etc/sudoers.d/folderw-rsync"
+
+def configure_rsync_sudo():
+    """Grants NOPASSWD sudo for rsync specifically, so a backup triggered
+    without an interactive terminal (the watchdog, a scheduled interval, a
+    plain systemd restart) can still read files owned by another UID --
+    e.g. a Docker container writing into a bind-mounted config directory
+    under its own internal user, unreadable by this account otherwise
+    (found the hard way: WireGuard peer configs owned by UID 2000, 700/600
+    permissions). Without this, rsync just can't read those files -- a
+    permission error it handles fine on its own (logs a warning, moves on),
+    but the backup silently misses that data either way.
+
+    Skipped if some NOPASSWD rule already covers rsync (e.g. a broader
+    NOPASSWD: ALL the user already has for other reasons) -- no need to add
+    a redundant rule on top of one that already works. This is what makes
+    the backup behave the same way for every install, rather than only
+    working around permission walls on machines that happen to already
+    have broad passwordless sudo configured for unrelated reasons.
+    """
+    rsync_path = shutil.which("rsync") or "/usr/bin/rsync"
+    username = os.environ.get("SUDO_USER") or os.environ.get("USER") or os.environ.get("LOGNAME")
+    if not username:
+        print("Could not determine the current username -- skipping rsync sudo setup. To let "
+              f"backups read files owned by another user, add manually: echo '<username> "
+              f"ALL=(root) NOPASSWD: {rsync_path}' | sudo tee {RSYNC_SUDOERS_DROPIN}")
+        return
+
+    check = subprocess.run(["sudo", "-n", "-l", rsync_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if check.returncode == 0:
+        print("rsync can already run passwordlessly under sudo -- nothing to configure.")
+        return
+
+    print("Configuring passwordless sudo for rsync (lets backups read files owned by another "
+          "user, e.g. a Docker container) -- you may be prompted for your password once.")
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".folderw-sudoers") as tmp:
+            tmp.write(f"{username} ALL=(root) NOPASSWD: {rsync_path}\n")
+            tmp_path = tmp.name
+
+        # Validate BEFORE installing -- a syntax error in a live sudoers.d
+        # file can break sudo system-wide, so this never touches the real
+        # location without first confirming the grammar is valid. Doesn't
+        # need root: just parses the given file, doesn't touch system state.
+        validate = subprocess.run(["visudo", "-c", "-f", tmp_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if validate.returncode != 0:
+            print(f"Generated sudoers rule failed validation, skipping: {validate.stderr}")
+            return
+
+        # pkexec (not plain sudo): this is a GUI app with no guaranteed
+        # controlling terminal for sudo to prompt on -- pkexec shows a
+        # proper graphical polkit prompt regardless of how setup.py was
+        # launched. root:root 0440 is sudoers.d's required ownership/mode;
+        # sudo refuses to even read a drop-in file with any other group/
+        # other write access, as its own protection against tampering.
+        install = subprocess.run(
+            ["pkexec", "install", "-m", "0440", "-o", "root", "-g", "root", tmp_path, RSYNC_SUDOERS_DROPIN],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        if install.returncode != 0:
+            print(f"Could not configure sudo for rsync (you may need to do this manually): {install.stderr}")
+            return
+        print("Configured passwordless sudo for rsync.")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
 def browse_directory(entry):
     directory = filedialog.askdirectory()
     entry.delete(0, tk.END)
@@ -204,6 +274,7 @@ def save_paths():
     upgrade_packages()
 
     configure_systemd_autostart(autostart_var.get() == 1)
+    configure_rsync_sudo()
 
     # start_new_session detaches server.py from this terminal's session, so
     # closing the terminal (which sends SIGHUP) doesn't kill the dashboard.

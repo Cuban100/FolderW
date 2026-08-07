@@ -160,7 +160,22 @@ def rsync(result_holder=None):
     # with nothing else printed). The second -v adds an explicit line per
     # already-up-to-date file too, so the activity log actually shows
     # what's being checked instead of going quiet for the whole scan.
-    rsync_command = ["rsync", "-avv", "--sparse", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
+    # sudo -n: runs rsync as root so files owned by another UID (a Docker
+    # container writing into a bind-mounted config dir under a different
+    # internal user, e.g. found live: WireGuard peer configs owned by UID
+    # 2000, 700/600 permissions, unreadable by this process's own user) can
+    # actually be read and backed up instead of silently being skipped or
+    # (before a separate fix) hanging the whole run. setup.py's
+    # configure_rsync_sudo() grants exactly this — NOPASSWD sudo scoped to
+    # the rsync binary specifically — on every install, so this behaves the
+    # same way for every user rather than only working around permission
+    # walls on a machine that happens to already have broad passwordless
+    # sudo configured for unrelated reasons. -n (non-interactive): if that
+    # setup step was skipped or its sudoers rule removed later, this fails
+    # immediately with a clear error instead of hanging forever waiting on
+    # a password prompt that, from a headless service, can never come — the
+    # same "never let it hang silently" reasoning as the stderr fix.
+    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
     logger.warning(f"Executing rsync command {rsync_command}")
         
     try:
