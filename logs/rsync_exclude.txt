@@ -8,3 +8,7 @@ lib
 overlay2/
 FolderW.png
 .directory
+*.tmp
+*.swp
+*.swx
+~*

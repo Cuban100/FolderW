@@ -152,4 +152,10 @@ Deleting a file from `SRC_DIR` behaves differently depending on which backup you
 - **Full backup:** reflects `SRC_DIR` exactly, so a deleted source file is removed from the full backup on the next run (`rsync --delete`).
 - **Incremental snapshots:** deletions are never recorded in a snapshot — a deleted file simply stops appearing in *future* snapshots, but stays intact in whichever earlier snapshot last captured it, so you can still recover it from there via Restore.
 
+## Excluding Files
+
+`logs/rsync_exclude.txt` lists patterns (one per line, `*`/`?` wildcards supported) to skip — it's already used to exclude `.cache/`, `__pycache__`, `*.tmp`, and similar noise by default. Add your own patterns to exclude anything else specific to your `SRC_DIR` (build output, another app's cache, etc.).
+
+This one file drives both **what gets backed up** (rsync's `--exclude-from`) and **what the watchdog reacts to** — a change inside an excluded path won't reset the 5-minute debounce timer either, so a busy cache directory can't perpetually delay a real backup. Changes to this file take effect the next time a backup runs or the watchdog restarts.
+
 This project aims to streamline backup operations, providing a reliable and user-friendly solution for both regular and event-driven file backups.

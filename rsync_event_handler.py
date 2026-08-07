@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import fnmatch
 import threading
 from db_operations import load_env_value, load_other_variables
 from watchdog.observers import Observer
@@ -19,6 +20,27 @@ rsync_txt = load_other_variables('rsync_txt')
 logfile = load_other_variables('logfile')
 src_dir = load_env_value('SRC_DIR')
 backup_interval = load_env_value('BACKUP_INTERVAL')
+
+def _load_exclude_patterns():
+    # Reuses rsync's own exclude file (logs/rsync_exclude.txt) rather than
+    # a separate list, so a change/tmp/cache directory only needs to be
+    # excluded in one place to be skipped by both the actual backup and
+    # the watchdog that triggers it — otherwise every write inside an
+    # excluded directory (e.g. a busy browser cache) would still reset the
+    # debounce timer for no reason, delaying real backups indefinitely.
+    exclude_file = load_other_variables('exclude_file')
+    patterns = []
+    try:
+        with open(exclude_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    patterns.append(line.rstrip('/'))
+    except FileNotFoundError:
+        pass
+    return patterns
+
+EXCLUDE_PATTERNS = _load_exclude_patterns()
 
 def run_backup_script():
     try:
@@ -64,23 +86,35 @@ class BackupHandler(FileSystemEventHandler):
         run_backup_script()
 
     def on_modified(self, event):
-        if not event.is_directory and not self.is_log_file(event.src_path):
+        if not event.is_directory and not self.should_ignore(event.src_path):
             logger.debug(f"File modified: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
             self._schedule_backup()
 
     def on_created(self, event):
-        if not event.is_directory and not self.is_log_file(event.src_path):
+        if not event.is_directory and not self.should_ignore(event.src_path):
             logger.debug(f"File created: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
             self._schedule_backup()
 
     def on_deleted(self, event):
-        if not event.is_directory and not self.is_log_file(event.src_path):
+        if not event.is_directory and not self.should_ignore(event.src_path):
             logger.debug(f"File deleted: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
             self._schedule_backup()
 
-    def is_log_file(self, file_path):
-        log_files = [rsync_txt, logfile]
-        return file_path in log_files
+    def should_ignore(self, file_path):
+        if file_path in (rsync_txt, logfile):
+            return True
+        try:
+            rel_path = os.path.relpath(file_path, src_dir)
+        except ValueError:
+            rel_path = file_path
+        parts = rel_path.split(os.sep)
+        basename = os.path.basename(file_path)
+        for pattern in EXCLUDE_PATTERNS:
+            if fnmatch.fnmatch(rel_path, pattern) or fnmatch.fnmatch(basename, pattern):
+                return True
+            if any(fnmatch.fnmatch(part, pattern) for part in parts):
+                return True
+        return False
 
 def notify_stop():
     logger.info("Observer stopped")
