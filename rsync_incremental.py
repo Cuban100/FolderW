@@ -404,15 +404,22 @@ if __name__ == "__main__":
             current_total = dest_baseline + (transferred_bytes - baselines['transferred_offset'])
             percent = min(100, round(current_total / source_total * 100))
             set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(current_total))
+            percent_str = str(percent)
         else:
-            # Baselines not ready yet — fall back to rsync's own
-            # percentage rather than blocking the progress bar on the
-            # (potentially slow) du scans above.
-            percent = int(match.group(2))
-        percent_str = str(percent)
+            # Baselines not ready yet (source_total's du scan alone took 45s
+            # on one observed run). rsync's own percentage reflects only
+            # whatever small subset of files incremental recursion has
+            # discovered so far, not real progress against the whole
+            # backup — verified live: it climbed past 60% while barely 3%
+            # of the real, much larger total had actually transferred.
+            # Showing that number as our own percent isn't just imprecise,
+            # it's actively misleading (a confident-looking wrong answer).
+            # Leave it unset instead — the frontend already falls back to
+            # an honest indeterminate animation when percent is blank.
+            percent_str = None
         if percent_str != last_percent:
             last_percent = percent_str
-            set_database_value('BACKUP_PROGRESS_PERCENT', percent_str)
+            set_database_value('BACKUP_PROGRESS_PERCENT', percent_str or '')
         if eta != last_eta:
             last_eta = eta
             set_database_value('BACKUP_ETA', eta)
