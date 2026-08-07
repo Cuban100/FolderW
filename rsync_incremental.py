@@ -319,6 +319,14 @@ if __name__ == "__main__":
         # be transferred, understating percent for the whole run.
         baselines['source_total'] = get_folder_size_bytes_du(src_dir, exclude_from=exclude_file)
         logger.info(f"Source total size: {baselines['source_total']}")
+        if baselines['source_total'] is not None:
+            # Keeps the dashboard's "Source Folder Size" stat in sync with
+            # this run's own exclude-aware measurement, regardless of how
+            # the run was started — that stat otherwise only refreshes when
+            # someone clicks Check/Start Full Backup in the browser, so a
+            # backup started any other way (systemd, a scheduled interval)
+            # left it showing a stale, possibly pre-fix, unfiltered number.
+            set_database_value('LAST_SRC_SIZE', human_readable_size(baselines['source_total']))
 
     threading.Thread(target=_compute_dest_baseline, daemon=True).start()
     threading.Thread(target=_compute_source_total, daemon=True).start()

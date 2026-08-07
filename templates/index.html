@@ -551,7 +551,7 @@
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-label">Source Folder Size</div>
-                        <div class="stat-value">{{ src_size if src_size else 'Not Available' }}</div>
+                        <div class="stat-value" id="source-folder-size-value">{{ src_size if src_size else 'Not Available' }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Current Backup Size</div>
@@ -676,6 +676,7 @@
             const progressBar = progressContainer ? progressContainer.querySelector('.progress-bar') : null;
             const progressText = document.getElementById('backup-progress-text');
             const currentSizeValue = document.getElementById('current-backup-size-value');
+            const sourceSizeValue = document.getElementById('source-folder-size-value');
             if (!statusMessage || statusMessage.textContent.trim().startsWith('Failed')) {
                 return;
             }
@@ -688,6 +689,9 @@
                     const data = await response.json();
                     if (currentSizeValue && data.current_backup_size) {
                         currentSizeValue.textContent = data.current_backup_size;
+                    }
+                    if (sourceSizeValue && data.src_size) {
+                        sourceSizeValue.textContent = data.src_size;
                     }
                     if (data.running) {
                         const parts = [];
