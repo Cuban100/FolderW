@@ -9,6 +9,7 @@ overlay2/
 **/.docker/desktop/vms
 **/.local/share/docker
 **/.npm/_cacache
+**/.config/Claude/vm_bundles
 FolderW.png
 .directory
 *.tmp
