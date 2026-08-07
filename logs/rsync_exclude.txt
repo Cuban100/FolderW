@@ -6,6 +6,7 @@ logs/
 lib
 .cache/
 overlay2/
+.docker/desktop/vms/
 FolderW.png
 .directory
 *.tmp
