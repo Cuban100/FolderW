@@ -357,11 +357,11 @@ async def backup_status_endpoint():
     # rather than indistinguishable from actually being stuck.
     rsync_tail = []
     try:
-        # 16 lines: matches how many actually fit in the panel's fixed
-        # height at its font/line-height before needing to scroll (was 10,
-        # leaving visibly empty space below the last line).
+        # 20 lines: matches how many actually fit in the panel's fixed
+        # height at its font/line-height before needing to scroll (16 still
+        # left a bit of empty space below the last line).
         tail_result = subprocess.run(
-            ['tail', '-n', '16', load_other_variables('rsync_txt')],
+            ['tail', '-n', '20', load_other_variables('rsync_txt')],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2,
         )
         rsync_tail = [line for line in tail_result.stdout.decode('utf-8', errors='replace').splitlines() if line.strip()]
