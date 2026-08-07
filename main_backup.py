@@ -2,6 +2,7 @@ import os
 import sys
 from db_operations import load_env_value, load_other_variables
 from notifications import notify
+from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
 import subprocess
 import schedule
 import time
@@ -43,9 +44,39 @@ def start_event_backup():
             time.sleep(retry_delay)
             retry_delay = min(retry_delay * 2, max_retry_delay)
 
+def backup_prerequisites_met():
+    """The same three-step gate the web UI's /run-all-steps route already
+    enforces before letting a user start a backup — settings present,
+    source/destination paths valid, enough space. Without this, this
+    worker ran a real backup the instant it started for ANY reason (a
+    fresh install before setup is finished, the service enabled at boot,
+    any manual restart) using whatever's in .env, with none of the checks
+    a user clicking "Start Full Backup" in the browser gets first.
+    """
+    settings_sent, _settings, missing_vars = check_env_variables()
+    if not settings_sent:
+        logger.error(f"Backup worker started, but required settings are missing: {missing_vars}. Not running a backup.")
+        return False
+
+    validation_status, validation_message = validate_all_conditions(load_env_value('SRC_DIR'), load_env_value('BASE_DIR'))
+    if not validation_status:
+        logger.error(f"Backup worker started, but validation failed: {validation_message}. Not running a backup.")
+        return False
+
+    _src_size, _dest_space, can_backup, evaluation_message = evaluation_of_resources()
+    if not can_backup:
+        logger.error(f"Backup worker started, but evaluation failed: {evaluation_message}. Not running a backup.")
+        return False
+
+    return True
+
 if __name__ == "__main__":
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
+
+    if not backup_prerequisites_met():
+        logger.warning("Exiting without starting a backup or monitoring — fix settings/validation/evaluation via the dashboard, then start the backup service again (e.g. Start Full Backup once those checks pass).")
+        sys.exit(0)
 
     run_regular_backup()
 
