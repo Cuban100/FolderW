@@ -490,7 +490,8 @@
                     {% if backup_active %}
                     <button class="check-button stop" onclick="stopMonitoring()">Stop Full Backup</button>
                     {% else %}
-                    <button class="check-button" onclick="startBackup()">Start Full Backup</button>
+                    <button id="start-backup-btn" class="check-button" onclick="startBackup()">Start Full Backup</button>
+                    <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 8px;">Starting a backup can take up to a minute while the source directory is scanned — the page may look stuck, please don't click again.</p>
                     {% endif %}
                 </div>
 
@@ -622,6 +623,12 @@
 
     <script>
         function startBackup() {
+            const btn = document.getElementById('start-backup-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Starting Backup… (this can take up to a minute)';
+                btn.style.cursor = 'wait';
+            }
             window.location.href = '/run-all-steps';
         }
         async function stopMonitoring() {
