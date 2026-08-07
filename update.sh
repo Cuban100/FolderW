@@ -41,21 +41,38 @@ log "Code and dependencies updated successfully."
 
 # A running Python process keeps executing whatever code was loaded when it
 # started — pulling new files to disk has no effect on it until it restarts.
+#
+# Checked once here and reused below for both services: restarting
+# folderw-backup.service (main_backup.py, the watchdog supervisor) while a
+# backup is running would kill rsync_incremental.py as its child process,
+# interrupting the backup — same reason folderw.service (just the dashboard,
+# not part of the backup itself, but kept consistent) waits too rather than
+# restarting out from under an in-progress run.
+if pgrep -f "rsync_incremental.py" > /dev/null; then
+    backup_running=1
+    log "A backup appears to be running right now — skipping automatic restarts so it isn't interrupted."
+else
+    backup_running=0
+fi
+
 if systemctl --user list-unit-files folderw.service &>/dev/null; then
-    # Deliberately only checks rsync_incremental.py, not main_backup.py:
-    # main_backup.py is the supervisor that hosts watchdog monitoring and
-    # runs for as long as event-driven mode is enabled, not just while a
-    # backup is actually executing — checking for it here would mean this
-    # never auto-restarts at all under MONITOR=1. rsync_incremental.py is
-    # the actual work: it starts and exits with each individual run.
-    if pgrep -f "rsync_incremental.py" > /dev/null; then
-        log "A backup appears to be running right now — skipping automatic restart so it isn't interrupted."
+    if [ "$backup_running" -eq 1 ]; then
         log "Once it finishes, apply the update with: systemctl --user restart folderw"
     else
-        log "Restarting the folderw service so the update takes effect..."
+        log "Restarting the folderw service (dashboard) so the update takes effect..."
         systemctl --user restart folderw
-        log "Service restarted."
+        log "folderw service restarted."
     fi
 else
-    log "No systemd autostart service found. If FolderW is currently running manually (setup.py/server.py), stop and restart it now — the update won't take effect until you do."
+    log "No systemd autostart service found for the dashboard. If FolderW is currently running manually (setup.py/server.py), stop and restart it now — the update won't take effect until you do."
+fi
+
+if systemctl --user list-unit-files folderw-backup.service &>/dev/null; then
+    if [ "$backup_running" -eq 1 ]; then
+        log "Once it finishes, apply the update with: systemctl --user restart folderw-backup"
+    else
+        log "Restarting the folderw-backup service (watchdog worker) so the update takes effect..."
+        systemctl --user restart folderw-backup
+        log "folderw-backup service restarted."
+    fi
 fi
