@@ -315,16 +315,21 @@ if __name__ == "__main__":
     # top too, so the estimate drifts upward as more files change (not just
     # new ones get added). This loop periodically re-`du`s the real
     # destination and overwrites the estimate with ground truth.
-    # Self-rescheduling — waits 30s after each scan *completes*, not on a
+    # Self-rescheduling — waits 60s after each scan *completes*, not on a
     # fixed clock — so scans on a huge tree can never overlap or pile up.
     stop_size_refresh = threading.Event()
 
     def _refresh_current_size_periodically():
+        # Wait before the first scan too — _compute_dest_baseline above
+        # already `du`s this exact same path once at startup; running a
+        # second, redundant concurrent scan of it at the same moment just
+        # adds I/O contention for no benefit.
+        stop_size_refresh.wait(60)
         while not stop_size_refresh.is_set():
             size_bytes = get_folder_size_bytes_du(full_backup)
             if size_bytes is not None:
                 set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(size_bytes))
-            stop_size_refresh.wait(30)
+            stop_size_refresh.wait(60)
 
     threading.Thread(target=_refresh_current_size_periodically, daemon=True).start()
 
