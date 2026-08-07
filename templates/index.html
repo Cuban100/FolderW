@@ -356,6 +356,15 @@
             0%   { left: -30%; }
             100% { left: 100%; }
         }
+        /* Determinate mode: a real percentage is known (rsync
+           --info=progress2), so the bar fills left-to-right instead of
+           sliding indefinitely. */
+        .progress-bar.determinate {
+            left: 0;
+            width: 0%;
+            animation: none;
+            transition: width 0.4s ease;
+        }
 
         .progress-bar-text {
             margin-top: 6px;
@@ -705,12 +714,15 @@
         }
 
         // If a backup was just started, poll for whether it's still running
-        // and show/hide an indeterminate progress bar accordingly. There's no
-        // reliable byte/percent progress for a detached background process,
-        // so this reflects real running state rather than faking a number.
+        // and show a progress bar accordingly. When rsync's --info=progress2
+        // percentage is available (see /backup-status), the bar fills to
+        // that exact percent; otherwise (e.g. during the icon-setup phase
+        // before rsync's first line arrives) it falls back to an
+        // indeterminate sliding animation.
         (function pollBackupStatus() {
             const statusMessage = document.getElementById('backup-status-message');
             const progressContainer = document.getElementById('backup-progress-container');
+            const progressBar = progressContainer ? progressContainer.querySelector('.progress-bar') : null;
             const progressText = document.getElementById('backup-progress-text');
             if (!statusMessage || statusMessage.textContent.trim().startsWith('Failed')) {
                 return;
@@ -722,9 +734,22 @@
                 try {
                     const response = await fetch('/backup-status');
                     const data = await response.json();
+                    if (data.running) {
+                        if (data.percent !== null && data.percent !== undefined) {
+                            progressBar.classList.add('determinate');
+                            progressBar.style.width = data.percent + '%';
+                            progressText.textContent = `Backup running… ${data.percent}%`;
+                        } else {
+                            progressBar.classList.remove('determinate');
+                            progressBar.style.width = '';
+                            progressText.textContent = 'Backup running…';
+                        }
+                    }
                     if (!data.running) {
                         clearInterval(interval);
                         progressContainer.classList.remove('active');
+                        progressBar.classList.remove('determinate');
+                        progressBar.style.width = '';
                         progressText.textContent = 'Backup complete.';
                         statusMessage.textContent = 'Backup complete.';
                         // Reveal "Create a Manual Snapshot" now that this run

@@ -1,4 +1,5 @@
 import os
+import re
 import stat
 from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value
 from restore_operations import cleanup_old_snapshots
@@ -118,7 +119,10 @@ def rsync():
     # Trailing slash on the source makes rsync copy src_dir's *contents*
     # into full_backup, instead of nesting it as full_backup/<src_dir basename>/.
     src_dir_contents = src_dir.rstrip('/') + '/'
-    rsync_command = ["rsync", "-av", "--delete", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
+    # --info=progress2 reports overall transfer progress (a single running
+    # percentage across the whole run) rather than per-file progress, which
+    # is what a single dashboard progress bar needs.
+    rsync_command = ["rsync", "-av", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
     logger.warning(f"Executing rsync command {rsync_command}")
         
     try:
@@ -137,6 +141,8 @@ def rsync():
     except Exception as e:
         logger.error(f"Error executing rsync command: {e}")
 
+PROGRESS_LINE_RE = re.compile(r'^[\d,]+\s+\d+%')
+
 def parse_logfile(rsync_txt):
     changes = []
     capturing = False
@@ -152,6 +158,12 @@ def parse_logfile(rsync_txt):
                     if line == "":
                         continue
                     if "sent" in line or "received" in line or "total size" in line:
+                        continue
+                    if PROGRESS_LINE_RE.match(line):
+                        # --info=progress2 interleaves per-update transfer
+                        # stat lines (bytes, percent, speed, ETA) among the
+                        # real filenames on stdout — without this filter
+                        # these get mistaken for changed file paths.
                         continue
                     if "Server/" in line:
                         line = line.replace("Server/", "")
@@ -229,8 +241,18 @@ def copy_files():
 if __name__ == "__main__":
     logger.info(f"Full Backup is: {full_backup}")
     ensure_backup_folder_icon()
+    # Cleared up front so a stale percentage from a previous run can't be
+    # shown on the dashboard during the icon-setup gap before rsync's first
+    # progress line actually arrives.
+    set_database_value('BACKUP_PROGRESS_PERCENT', '')
+    last_percent = None
     for progress in rsync():
         logger.info(f"Progress: {progress}")
+        match = re.search(r'(\d+)%', progress)
+        if match and match.group(1) != last_percent:
+            last_percent = match.group(1)
+            set_database_value('BACKUP_PROGRESS_PERCENT', last_percent)
+    set_database_value('BACKUP_PROGRESS_PERCENT', '')
 
     changes = parse_logfile(rsync_txt)
     store_changes_in_db(changes)

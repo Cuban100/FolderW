@@ -290,7 +290,8 @@ def is_backup_running():
 
 @app.get("/backup-status")
 async def backup_status_endpoint():
-    return JSONResponse({"running": is_backup_running()})
+    percent = get_database_value('BACKUP_PROGRESS_PERCENT', 'settings')
+    return JSONResponse({"running": is_backup_running(), "percent": percent or None})
 
 @app.post("/stop-backup")
 async def stop_backup():
