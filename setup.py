@@ -119,6 +119,7 @@ def save_paths():
         'SRC_DIR': src_dir_entry.get(),
         'BASE_DIR': base_dir_entry.get(),
         'DATABASE': database_entry.get(),
+        'FULL_NAME': full_folder_name_entry.get(),
         'SERVER_PORT': server_port_entry.get(),
         'MONITOR': str(monitor_var.get()),
         'AUTOSTART': str(autostart_var.get()),
@@ -257,6 +258,7 @@ labels = [
     ("Source Directory:", "SRC_DIR"),
     ("Base Backup Directory:", "BASE_DIR"),
     ("Database:", "DATABASE"),
+    ("Full Folder Name:", "FULL_NAME"),
     ("Server Port:", "SERVER_PORT"),  # Add server port label
 ]
 entries = []
@@ -264,6 +266,7 @@ placeholders = {
     "Source Directory:": "Select the Source Folder to be Backed up",
     "Base Backup Directory:": "Destination directory to place the backup",
     "Database:": "Enter the database file name, Example: backup.db",
+    "Full Folder Name:": "Example: Documents — contains Full Backup/ and Snapshots/ inside it",
     "Server Port:": "Enter the server port, Example: 8000"
 }
 
@@ -285,7 +288,7 @@ for i, (label, env_key) in enumerate(labels):
         button = ttk.Button(root, text="Browse...", command=lambda e=entry: browse_file(e))
         button.grid(row=i, column=2, padx=10, pady=10)
 
-src_dir_entry, base_dir_entry, database_entry, server_port_entry = entries  # Include server port entry
+src_dir_entry, base_dir_entry, database_entry, full_folder_name_entry, server_port_entry = entries  # Include server port entry
 
 # Monitor checkbox setup
 monitor_var = tk.IntVar(value=1)  

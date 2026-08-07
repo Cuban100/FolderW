@@ -51,11 +51,13 @@ def load_other_variables(variable_name):
     load_dotenv()
 
     if variable_name == 'full_backup':
-        base_dir = ensure_trailing_slash(load_env_value('BASE_DIR'))
-        return os.path.join(base_dir, 'Full Backup')
+        base_dir = load_env_value('BASE_DIR')
+        full_name = load_env_value('FULL_NAME')
+        return os.path.join(base_dir, full_name, 'Full Backup')
     elif variable_name == 'snapshots_root':
         base_dir = load_env_value('BASE_DIR')
-        return os.path.join(base_dir, 'Snapshots', 'Months')
+        full_name = load_env_value('FULL_NAME')
+        return os.path.join(base_dir, full_name, 'Snapshots', 'Months')
     elif variable_name == 'env_file':
         return os.path.join(os.path.dirname(__file__), '.env')
     elif variable_name == 'logfile':

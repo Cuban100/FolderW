@@ -73,6 +73,7 @@ def check_env_variables():
         'DATABASE': load_env_value('DATABASE'),
         'SRC_DIR': load_env_value('SRC_DIR'),
         'BASE_DIR': load_env_value('BASE_DIR'),
+        'FULL_NAME': load_env_value('FULL_NAME'),
         'SERVER_PORT': load_env_value('SERVER_PORT'),
         'MONITOR': load_env_value('MONITOR'),
         'BACKUP_INTERVAL': load_env_value('BACKUP_INTERVAL')

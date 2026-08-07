@@ -130,6 +130,11 @@
                             <div class="text-sm text-[var(--text-muted)] mt-1">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
                         </div>
                         <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="full_name" class="text-[var(--text)] font-medium">Full Backup Folder Name:</label>
+                            <input type="text" id="full_name" name="full_name" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ full_name or '' }}">
+                            <div class="text-sm text-[var(--text-muted)] mt-1">Name of the folder created inside the Base Backup Directory to hold "Full Backup" and "Snapshots". Example: Documents</div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 items-center">
                             <label for="database" class="text-[var(--text)] font-medium">Database File:</label>
                             <input type="text" id="database" name="database" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ database or '' }}">
                             <div class="text-sm text-[var(--text-muted)] mt-1">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>

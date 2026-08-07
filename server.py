@@ -88,11 +88,12 @@ async def validate_conditions(request: Request):
     logger.info("Response received from Front End for /check-evaluation")
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
+    full_name = load_env_value('FULL_NAME')
     database = load_env_value('DATABASE')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
-    validation_status, validation_message = validate_all_conditions(src_dir, base_dir) 
-    settings_sent, settings, missing_vars = check_env_variables() 
+    validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
+    settings_sent, settings, missing_vars = check_env_variables()
     src_size, dest_space, can_backup, evaluation_message = evaluation_of_resources()
 
     status.update({
@@ -122,6 +123,7 @@ async def validate_conditions(request: Request):
             "settings": settings,
             "src_dir": src_dir,
             "base_dir": base_dir,
+            "full_name": full_name,
             "database": database,
             "monitor": monitor,
             "interval": backup_interval,
@@ -151,6 +153,7 @@ async def check_settings(request: Request):
     logger.info("Response received from Front End for /check-settings")
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
+    full_name = load_env_value('FULL_NAME')
     database = load_env_value('DATABASE')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
@@ -168,6 +171,7 @@ async def check_settings(request: Request):
             "settings_sent": settings_sent,
             "src_dir": src_dir,
             "base_dir": base_dir,
+            "full_name": full_name,
             "database": database,
             "monitor": monitor,
             "interval": backup_interval
@@ -207,6 +211,7 @@ async def run_all_steps(request: Request):
     logger.info("Response received from Front End for /run-all-steps")
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
+    full_name = load_env_value('FULL_NAME')
     database = load_env_value('DATABASE')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
@@ -285,6 +290,7 @@ async def run_all_steps(request: Request):
         "evaluation_message": "",
         "src_dir": src_dir,
         "base_dir": base_dir,
+        "full_name": full_name,
         "database": database,
         "monitor": monitor,
         "interval": backup_interval,
@@ -298,6 +304,7 @@ async def validate_conditions(request: Request):
     logger.info("Response received from Front End for /check-validation")
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
+    full_name = load_env_value('FULL_NAME')
     database = load_env_value('DATABASE')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
@@ -318,6 +325,7 @@ async def validate_conditions(request: Request):
             "validation_message": validation_message,
             "src_dir": src_dir,
             "base_dir": base_dir,
+            "full_name": full_name,
             "database": database,
             "monitor": monitor,
             "interval": backup_interval
@@ -337,6 +345,7 @@ async def validate_conditions(request: Request):
 async def root(request: Request):
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
+    full_name = load_env_value('FULL_NAME')
     database = load_env_value('DATABASE')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
@@ -348,6 +357,7 @@ async def root(request: Request):
         "logo": logo,
         "src_dir": src_dir,
         "base_dir": base_dir,
+        "full_name": full_name,
         "database": database,
         "monitor": monitor,
         "interval": backup_interval,
@@ -433,6 +443,7 @@ async def settings_page(request: Request):
         "log_dir": os.path.dirname(logfile),
         "src_dir": load_env_value('SRC_DIR'),
         "base_dir": load_env_value('BASE_DIR'),
+        "full_name": load_env_value('FULL_NAME'),
         "database": load_env_value('DATABASE'),
         "monitor_checked": monitor == '1',
         "interval": load_env_value('BACKUP_INTERVAL'),
@@ -445,6 +456,7 @@ async def submit_settings(
     request: Request,
     src_dir: str = Form(""),
     base_dir: str = Form(""),
+    full_name: str = Form(""),
     database: str = Form(""),
     interval: str = Form(""),
     max_snapshots: str = Form(""),
@@ -462,6 +474,7 @@ async def submit_settings(
             "log_dir": os.path.dirname(logfile),
             "src_dir": load_env_value('SRC_DIR'),
             "base_dir": load_env_value('BASE_DIR'),
+            "full_name": load_env_value('FULL_NAME'),
             "database": load_env_value('DATABASE'),
             "monitor_checked": monitor_enabled,
             "interval": load_env_value('BACKUP_INTERVAL'),
@@ -471,6 +484,7 @@ async def submit_settings(
     new_values = {
         "SRC_DIR": src_dir.strip() or load_env_value('SRC_DIR'),
         "BASE_DIR": base_dir.strip() or load_env_value('BASE_DIR'),
+        "FULL_NAME": full_name.strip() or load_env_value('FULL_NAME'),
         "DATABASE": database.strip() or load_env_value('DATABASE'),
         "MONITOR": "1" if monitor_enabled else "0",
         "BACKUP_INTERVAL": "False" if monitor_enabled else (interval or load_env_value('BACKUP_INTERVAL') or "hourly"),
@@ -490,6 +504,7 @@ async def submit_settings(
         "log_dir": os.path.dirname(logfile),
         "src_dir": new_values["SRC_DIR"],
         "base_dir": new_values["BASE_DIR"],
+        "full_name": new_values["FULL_NAME"],
         "database": new_values["DATABASE"],
         "monitor_checked": monitor_enabled,
         "interval": new_values["BACKUP_INTERVAL"],
