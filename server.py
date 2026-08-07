@@ -340,6 +340,20 @@ async def backup_status_endpoint():
             elapsed_seconds = int(time.time() - float(start_time_raw))
         except ValueError:
             pass
+    # rsync's raw stdout (filenames + periodic progress2 stat lines,
+    # interleaved) — lets the dashboard show real activity happening right
+    # now, so a long silent stretch (e.g. deep in file-list scanning with
+    # nothing new to transfer) is visibly "still working through files"
+    # rather than indistinguishable from actually being stuck.
+    rsync_tail = []
+    try:
+        tail_result = subprocess.run(
+            ['tail', '-n', '10', load_other_variables('rsync_txt')],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2,
+        )
+        rsync_tail = [line for line in tail_result.stdout.decode('utf-8', errors='replace').splitlines() if line.strip()]
+    except Exception:
+        pass
     return JSONResponse({
         "running": is_backup_running(),
         "percent": percent or None,
@@ -347,6 +361,7 @@ async def backup_status_endpoint():
         "elapsed_seconds": elapsed_seconds,
         "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings') or None,
         "src_size": get_database_value('LAST_SRC_SIZE', 'settings') or None,
+        "rsync_tail": rsync_tail,
     })
 
 @app.post("/stop-backup")

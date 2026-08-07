@@ -357,13 +357,19 @@ if __name__ == "__main__":
         stop_size_refresh.wait(60)
         while not stop_size_refresh.is_set():
             size_bytes = get_folder_size_bytes_du(full_backup)
-            if size_bytes is not None:
+            source_total = baselines['source_total']
+            # Both gated on the same condition, updated together — size_bytes
+            # not None on its own used to be enough to update
+            # CURRENT_BACKUP_SIZE, leaving BACKUP_PROGRESS_PERCENT stuck at
+            # whatever it was if source_total's own du scan (a separate,
+            # independently-timed background thread) hadn't finished yet.
+            # That gap let the dashboard show a freshly-updated size next to
+            # a stale, unrelated percent for as long as source_total lagged.
+            if size_bytes is not None and source_total:
                 set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(size_bytes))
                 baselines['dest_baseline'] = size_bytes
                 baselines['transferred_offset'] = baselines['last_transferred']
-                source_total = baselines['source_total']
-                if source_total:
-                    set_database_value('BACKUP_PROGRESS_PERCENT', str(min(100, round(size_bytes / source_total * 100))))
+                set_database_value('BACKUP_PROGRESS_PERCENT', str(min(100, round(size_bytes / source_total * 100))))
             stop_size_refresh.wait(60)
 
     threading.Thread(target=_refresh_current_size_periodically, daemon=True).start()

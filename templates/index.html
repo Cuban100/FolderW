@@ -320,6 +320,46 @@
             color: var(--text-muted);
             text-align: center;
         }
+        .rsync-tail-container {
+            background-color: #0d1117;
+            border-radius: 10px;
+            margin-top: 14px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px var(--shadow);
+        }
+        .rsync-tail-titlebar {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 12px;
+            background-color: #21262d;
+            position: relative;
+        }
+        .rsync-tail-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .rsync-tail-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: #8b949e;
+        }
+        .rsync-tail {
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #8ee08e;
+            padding: 6px 12px;
+            height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin: 0;
+        }
         /* Enclosing div for the whole Settings section */
         .settings {
             background-color: var(--surface-alt);
@@ -427,6 +467,15 @@
                         <div class="progress-bar"></div>
                     </div>
                     <div class="progress-bar-text" id="backup-progress-text">Backup running&hellip;</div>
+                    <div class="rsync-tail-container" id="rsync-tail-container">
+                        <div class="rsync-tail-titlebar">
+                            <span class="rsync-tail-dot" style="background:#ff5f56;"></span>
+                            <span class="rsync-tail-dot" style="background:#ffbd2e;"></span>
+                            <span class="rsync-tail-dot" style="background:#27c93f;"></span>
+                            <span class="rsync-tail-title">rsync activity</span>
+                        </div>
+                        <pre class="rsync-tail" id="rsync-tail"></pre>
+                    </div>
                     {% endif %}
             {% set ready_for_manual_snapshot = settings_sent == True and validation_status == True and evaluation_status == True and has_completed_backup %}
             {% set backup_active = backup_status or backup_in_progress %}
@@ -677,6 +726,7 @@
             const progressText = document.getElementById('backup-progress-text');
             const currentSizeValue = document.getElementById('current-backup-size-value');
             const sourceSizeValue = document.getElementById('source-folder-size-value');
+            const rsyncTail = document.getElementById('rsync-tail');
             if (!statusMessage || statusMessage.textContent.trim().startsWith('Failed')) {
                 return;
             }
@@ -692,6 +742,9 @@
                     }
                     if (sourceSizeValue && data.src_size) {
                         sourceSizeValue.textContent = data.src_size;
+                    }
+                    if (rsyncTail && Array.isArray(data.rsync_tail)) {
+                        rsyncTail.textContent = data.rsync_tail.join('\n');
                     }
                     if (data.running) {
                         const parts = [];
@@ -734,6 +787,10 @@
                         setTimeout(() => {
                             statusMessage.style.display = 'none';
                             progressText.style.display = 'none';
+                            const tailContainer = document.getElementById('rsync-tail-container');
+                            if (tailContainer) {
+                                tailContainer.style.display = 'none';
+                            }
                         }, 4000);
                     }
                 } catch (error) {
