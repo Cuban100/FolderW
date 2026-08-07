@@ -308,6 +308,26 @@ if __name__ == "__main__":
     threading.Thread(target=_compute_dest_baseline, daemon=True).start()
     threading.Thread(target=_compute_source_total, daemon=True).start()
 
+    # CURRENT_BACKUP_SIZE (set below, per progress line) is a live estimate
+    # of dest_baseline + transferred-this-run — cheap and immediate, but it
+    # double-counts modified files: the old version's bytes are already in
+    # the one-time baseline above, and the new version's size gets added on
+    # top too, so the estimate drifts upward as more files change (not just
+    # new ones get added). This loop periodically re-`du`s the real
+    # destination and overwrites the estimate with ground truth.
+    # Self-rescheduling — waits 30s after each scan *completes*, not on a
+    # fixed clock — so scans on a huge tree can never overlap or pile up.
+    stop_size_refresh = threading.Event()
+
+    def _refresh_current_size_periodically():
+        while not stop_size_refresh.is_set():
+            size_bytes = get_folder_size_bytes_du(full_backup)
+            if size_bytes is not None:
+                set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(size_bytes))
+            stop_size_refresh.wait(30)
+
+    threading.Thread(target=_refresh_current_size_periodically, daemon=True).start()
+
     rsync_result = {'success': None}
     last_percent = None
     last_eta = None
@@ -342,6 +362,11 @@ if __name__ == "__main__":
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
     set_database_value('BACKUP_ETA', '')
     set_database_value('BACKUP_START_TIME', '')
+    # record_backup_statistics() below does its own final accurate du scan,
+    # so this periodic one has nothing left to correct — stop it here
+    # rather than leaving it running (and holding the process open on its
+    # 30s wait) through the rest of this script's work.
+    stop_size_refresh.set()
 
     if rsync_result['success'] is False:
         # rsync itself failed — recording stats/copying an incremental
