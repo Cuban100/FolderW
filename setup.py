@@ -88,6 +88,13 @@ def configure_systemd_autostart(enable):
             f"ExecStart={sys.executable} {os.path.join(APP_DIR, 'main_backup.py')}\n"
             "Restart=on-failure\n"
             "RestartSec=10\n"
+            # Default (90s) meant Stop Full Backup could block for a minute
+            # and a half waiting on rsync mid-transfer before systemd gave
+            # up and SIGKILLed it — the dashboard's stop request blocks on
+            # this same wait. 15s is enough for a normal graceful exit
+            # (finish the current write, clean up its temp file) without
+            # leaving a stop request hanging for so long it looks broken.
+            "TimeoutStopSec=15\n"
         )
         try:
             os.makedirs(service_dir, exist_ok=True)
