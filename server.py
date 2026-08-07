@@ -8,7 +8,7 @@ import queue
 import webbrowser
 import psutil
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space, get_folder_size_du
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, cleanup_old_snapshots
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
@@ -465,6 +465,15 @@ async def submit_settings(
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
 
+    # Captured before save_env_values overwrites .env, so we can tell
+    # afterward whether the backup identity itself changed (as opposed to,
+    # say, just the snapshot retention count or interval).
+    old_identity = (
+        load_env_value('SRC_DIR'),
+        load_env_value('BASE_DIR'),
+        load_env_value('FULL_NAME'),
+    )
+
     max_snapshots = max_snapshots.strip()
     if max_snapshots and (not max_snapshots.isdigit() or int(max_snapshots) <= 0):
         logfile = load_other_variables('logfile')
@@ -496,6 +505,14 @@ async def submit_settings(
         create_all_tables(new_values["DATABASE"])
         # Settings changed — old check results no longer reflect reality
         clear_persisted_checks()
+
+        new_identity = (new_values["SRC_DIR"], new_values["BASE_DIR"], new_values["FULL_NAME"])
+        if new_identity != old_identity:
+            # Pointed FolderW at a different backup (source, destination, or
+            # container folder) — old session/change/statistics history
+            # belongs to the previous backup and would otherwise corrupt
+            # session numbering and historical stats for the new one.
+            reset_backup_history(new_values["DATABASE"])
 
     logfile = load_other_variables('logfile')
     return templates.TemplateResponse("settings.html", {

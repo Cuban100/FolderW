@@ -184,6 +184,24 @@ def create_all_tables(database):
     except Exception as e:
         logger.error(f"Failed to create tables: {e}")
 
+def reset_backup_history(database):
+    """Wipe recorded change/session/statistics history. Called when SRC_DIR,
+    BASE_DIR, or FULL_NAME changes — i.e. the user pointed FolderW at a
+    different backup — since old sessions reference a source/destination
+    that no longer applies and mixing them in would corrupt session
+    numbering (incremental folder naming) and historical stats/backup runs.
+    """
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs'):
+            cursor.execute(f"DELETE FROM {table}")
+        conn.commit()
+        conn.close()
+        logger.info("Backup history reset (changes/statistics/performance_metrics/backup_runs cleared).")
+    except sqlite3.Error as e:
+        logger.error(f"Error resetting backup history: {e}")
+
 def get_next_session_number():
     database = load_env_value('DATABASE')
     last_session_number = get_last_session_number(database)
