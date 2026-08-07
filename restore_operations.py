@@ -40,11 +40,11 @@ def _summarize_folder(path):
 
 
 def list_backups():
-    """List the full mirror plus every incremental snapshot (Month/Day/Time
-    folders under BASE_DIR), newest first."""
-    base_dir = load_env_value('BASE_DIR')
-    full_name = load_env_value('FULL_NAME').rstrip('/')
+    """List the full mirror (BASE_DIR/Full Backup) plus every incremental
+    snapshot (Month/Day/Time folders under BASE_DIR/Snapshots/Months),
+    newest first."""
     full_backup = load_other_variables('full_backup')
+    snapshots_root = load_other_variables('snapshots_root')
 
     backups = []
 
@@ -58,19 +58,18 @@ def list_backups():
             "mtime": os.path.getmtime(full_backup),
         })
 
-    if not os.path.isdir(base_dir):
+    if not os.path.isdir(snapshots_root):
         return backups
 
-    # BASE_DIR may be a shared destination with other, unrelated folders
-    # (cloud sync clients, photo libraries, etc.) sitting next to FolderW's
-    # own snapshots. Only ever descend into folders whose *names* actually
-    # match FolderW's own Month/Day/Time convention — anything else is
-    # skipped without being listed at all, so a huge unrelated directory
-    # tree can't turn this into a multi-minute (or hanging) recursive walk.
-    for month in sorted(os.listdir(base_dir)):
+    # Folder *names* under snapshots_root are still validated against
+    # FolderW's own Month/Day/Time convention as defense in depth (e.g.
+    # against a stray unrelated folder someone drops in there), even though
+    # nesting snapshots under BASE_DIR/Snapshots/Months/ already keeps this
+    # walk away from any unrelated content sitting elsewhere under BASE_DIR.
+    for month in sorted(os.listdir(snapshots_root)):
         if not _is_month_folder(month):
             continue
-        month_path = os.path.join(base_dir, month)
+        month_path = os.path.join(snapshots_root, month)
         if not os.path.isdir(month_path):
             continue
         for day in sorted(os.listdir(month_path)):
@@ -150,19 +149,19 @@ def _prune_empty_parents(path):
 
 def get_backup_path(backup_id):
     """Resolve a backup id ('full' or 'Month/Day/Time') to an absolute path,
-    validated to stay inside BASE_DIR. Returns None if invalid, unknown, or
-    an attempt to escape BASE_DIR."""
-    base_dir = load_env_value('BASE_DIR')
-
+    validated to stay inside the full backup / snapshots root respectively.
+    Returns None if invalid, unknown, or an attempt to escape those roots."""
     if backup_id == "full":
-        path = load_other_variables('full_backup')
+        root = load_other_variables('full_backup')
+        path = root
     else:
-        path = os.path.join(base_dir, backup_id)
+        root = load_other_variables('snapshots_root')
+        path = os.path.join(root, backup_id)
 
-    base_real = os.path.realpath(base_dir)
+    root_real = os.path.realpath(root)
     path_real = os.path.realpath(path)
-    if path_real != base_real and not path_real.startswith(base_real + os.sep):
-        logger.warning(f"Rejected restore path outside BASE_DIR: {backup_id}")
+    if path_real != root_real and not path_real.startswith(root_real + os.sep):
+        logger.warning(f"Rejected restore path outside its root: {backup_id}")
         return None
     if not os.path.isdir(path_real):
         return None

@@ -52,8 +52,10 @@ def load_other_variables(variable_name):
 
     if variable_name == 'full_backup':
         base_dir = ensure_trailing_slash(load_env_value('BASE_DIR'))
-        full_name = ensure_trailing_slash(load_env_value('FULL_NAME'))
-        return os.path.join(base_dir, full_name)
+        return os.path.join(base_dir, 'Full Backup')
+    elif variable_name == 'snapshots_root':
+        base_dir = load_env_value('BASE_DIR')
+        return os.path.join(base_dir, 'Snapshots', 'Months')
     elif variable_name == 'env_file':
         return os.path.join(os.path.dirname(__file__), '.env')
     elif variable_name == 'logfile':
@@ -267,7 +269,7 @@ def record_backup_run(session, backup_type, label, files_changed, status='comple
     except sqlite3.Error as e:
         logger.error(f"Error recording backup run: {e}")
 
-def save_settings_to_db(log_directory, source_directory, base_backup_directory, database_file, full_folder_name, monitor_source_folder, backup_interval):
+def save_settings_to_db(log_directory, source_directory, base_backup_directory, database_file, monitor_source_folder, backup_interval):
     try:
         connection = sqlite3.connect(database_file)
         cursor = connection.cursor()
@@ -276,7 +278,6 @@ def save_settings_to_db(log_directory, source_directory, base_backup_directory, 
             ("SOURCE_DIRECTORY", source_directory),
             ("BASE_BACKUP_DIRECTORY", base_backup_directory),
             ("DATABASE_FILE", database_file),
-            ("FULL_FOLDER_NAME", full_folder_name),
             ("MONITOR_SOURCE_FOLDER", str(monitor_source_folder)),
             ("BACKUP_INTERVAL", backup_interval)
         ]

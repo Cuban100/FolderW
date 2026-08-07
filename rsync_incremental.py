@@ -14,9 +14,9 @@ base_dir = load_env_value('BASE_DIR')
 exclude_file = load_other_variables('exclude_file')
 src_dir = load_env_value('SRC_DIR')
 full_backup = load_other_variables('full_backup')
+snapshots_root = load_other_variables('snapshots_root')
 rsync_txt = load_other_variables('rsync_txt')
 database = load_env_value('DATABASE')
-full_name = load_env_value("FULL_NAME")
 logger.add(logfile, level="INFO", format="{time} - {level} - {message}")
 
 
@@ -200,7 +200,7 @@ def copy_files():
         # relative to src_dir itself (no basename prefix to strip).
         for item_path in session_items:
             source_path = os.path.join(src_dir, item_path)
-            destination_path = os.path.join(base_dir, incremental_folder, item_path)
+            destination_path = os.path.join(snapshots_root, incremental_folder, item_path)
             try:
                 if os.path.isdir(source_path):
                     shutil.copytree(source_path, destination_path, dirs_exist_ok=True, copy_function=_safe_copy2)
@@ -218,7 +218,7 @@ def copy_files():
 
 
 if __name__ == "__main__":
-    logger.info(f"Full Backup is: {full_name}")
+    logger.info(f"Full Backup is: {full_backup}")
     ensure_backup_folder_icon()
     for progress in rsync():
         logger.info(f"Progress: {progress}")

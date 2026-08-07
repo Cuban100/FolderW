@@ -123,8 +123,8 @@ Unchecking the autostart box and saving again disables the service (`systemctl -
 
 The **Restore** page (`/restore` in the dashboard) lists two kinds of backups:
 
-- **Full Backup (latest):** the continuously-synced mirror at `BASE_DIR/FULL_NAME`, always reflecting the current state of `SRC_DIR`.
-- **Incremental snapshots:** one entry per backup session that changed files, named by when it ran (e.g. `August 06, 1:09-PM`), each containing only the files that changed in that session.
+- **Full Backup (latest):** the continuously-synced mirror at `BASE_DIR/Full Backup`, always reflecting the current state of `SRC_DIR`.
+- **Incremental snapshots:** one entry per backup session that changed files, stored under `BASE_DIR/Snapshots/Months/<Month>/<Day>/<Time>/` (e.g. `August 06, 1:09-PM`), each containing only the files that changed in that session.
 
 For any backup you can either:
 
@@ -137,7 +137,7 @@ Restoring **never overwrites `SRC_DIR`**. Files are always copied into a new, ti
 
 Set **"Snapshots to Keep"** (in the setup GUI or the web Settings page) to a number, and after every backup FolderW deletes the oldest incremental snapshots beyond that count — keeping only the most recent N. Leave it blank to keep every snapshot forever (the default).
 
-This only ever deletes incremental snapshot folders (the `Month/Day/Time` folders under `BASE_DIR`); the full backup mirror is never touched by retention.
+This only ever deletes incremental snapshot folders (the `Month/Day/Time` folders under `BASE_DIR/Snapshots/Months`); the full backup mirror is never touched by retention.
 
 Deleting a file from `SRC_DIR` behaves differently depending on which backup you look at:
 

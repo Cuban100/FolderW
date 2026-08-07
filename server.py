@@ -34,7 +34,6 @@ class FormData(BaseModel):
     src_dir: str
     base_dir: str
     database: str
-    full_name: str
     monitor: bool
     backup_interval: str
 
@@ -90,7 +89,6 @@ async def validate_conditions(request: Request):
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
     database = load_env_value('DATABASE')
-    full_name = load_env_value('FULL_NAME')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
     validation_status, validation_message = validate_all_conditions(src_dir, base_dir) 
@@ -125,7 +123,6 @@ async def validate_conditions(request: Request):
             "src_dir": src_dir,
             "base_dir": base_dir,
             "database": database,
-            "full_name": full_name,
             "monitor": monitor,
             "interval": backup_interval,
             "src_size": src_size,  # Human-readable format
@@ -155,7 +152,6 @@ async def check_settings(request: Request):
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
     database = load_env_value('DATABASE')
-    full_name = load_env_value('FULL_NAME')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
     settings_sent, settings, missing_vars = check_env_variables()
@@ -173,7 +169,6 @@ async def check_settings(request: Request):
             "src_dir": src_dir,
             "base_dir": base_dir,
             "database": database,
-            "full_name": full_name,
             "monitor": monitor,
             "interval": backup_interval
 
@@ -213,7 +208,6 @@ async def run_all_steps(request: Request):
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
     database = load_env_value('DATABASE')
-    full_name = load_env_value('FULL_NAME')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
     settings_sent, settings, missing_vars = check_env_variables()
@@ -292,7 +286,6 @@ async def run_all_steps(request: Request):
         "src_dir": src_dir,
         "base_dir": base_dir,
         "database": database,
-        "full_name": full_name,
         "monitor": monitor,
         "interval": backup_interval,
         "backup_status": backup_status,
@@ -306,7 +299,6 @@ async def validate_conditions(request: Request):
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
     database = load_env_value('DATABASE')
-    full_name = load_env_value('FULL_NAME')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
     settings_sent, settings, missing_vars = check_env_variables()
@@ -327,7 +319,6 @@ async def validate_conditions(request: Request):
             "src_dir": src_dir,
             "base_dir": base_dir,
             "database": database,
-            "full_name": full_name,
             "monitor": monitor,
             "interval": backup_interval
         })
@@ -347,7 +338,6 @@ async def root(request: Request):
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
     database = load_env_value('DATABASE')
-    full_name = load_env_value('FULL_NAME')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
     # Restore the last known Settings/Validation/Evaluation check results,
@@ -359,7 +349,6 @@ async def root(request: Request):
         "src_dir": src_dir,
         "base_dir": base_dir,
         "database": database,
-        "full_name": full_name,
         "monitor": monitor,
         "interval": backup_interval,
         "settings_sent": persisted["settings_sent"],
@@ -445,7 +434,6 @@ async def settings_page(request: Request):
         "src_dir": load_env_value('SRC_DIR'),
         "base_dir": load_env_value('BASE_DIR'),
         "database": load_env_value('DATABASE'),
-        "full_name": load_env_value('FULL_NAME'),
         "monitor_checked": monitor == '1',
         "interval": load_env_value('BACKUP_INTERVAL'),
         "max_snapshots": load_env_value('MAX_SNAPSHOTS')
@@ -458,7 +446,6 @@ async def submit_settings(
     src_dir: str = Form(""),
     base_dir: str = Form(""),
     database: str = Form(""),
-    full_name: str = Form(""),
     interval: str = Form(""),
     max_snapshots: str = Form(""),
     monitor: str = Form(None)
@@ -476,7 +463,6 @@ async def submit_settings(
             "src_dir": load_env_value('SRC_DIR'),
             "base_dir": load_env_value('BASE_DIR'),
             "database": load_env_value('DATABASE'),
-            "full_name": load_env_value('FULL_NAME'),
             "monitor_checked": monitor_enabled,
             "interval": load_env_value('BACKUP_INTERVAL'),
             "max_snapshots": max_snapshots
@@ -486,7 +472,6 @@ async def submit_settings(
         "SRC_DIR": src_dir.strip() or load_env_value('SRC_DIR'),
         "BASE_DIR": base_dir.strip() or load_env_value('BASE_DIR'),
         "DATABASE": database.strip() or load_env_value('DATABASE'),
-        "FULL_NAME": full_name.strip() or load_env_value('FULL_NAME'),
         "MONITOR": "1" if monitor_enabled else "0",
         "BACKUP_INTERVAL": "False" if monitor_enabled else (interval or load_env_value('BACKUP_INTERVAL') or "hourly"),
         "MAX_SNAPSHOTS": max_snapshots
@@ -506,7 +491,6 @@ async def submit_settings(
         "src_dir": new_values["SRC_DIR"],
         "base_dir": new_values["BASE_DIR"],
         "database": new_values["DATABASE"],
-        "full_name": new_values["FULL_NAME"],
         "monitor_checked": monitor_enabled,
         "interval": new_values["BACKUP_INTERVAL"],
         "max_snapshots": new_values["MAX_SNAPSHOTS"]
