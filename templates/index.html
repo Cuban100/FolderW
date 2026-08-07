@@ -486,7 +486,7 @@
             {% endif %}
             {% if watchdog_active %}
             <div style="text-align: center;">
-                <button class="stop-monitoring-button" onclick="stopMonitoring()">Stop Monitoring</button>
+                <button class="stop-monitoring-button" onclick="stopMonitoring(event)">Stop Monitoring</button>
             </div>
             {% endif %}
             {% if not ready_for_manual_snapshot %}
@@ -503,7 +503,7 @@
                 {% endif %}
                 <div class="{{ start }}">
                     {% if backup_active %}
-                    <button class="check-button stop" onclick="stopMonitoring()">Stop Full Backup</button>
+                    <button class="check-button stop" onclick="stopMonitoring(event)">Stop Full Backup</button>
                     {% else %}
                     <button id="start-backup-btn" class="check-button" onclick="startBackup()">Start Full Backup</button>
                     <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 8px;">Starting a backup can take up to a minute while the source directory is scanned — the page may look stuck, please don't click again.</p>
@@ -641,9 +641,20 @@
             }
             window.location.href = '/run-all-steps';
         }
-        async function stopMonitoring() {
+        async function stopMonitoring(event) {
             if (!confirm('Stop monitoring and any backup currently in progress?')) {
                 return;
+            }
+            // systemctl stop blocks until the service (and rsync under it)
+            // actually exits — if rsync doesn't respond to SIGTERM right
+            // away (mid-transfer, cleaning up a partial file), that wait
+            // can run to systemd's stop timeout. Give immediate feedback
+            // so the page doesn't look frozen/unresponsive in the meantime.
+            const btn = event && event.target;
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Stopping… (this can take a moment)';
+                btn.style.cursor = 'wait';
             }
             try {
                 const response = await fetch('/stop-backup', { method: 'POST' });
