@@ -43,14 +43,24 @@ def toggle_backup_options():
             widget.grid()
 
 SERVICE_NAME = "folderw.service"
+BACKUP_SERVICE_NAME = "folderw-backup.service"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def configure_systemd_autostart(enable):
     service_dir = os.path.join(os.path.expanduser("~"), ".config", "systemd", "user")
     service_path = os.path.join(service_dir, SERVICE_NAME)
+    backup_service_path = os.path.join(service_dir, BACKUP_SERVICE_NAME)
 
     if enable:
         print(f"Configuring systemd to start FolderW at boot ({service_path})")
+        # Two separate units, deliberately not tied together in the same
+        # cgroup: this unit only ever runs server.py (the dashboard), so a
+        # routine restart (e.g. from update.sh after every code update)
+        # can't touch an active backup — and folderw-backup.service (below)
+        # can be stopped/restarted on its own with normal systemd semantics
+        # (default KillMode=control-group), cleanly killing main_backup.py
+        # and everything it spawned (rsync_event_handler.py, rsync itself)
+        # with no lingering processes.
         service_content = (
             "[Unit]\n"
             "Description=FolderW Backup Dashboard\n"
@@ -60,26 +70,30 @@ def configure_systemd_autostart(enable):
             f"WorkingDirectory={APP_DIR}\n"
             f"ExecStart={sys.executable} {os.path.join(APP_DIR, 'server.py')}\n"
             "Restart=on-failure\n"
-            "RestartSec=5\n"
-            # Without this, systemd's default KillMode=control-group sends
-            # the stop/restart signal to every process in this service's
-            # cgroup — including main_backup.py, even though it's launched
-            # with start_new_session=True specifically to survive dashboard
-            # restarts. That start_new_session flag only detaches it from
-            # the *terminal* session (protects against SIGHUP on terminal
-            # close); it does nothing against systemd's own cgroup-wide
-            # kill. KillMode=process makes systemd only ever signal the
-            # single tracked PID (server.py) on stop/restart/update, so the
-            # watchdog and any in-progress backup are never silently killed
-            # just because the dashboard restarted.
-            "KillMode=process\n\n"
+            "RestartSec=5\n\n"
             "[Install]\n"
             "WantedBy=default.target\n"
+        )
+        # Not enabled/started here — server.py starts (or restarts) it
+        # on-demand via systemctl when a backup is actually triggered, the
+        # same way it always launched main_backup.py directly before.
+        backup_service_content = (
+            "[Unit]\n"
+            "Description=FolderW Backup Worker\n"
+            "After=network.target\n\n"
+            "[Service]\n"
+            "Type=simple\n"
+            f"WorkingDirectory={APP_DIR}\n"
+            f"ExecStart={sys.executable} {os.path.join(APP_DIR, 'main_backup.py')}\n"
+            "Restart=on-failure\n"
+            "RestartSec=10\n"
         )
         try:
             os.makedirs(service_dir, exist_ok=True)
             with open(service_path, "w") as f:
                 f.write(service_content)
+            with open(backup_service_path, "w") as f:
+                f.write(backup_service_content)
             subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
             subprocess.run(["systemctl", "--user", "enable", SERVICE_NAME], check=True)
             print("Autostart enabled. FolderW will start automatically on login/boot.")

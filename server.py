@@ -186,6 +186,39 @@ async def check_settings(request: Request):
             "settings_sent": settings_sent
         })
 
+BACKUP_SERVICE_NAME = "folderw-backup.service"
+
+
+def _backup_service_unit_exists():
+    # Only true when setup.py's autostart configuration has written
+    # folderw-backup.service (see setup.py:configure_systemd_autostart).
+    # Installs that never enabled autostart have no such unit, so the
+    # start/stop routes below fall back to the old Popen/psutil approach.
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "list-unit-files", BACKUP_SERVICE_NAME],
+            capture_output=True, text=True, timeout=5,
+        )
+        return BACKUP_SERVICE_NAME in result.stdout
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False
+
+
+def is_watchdog_active():
+    # Distinct from is_backup_running(): this reflects whether the
+    # long-lived supervisor (main_backup.py) is up at all — watching for
+    # changes or waiting on its schedule — not just whether a backup is
+    # actively copying files right now.
+    for proc in psutil.process_iter(['cmdline']):
+        try:
+            cmdline = proc.info['cmdline'] or []
+            if any('main_backup.py' in part for part in cmdline):
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    return False
+
+
 def is_backup_running():
     # Deliberately excludes main_backup.py: in event-driven (MONITOR=1) mode
     # it's a supervisor process that runs for as long as watchdog monitoring
@@ -205,6 +238,33 @@ def is_backup_running():
 @app.get("/backup-status")
 async def backup_status_endpoint():
     return JSONResponse({"running": is_backup_running()})
+
+@app.post("/stop-backup")
+async def stop_backup():
+    if _backup_service_unit_exists():
+        try:
+            subprocess.run(["systemctl", "--user", "stop", BACKUP_SERVICE_NAME], check=True)
+            logger.info("Stopped folderw-backup.service on request.")
+            return JSONResponse({"message": "Backup and monitoring stopped."})
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to stop {BACKUP_SERVICE_NAME}: {e}")
+            return JSONResponse({"message": f"Failed to stop: {e}"}, status_code=500)
+
+    # No systemd unit (autostart never configured) — fall back to killing
+    # the known process names directly. main_backup.py's own retry loop
+    # would otherwise just relaunch rsync_event_handler.py after a bare
+    # kill of that child, so the supervisor itself has to go too.
+    killed = 0
+    for proc in psutil.process_iter(['cmdline']):
+        try:
+            cmdline = proc.info['cmdline'] or []
+            if any('main_backup.py' in part or 'rsync_event_handler.py' in part for part in cmdline):
+                proc.terminate()
+                killed += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    logger.info(f"Stopped {killed} backup/watchdog process(es) directly.")
+    return JSONResponse({"message": f"Stopped {killed} process(es)." if killed else "Nothing was running."})
 
 @app.get("/run-all-steps", response_class=HTMLResponse)
 async def run_all_steps(request: Request):
@@ -262,19 +322,29 @@ async def run_all_steps(request: Request):
     success_message = "All settings, validations, and evaluations are correct. READY"
     
     try:
-        # start_new_session detaches main_backup.py from this process's session,
-        # so it survives server.py restarting or its terminal closing. stdout=PIPE
-        # without ever being read risks the child blocking once the OS pipe buffer
-        # fills, so redirect to a log file instead.
-        log_dir = os.path.join(BASE_DIR, "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        backup_log = open(os.path.join(log_dir, "main_backup.log"), "a")
-        subprocess.Popen(
-            [sys.executable, os.path.join(BASE_DIR, "main_backup.py")],
-            stdout=backup_log,
-            stderr=backup_log,
-            start_new_session=True,
-        )
+        if _backup_service_unit_exists():
+            # restart (not start) so re-clicking while a backup/watchdog is
+            # already running replaces it with a fresh run instead of being
+            # a no-op — and, since it's its own systemd unit with default
+            # KillMode, the old one is guaranteed to be fully stopped first
+            # (no duplicate watchdog processes left behind).
+            subprocess.run(["systemctl", "--user", "restart", BACKUP_SERVICE_NAME], check=True)
+        else:
+            # No systemd unit for it (autostart was never configured) —
+            # start_new_session detaches main_backup.py from this process's
+            # session, so it survives server.py restarting or its terminal
+            # closing. stdout=PIPE without ever being read risks the child
+            # blocking once the OS pipe buffer fills, so redirect to a log
+            # file instead.
+            log_dir = os.path.join(BASE_DIR, "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            backup_log = open(os.path.join(log_dir, "main_backup.log"), "a")
+            subprocess.Popen(
+                [sys.executable, os.path.join(BASE_DIR, "main_backup.py")],
+                stdout=backup_log,
+                stderr=backup_log,
+                start_new_session=True,
+            )
         backup_status = "Backup started."
     except Exception as e:
         backup_status = f"Failed to start backup process: {str(e)}"
@@ -368,6 +438,7 @@ async def root(request: Request):
         "dest_space": persisted["dest_space"],
         "can_backup": persisted["can_backup"],
         "backup_in_progress": is_backup_running(),
+        "watchdog_active": is_watchdog_active(),
         })
 
 @app.get("/statistics", response_class=HTMLResponse)
