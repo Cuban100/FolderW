@@ -8,6 +8,7 @@ lib
 overlay2/
 **/.docker/desktop/vms
 **/.local/share/docker
+**/.npm/_cacache
 FolderW.png
 .directory
 *.tmp
