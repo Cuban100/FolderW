@@ -90,7 +90,7 @@ def check_env_variables():
     settings_sent = len(missing_vars) == 0
     return settings_sent, settings, missing_vars
 
-def get_folder_size_bytes_du(path, exclude_from=None):
+def get_folder_size_bytes_du(path, exclude_from=None, apparent_size=True):
     """Like get_folder_size(), but shells out to `du` (much faster than a
     pure-Python os.walk on a large tree) and returns a raw byte count
     instead of a human-readable string.
@@ -106,8 +106,21 @@ def get_folder_size_bytes_du(path, exclude_from=None):
     huge excluded-from-the-backup item — e.g. a sparse virtual disk image
     with a multi-hundred-GB apparent size — inflates the total far beyond
     what will actually be transferred.
+
+    apparent_size: True (default) sums each file's logical size — matches
+    what rsync's own byte counters report, so the live progress-percentage
+    math (which compares against those counters) stays internally
+    consistent. Pass False for anything shown/compared as an absolute
+    size a user might sanity-check against real disk/drive capacity (a
+    "does this fit" question) — a sparse file can have a logical size wildly
+    larger than what it (or its backup copy, now that rsync runs with
+    --sparse) actually occupies on disk.
     """
-    command = ['du', '-sb']
+    command = ['du', '-s']
+    if apparent_size:
+        command.append('-b')
+    else:
+        command.append('--block-size=1')
     if exclude_from:
         command.append(f'--exclude-from={exclude_from}')
     command.append(path)
@@ -162,10 +175,16 @@ def evaluation_of_resources():
     # skip too — most dramatically Docker Desktop's VM disk, a sparse file
     # with a ~1TB apparent size but ~1.4GB real content, which alone made
     # this look like a 1.25TB source when the real backup scope is ~200GB.
+    # apparent_size=False: this number gets shown to a user as an absolute
+    # size ("does my data fit?") and compared against real drive capacity —
+    # sparse files should count for their real disk footprint here, not
+    # their logical size (rsync now runs with --sparse, so a sparse file's
+    # backup copy genuinely only occupies its real size at the destination
+    # too, not its logical one).
     # `or 0`: unlike the os.walk version, du can return None on total
     # failure (e.g. SRC_DIR unreadable) — keep this always an int like
     # every downstream comparison/formatting call here already assumes.
-    src_size = get_folder_size_bytes_du(load_env_value('SRC_DIR'), exclude_from=load_other_variables('exclude_file')) or 0
+    src_size = get_folder_size_bytes_du(load_env_value('SRC_DIR'), exclude_from=load_other_variables('exclude_file'), apparent_size=False) or 0
     total, used, free = destination_space()
     if total is None:
         return (

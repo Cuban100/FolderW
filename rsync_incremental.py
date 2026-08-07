@@ -147,7 +147,14 @@ def rsync(result_holder=None):
     # incremental recursion instead: the percentage understates true
     # progress for a while on such trees (denominator keeps growing as
     # rsync discovers more), but transferring starts immediately every time.
-    rsync_command = ["rsync", "-av", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
+    # --sparse: without it, a sparse file (a VM disk, database file, etc. —
+    # anything with a huge logical size but mostly-empty real content) gets
+    # written to the destination in full, holes included, actually
+    # consuming destination space matching its logical size instead of its
+    # real one. Excluding Docker Desktop's VM disk (found the hard way)
+    # only protects against that one specific file; --sparse protects
+    # against every other sparse file nobody's found yet.
+    rsync_command = ["rsync", "-av", "--sparse", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
     logger.warning(f"Executing rsync command {rsync_command}")
         
     try:
