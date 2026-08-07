@@ -157,7 +157,15 @@ def destination_space():
 
 
 def evaluation_of_resources():
-    src_size = get_folder_size(load_env_value('SRC_DIR'))
+    # get_folder_size_bytes_du with exclude_from, not the plain get_folder_size
+    # os.walk above: without it, this counts everything rsync will actually
+    # skip too — most dramatically Docker Desktop's VM disk, a sparse file
+    # with a ~1TB apparent size but ~1.4GB real content, which alone made
+    # this look like a 1.25TB source when the real backup scope is ~200GB.
+    # `or 0`: unlike the os.walk version, du can return None on total
+    # failure (e.g. SRC_DIR unreadable) — keep this always an int like
+    # every downstream comparison/formatting call here already assumes.
+    src_size = get_folder_size_bytes_du(load_env_value('SRC_DIR'), exclude_from=load_other_variables('exclude_file')) or 0
     total, used, free = destination_space()
     if total is None:
         return (
