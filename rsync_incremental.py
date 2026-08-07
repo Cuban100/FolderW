@@ -154,7 +154,13 @@ def rsync(result_holder=None):
     # real one. Excluding Docker Desktop's VM disk (found the hard way)
     # only protects against that one specific file; --sparse protects
     # against every other sparse file nobody's found yet.
-    rsync_command = ["rsync", "-av", "--sparse", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
+    # -vv (not just -v): the single -v was silent for files rsync decides
+    # not to touch — which, deep in a large tree's file-list scan, is most
+    # of what it's doing at any given moment (the "ir-chk" counter climbing
+    # with nothing else printed). The second -v adds an explicit line per
+    # already-up-to-date file too, so the activity log actually shows
+    # what's being checked instead of going quiet for the whole scan.
+    rsync_command = ["rsync", "-avv", "--sparse", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
     logger.warning(f"Executing rsync command {rsync_command}")
         
     try:
