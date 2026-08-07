@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import subprocess
 import os
 import sys
+import time
 import threading
 import queue
 import webbrowser
@@ -331,7 +332,20 @@ def is_backup_running():
 @app.get("/backup-status")
 async def backup_status_endpoint():
     percent = get_database_value('BACKUP_PROGRESS_PERCENT', 'settings')
-    return JSONResponse({"running": is_backup_running(), "percent": percent or None})
+    eta = get_database_value('BACKUP_ETA', 'settings')
+    start_time_raw = get_database_value('BACKUP_START_TIME', 'settings')
+    elapsed_seconds = None
+    if start_time_raw:
+        try:
+            elapsed_seconds = int(time.time() - float(start_time_raw))
+        except ValueError:
+            pass
+    return JSONResponse({
+        "running": is_backup_running(),
+        "percent": percent or None,
+        "eta": eta or None,
+        "elapsed_seconds": elapsed_seconds,
+    })
 
 @app.post("/stop-backup")
 async def stop_backup():

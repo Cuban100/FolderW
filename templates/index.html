@@ -648,6 +648,15 @@
             }
         }
 
+        function formatDuration(totalSeconds) {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            if (h > 0) return `${h}h ${m}m ${s}s`;
+            if (m > 0) return `${m}m ${s}s`;
+            return `${s}s`;
+        }
+
         // If a backup was just started, poll for whether it's still running
         // and show a progress bar accordingly. When rsync's --info=progress2
         // percentage is available (see /backup-status), the bar fills to
@@ -670,14 +679,22 @@
                     const response = await fetch('/backup-status');
                     const data = await response.json();
                     if (data.running) {
+                        const parts = [];
+                        if (data.elapsed_seconds !== null && data.elapsed_seconds !== undefined) {
+                            parts.push(`elapsed ${formatDuration(data.elapsed_seconds)}`);
+                        }
+                        if (data.eta) {
+                            parts.push(`ETA ${data.eta}`);
+                        }
+                        const suffix = parts.length ? ` (${parts.join(', ')})` : '';
                         if (data.percent !== null && data.percent !== undefined) {
                             progressBar.classList.add('determinate');
                             progressBar.style.width = data.percent + '%';
-                            progressText.textContent = `Backup running… ${data.percent}%`;
+                            progressText.textContent = `Backup running… ${data.percent}%${suffix}`;
                         } else {
                             progressBar.classList.remove('determinate');
                             progressBar.style.width = '';
-                            progressText.textContent = 'Backup running…';
+                            progressText.textContent = `Backup running…${suffix}`;
                         }
                     }
                     if (!data.running) {

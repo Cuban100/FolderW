@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import stat
+import time
 import threading
 from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value
 from restore_operations import cleanup_old_snapshots
@@ -274,10 +275,15 @@ def copy_files():
 if __name__ == "__main__":
     logger.info(f"Full Backup is: {full_backup}")
     ensure_backup_folder_icon()
-    # Cleared up front so a stale percentage/size from a previous run can't
-    # be shown on the dashboard during the icon-setup gap before rsync's
-    # first progress line actually arrives.
+    # Cleared up front so a stale percentage/size/ETA from a previous run
+    # can't be shown on the dashboard during the icon-setup gap before
+    # rsync's first progress line actually arrives.
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
+    set_database_value('BACKUP_ETA', '')
+    # Elapsed time is computed by the dashboard (now - this), not rsync
+    # itself — rsync only ever reports ETA (time remaining), never how
+    # long the run has been going.
+    set_database_value('BACKUP_START_TIME', str(time.time()))
 
     # rsync's own --info=progress2 percentage only counts bytes it actually
     # transfers this run — a file that already matches at the destination
@@ -304,12 +310,17 @@ if __name__ == "__main__":
 
     rsync_result = {'success': None}
     last_percent = None
+    last_eta = None
     for progress in rsync(rsync_result):
         logger.info(f"Progress: {progress}")
-        match = re.search(r'^([\d,]+)\s+(\d+)%', progress)
+        # Groups: bytes-transferred-so-far, rsync's own percent, ETA
+        # (time *remaining* — verified empirically with a throttled
+        # transfer that it counts down to 0:00:00, not up).
+        match = re.search(r'^([\d,]+)\s+(\d+)%\s+\S+\s+(\d+:\d+:\d+)', progress)
         if not match:
             continue
         transferred_bytes = int(match.group(1).replace(',', ''))
+        eta = match.group(3)
         dest_baseline = baselines['dest_baseline']
         source_total = baselines['source_total']
         if dest_baseline is not None and source_total:
@@ -325,7 +336,12 @@ if __name__ == "__main__":
         if percent_str != last_percent:
             last_percent = percent_str
             set_database_value('BACKUP_PROGRESS_PERCENT', percent_str)
+        if eta != last_eta:
+            last_eta = eta
+            set_database_value('BACKUP_ETA', eta)
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
+    set_database_value('BACKUP_ETA', '')
+    set_database_value('BACKUP_START_TIME', '')
 
     if rsync_result['success'] is False:
         # rsync itself failed — recording stats/copying an incremental
