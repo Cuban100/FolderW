@@ -121,8 +121,15 @@ def rsync():
     src_dir_contents = src_dir.rstrip('/') + '/'
     # --info=progress2 reports overall transfer progress (a single running
     # percentage across the whole run) rather than per-file progress, which
-    # is what a single dashboard progress bar needs.
-    rsync_command = ["rsync", "-av", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
+    # is what a single dashboard progress bar needs. --no-inc-recursive
+    # disables rsync's default incremental recursion so it builds the
+    # complete file list upfront instead of discovering files as it goes —
+    # without it, --info=progress2's percentage is "bytes sent so far /
+    # bytes discovered so far", which understates true progress for a long
+    # time on large, deep trees (the denominator keeps growing). The
+    # trade-off is a pause upfront, proportional to file count, before any
+    # progress shows at all.
+    rsync_command = ["rsync", "-av", "--delete", "--info=progress2", "--no-inc-recursive", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
     logger.warning(f"Executing rsync command {rsync_command}")
         
     try:
@@ -151,7 +158,10 @@ def parse_logfile(rsync_txt):
             for line in f:
                 #logger.debug(f"Reading line from rsync_txt: {line.strip()}")
                 line = line.strip()
-                if "sending incremental file list" in line:
+                # --no-inc-recursive changes rsync's header from "sending
+                # incremental file list" to "building file list ... done" —
+                # both mark the start of the actual file listing.
+                if "sending incremental file list" in line or "building file list" in line:
                     capturing = True
                     continue
                 if capturing:
