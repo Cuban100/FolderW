@@ -284,12 +284,22 @@ def get_backup_stats_context(database):
     # a plain dashboard load, but also right after clicking a Check button
     # or Start Full Backup.
     total, used, _free = destination_space()
+    # interval=None (non-blocking): compares against the last call within
+    # this same process rather than sampling over a fixed window, so it
+    # doesn't add latency to the page load. The very first call after
+    # startup returns 0.0 — accurate readings kick in from the second
+    # request on.
+    cpu_percent = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory()
     return {
         "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings'),
         "dest_total": f"{total:.2f} GB" if total is not None else None,
         "dest_used": f"{used:.2f} GB" if used is not None else None,
         "last_session": get_last_session_number(database),
         "last_session_files": len(list_items_by_session(database)),
+        "cpu_percent": f"{cpu_percent:.1f}%",
+        "ram_used": f"{mem.used / (1024**3):.2f} GB",
+        "ram_total": f"{mem.total / (1024**3):.2f} GB",
     }
 
 
