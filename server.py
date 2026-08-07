@@ -258,14 +258,16 @@ def _backup_service_unit_exists():
 
 
 def is_watchdog_active():
-    # Distinct from is_backup_running(): this reflects whether the
-    # long-lived supervisor (main_backup.py) is up at all — watching for
-    # changes or waiting on its schedule — not just whether a backup is
-    # actively copying files right now.
+    # Deliberately matches rsync_event_handler.py, not main_backup.py: the
+    # supervisor runs the first full backup to completion before ever
+    # launching the event handler (see main_backup.py's run_regular_backup()
+    # followed by start_event_backup()), so matching main_backup.py itself
+    # would report the watchdog as "active" during that initial full
+    # backup, before it's actually watching anything.
     for proc in psutil.process_iter(['cmdline']):
         try:
             cmdline = proc.info['cmdline'] or []
-            if any('main_backup.py' in part for part in cmdline):
+            if any('rsync_event_handler.py' in part for part in cmdline):
                 return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
