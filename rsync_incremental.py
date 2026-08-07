@@ -76,13 +76,9 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
     if current_size:
         set_database_value('CURRENT_BACKUP_SIZE', current_size)
 
-def ensure_backup_folder_icon():
-    """Make the backup destination folder itself show the FolderW logo as
-    its icon in the file manager, rather than just containing a PNG a user
-    has to open to notice. rsync --delete manages the entire full_backup
-    directory (src_dir's contents are mirrored directly into it), so both
-    files below are listed in the rsync exclude file to keep them from
-    being wiped as "extra" files on every sync.
+def _set_folder_icon(folder, icon_filename):
+    """Make `folder` itself show a branded icon in the file manager, rather
+    than just containing a PNG a user has to open to notice.
 
     Two mechanisms, since no single one covers every file manager:
     - gio set metadata::custom-icon: what GNOME Files/Nemo (GTK/GVFS-based)
@@ -93,14 +89,14 @@ def ensure_backup_folder_icon():
       rather than living in a per-user GVFS metadata database, so it's kept
       as a portable fallback even though it's inert on this desktop.
     """
-    icon_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'FolderW.png')
-    icon_dest = os.path.join(full_backup, 'FolderW.png')
-    os.makedirs(full_backup, exist_ok=True)
+    icon_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), icon_filename)
+    icon_dest = os.path.join(folder, icon_filename)
+    os.makedirs(folder, exist_ok=True)
     if os.path.exists(icon_source) and not os.path.exists(icon_dest):
         shutil.copy2(icon_source, icon_dest)
-        logger.info(f"Added FolderW icon to backup folder: {icon_dest}")
+        logger.info(f"Added icon to folder: {icon_dest}")
 
-    directory_file = os.path.join(full_backup, '.directory')
+    directory_file = os.path.join(folder, '.directory')
     if not os.path.exists(directory_file):
         with open(directory_file, 'w') as f:
             f.write(f"[Desktop Entry]\nIcon={icon_dest}\n")
@@ -108,12 +104,22 @@ def ensure_backup_folder_icon():
 
     try:
         subprocess.run(
-            ["gio", "set", full_backup, "metadata::custom-icon", f"file://{icon_dest}"],
+            ["gio", "set", folder, "metadata::custom-icon", f"file://{icon_dest}"],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
-        logger.info(f"Set folder icon via gio metadata::custom-icon: {full_backup}")
+        logger.info(f"Set folder icon via gio metadata::custom-icon: {folder}")
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         logger.warning(f"Could not set folder icon via gio (non-fatal): {e}")
+
+def ensure_backup_folder_icon():
+    # full_backup (rsync's actual destination) gets FolderW.png, listed in
+    # the rsync exclude file so it isn't wiped as an "extra" file on every
+    # sync. Its FULL_NAME container folder (one level up — e.g. "Caveman",
+    # holding both Full Backup/ and Snapshots/) is never an rsync
+    # destination itself, so it's safe to brand with logo.png without any
+    # exclude-list entry.
+    _set_folder_icon(full_backup, 'FolderW.png')
+    _set_folder_icon(os.path.dirname(full_backup), 'logo.png')
 
 def rsync():
     # Trailing slash on the source makes rsync copy src_dir's *contents*
