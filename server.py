@@ -181,6 +181,7 @@ async def validate_conditions(request: Request):
             "dest_space": dest_space,  # Human-readable format
             "can_backup": 'Yes' if can_backup else 'No',
             "has_completed_backup": has_completed_backup(database),
+            **get_backup_stats_context(database),
         })
     else:
         return templates.TemplateResponse("index.html", {
@@ -196,6 +197,7 @@ async def validate_conditions(request: Request):
             "dest_space": dest_space,  # Human-readable format
             "can_backup": 'No',
             "has_completed_backup": has_completed_backup(database),
+            **get_backup_stats_context(database),
         })
 
 
@@ -228,6 +230,7 @@ async def check_settings(request: Request):
             "monitor": monitor,
             "interval": backup_interval,
             "has_completed_backup": has_completed_backup(database),
+            **get_backup_stats_context(database),
 
         })
     else:
@@ -236,7 +239,8 @@ async def check_settings(request: Request):
             "request": request,
             "logo": logo,
             "missing_vars": missing_vars,
-            "settings_sent": settings_sent
+            "settings_sent": settings_sent,
+            **get_backup_stats_context(database),
         })
 
 BACKUP_SERVICE_NAME = "folderw-backup.service"
@@ -272,6 +276,21 @@ def is_watchdog_active():
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
     return False
+
+
+def get_backup_stats_context(database):
+    # Shared by every route that renders index.html, so the Backup
+    # Statistics panel is populated consistently everywhere — not just on
+    # a plain dashboard load, but also right after clicking a Check button
+    # or Start Full Backup.
+    total, used, _free = destination_space()
+    return {
+        "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings'),
+        "dest_total": f"{total:.2f} GB" if total is not None else None,
+        "dest_used": f"{used:.2f} GB" if used is not None else None,
+        "last_session": get_last_session_number(database),
+        "last_session_files": len(list_items_by_session(database)),
+    }
 
 
 def is_backup_running():
@@ -338,7 +357,8 @@ async def run_all_steps(request: Request):
             "logo": logo,
             "setting": settings,
             "missing_settings": missing_vars,
-            "settings_sent": settings_sent
+            "settings_sent": settings_sent,
+            **get_backup_stats_context(database),
         })
 
     validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
@@ -350,7 +370,8 @@ async def run_all_steps(request: Request):
             "missing_settings": missing_vars,
             "settings_sent": settings_sent,
             "validation_status": validation_status,
-            "validation_message": validation_message
+            "validation_message": validation_message,
+            **get_backup_stats_context(database),
         })
 
     src_size, dest_space, can_backup, evaluation_message = evaluation_of_resources()
@@ -372,7 +393,8 @@ async def run_all_steps(request: Request):
             "evaluation_status": can_backup,
             "evaluation_message": evaluation_message,
             "src_size": src_size,
-            "dest_space": dest_space
+            "dest_space": dest_space,
+            **get_backup_stats_context(database),
         })
 
     success_message = "All settings, validations, and evaluations are correct. READY"
@@ -425,6 +447,7 @@ async def run_all_steps(request: Request):
         "dest_space": dest_space,
         "can_backup": can_backup,
         "has_completed_backup": has_completed_backup(database),
+        **get_backup_stats_context(database),
     })
 @app.get("/check-validation", response_class=HTMLResponse)
 async def validate_conditions(request: Request):
@@ -457,6 +480,7 @@ async def validate_conditions(request: Request):
             "monitor": monitor,
             "interval": backup_interval,
             "has_completed_backup": has_completed_backup(database),
+            **get_backup_stats_context(database),
         })
     else:
         return templates.TemplateResponse("index.html", {
@@ -466,7 +490,8 @@ async def validate_conditions(request: Request):
             "missing_settings": missing_vars,
             "settings_sent": settings_sent,
             "validation_status": validation_status,
-            "validation_message": validation_message
+            "validation_message": validation_message,
+            **get_backup_stats_context(database),
         })
 
 @app.get("/", response_class=HTMLResponse)
@@ -480,11 +505,6 @@ async def root(request: Request):
     # Restore the last known Settings/Validation/Evaluation check results,
     # so returning to the dashboard doesn't require re-running them.
     persisted = load_persisted_checks()
-    # dest_total/dest_used come from a plain statvfs-style call (cheap, safe
-    # on every page load); current_backup_size is a cached value written
-    # after each backup run (see rsync_incremental.py) rather than computed
-    # here, since a live `du` over the whole backup can take minutes.
-    total, used, _free = destination_space()
     return templates.TemplateResponse("index.html",
         { "request": request,
         "logo": logo,
@@ -503,11 +523,7 @@ async def root(request: Request):
         "backup_in_progress": is_backup_running(),
         "watchdog_active": is_watchdog_active(),
         "has_completed_backup": has_completed_backup(database),
-        "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings'),
-        "dest_total": f"{total:.2f} GB" if total is not None else None,
-        "dest_used": f"{used:.2f} GB" if used is not None else None,
-        "last_session": get_last_session_number(database),
-        "last_session_files": len(list_items_by_session(database)),
+        **get_backup_stats_context(database),
         })
 
 @app.get("/restore", response_class=HTMLResponse)
