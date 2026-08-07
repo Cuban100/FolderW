@@ -314,12 +314,22 @@ def get_backup_stats_context(database):
 
 
 def is_backup_running():
-    # Deliberately excludes main_backup.py: in event-driven (MONITOR=1) mode
-    # it's a supervisor process that runs for as long as watchdog monitoring
-    # is active, not just while a backup is actually executing — matching it
-    # here would make the dashboard show "Backup in progress" essentially
-    # permanently. rsync_incremental.py is the actual work being done: it
-    # starts and exits with each individual backup run.
+    # Deliberately excludes main_backup.py itself: in event-driven
+    # (MONITOR=1) mode it's a supervisor process that runs for as long as
+    # watchdog monitoring is active, not just while a backup is actually
+    # executing — matching it here would make the dashboard show "Backup in
+    # progress" essentially permanently. rsync_incremental.py is the actual
+    # work being done: it starts and exits with each individual backup run.
+    #
+    # BACKUP_PREPARING is the one exception: main_backup.py sets it while
+    # running its own prerequisite checks (settings/validation/evaluation,
+    # including a real du scan) *before* rsync_incremental.py exists yet.
+    # Without it, that startup gap read as "not running" — which the
+    # frontend poll took to mean a just-started backup had already
+    # finished, stopping the poll and showing "Backup complete" right as
+    # the real backup was about to start.
+    if get_database_value('BACKUP_PREPARING', 'settings') == '1':
+        return True
     for proc in psutil.process_iter(['cmdline']):
         try:
             cmdline = proc.info['cmdline'] or []

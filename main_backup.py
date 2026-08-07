@@ -1,6 +1,6 @@
 import os
 import sys
-from db_operations import load_env_value, load_other_variables
+from db_operations import load_env_value, load_other_variables, set_database_value
 from notifications import notify
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
 import subprocess
@@ -74,8 +74,20 @@ if __name__ == "__main__":
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
 
+    # Set before the checks below (which include a real du scan and can
+    # take a while) so the dashboard's /backup-status has something to
+    # report "running" during this window — without it, is_backup_running()
+    # only recognizes rsync_incremental.py, which doesn't exist yet at this
+    # point. The gap between this process starting and that one existing
+    # used to read as "not running" to the frontend poll, which took it to
+    # mean the backup had already finished and stopped polling, right as
+    # the real backup was about to start. rsync_incremental.py clears this
+    # once it takes over; the early-exit path below clears it too.
+    set_database_value('BACKUP_PREPARING', '1')
+
     if not backup_prerequisites_met():
         logger.warning("Exiting without starting a backup or monitoring — fix settings/validation/evaluation via the dashboard, then start the backup service again (e.g. Start Full Backup once those checks pass).")
+        set_database_value('BACKUP_PREPARING', '')
         sys.exit(0)
 
     run_regular_backup()

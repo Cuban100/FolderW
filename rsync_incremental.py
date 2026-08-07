@@ -294,6 +294,10 @@ if __name__ == "__main__":
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
     set_database_value('BACKUP_ETA', '')
     set_database_value('CURRENT_BACKUP_SIZE', '')
+    # main_backup.py sets this while it's still running its own prerequisite
+    # checks, before this process even exists — clear it now that this
+    # script (the actual work is_backup_running() looks for) has taken over.
+    set_database_value('BACKUP_PREPARING', '')
     # Elapsed time is computed by the dashboard (now - this), not rsync
     # itself — rsync only ever reports ETA (time remaining), never how
     # long the run has been going.
