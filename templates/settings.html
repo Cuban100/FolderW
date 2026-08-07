@@ -38,6 +38,26 @@
             // Listen for changes
             monitorCheckbox.addEventListener('change', toggleScheduleFields);
         });
+
+        async function testNotification() {
+            const resultEl = document.getElementById('test-notify-result');
+            const urls = document.getElementById('notify_urls').value;
+            resultEl.textContent = 'Sending...';
+            resultEl.className = 'text-sm text-[var(--text-muted)]';
+            try {
+                const response = await fetch('/test-notification', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'notify_urls=' + encodeURIComponent(urls)
+                });
+                const data = await response.json();
+                resultEl.textContent = data.message;
+                resultEl.className = 'text-sm ' + (data.success ? 'text-green-500' : 'text-red-500');
+            } catch (error) {
+                resultEl.textContent = 'Error sending test notification.';
+                resultEl.className = 'text-sm text-red-500';
+            }
+        }
     </script>
 </head>
 <body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
@@ -191,6 +211,18 @@
                             <input type="checkbox" id="require_login" name="require_login" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if login_enabled %}checked{% endif %}>
                             <label for="require_login" class="text-[var(--text)]">Require Login</label>
                             <div class="text-sm text-[var(--text-muted)] mt-1">Uncheck to disable the login page entirely.</div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                            <label for="notify_urls" class="text-[var(--text)] font-medium">Notification URL(s):</label>
+                            <input type="text" id="notify_urls" name="notify_urls" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ notify_urls or '' }}" placeholder="e.g. pover://user@token, ntfy://topic">
+                            <div class="text-sm text-[var(--text-muted)] mt-1">
+                                Comma-separated <a href="https://github.com/caronc/apprise#supported-notifications" target="_blank" rel="noopener" class="underline">Apprise URLs</a> (Pushover, ntfy, Pushbullet, email, Discord, and 100+ others). Notified on backup failure and full backup completion. Leave blank to disable.
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <button type="button" onclick="testNotification()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">Send Test Notification</button>
+                            <span id="test-notify-result" class="text-sm text-[var(--text-muted)]"></span>
                         </div>
 
                         <div class="pt-6">

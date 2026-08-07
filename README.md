@@ -102,6 +102,18 @@ Sessions last **15 days** via a signed cookie, so you won't need to log in again
 
 <p align="center"><img src="screenshots/login-page.png" alt="FolderW login page" width="400"></p>
 
+## Notifications
+
+Set **Notification URL(s)** (in `setup.py` or the web Settings page) to be notified when a backup fails, and when the initial full backup completes. Uses [Apprise](https://github.com/caronc/apprise), which supports 100+ services through simple URL strings — Pushover, ntfy, Pushbullet, Discord, Telegram, email, and more. Enter one or more, comma-separated:
+
+```
+pover://user@token
+ntfy://topic
+pbul://accesskey
+```
+
+See the [Apprise README](https://github.com/caronc/apprise#supported-notifications) for the full list of supported services and URL formats. Use the **Send Test Notification** button in Settings to verify a URL works before saving.
+
 ## Autostart on Boot (systemd)
 
 Checking **"Start FolderW automatically at system boot"** in the setup GUI installs and enables a systemd **user** service (`folderw.service`) that runs `server.py` on login/boot. No root/sudo is required — it's managed entirely through `systemctl --user`.

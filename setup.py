@@ -173,6 +173,11 @@ def save_paths():
     if dashboard_password:
         set_key(env_path, 'ADMIN_PASSWORD_HASH', hash_password(dashboard_password))
 
+    notify_urls = notify_urls_entry.get().strip()
+    if "e.g." in notify_urls:  # untouched placeholder text
+        notify_urls = ""
+    set_key(env_path, 'NOTIFY_URLS', notify_urls)
+
     result_label.config(text="Configuration saved to .env", foreground='#39FF14')  # Set to neon green
 
     create_all_tables(paths['DATABASE'])
@@ -369,11 +374,22 @@ dashboard_password_entry.grid(row=len(labels) + 4, column=1, padx=10, pady=10)
 dashboard_password_hint = tk.Label(root, text="Leave blank for no login, or to keep the current password unchanged.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
 dashboard_password_hint.grid(row=len(labels) + 4, column=2, padx=10, pady=10, sticky='w')
 
+# Notification URL(s): optional, comma-separated Apprise URLs
+notify_urls_label = tk.Label(root, text="Notification URL(s):", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
+notify_urls_label.grid(row=len(labels) + 5, column=0, padx=0, pady=10, sticky='e')
+
+notify_urls_entry = ttk.Entry(root, width=50)
+notify_urls_entry.grid(row=len(labels) + 5, column=1, padx=10, pady=10)
+set_placeholder(notify_urls_entry, "e.g. pover://user@token, ntfy://topic", 'NOTIFY_URLS')
+
+notify_urls_hint = tk.Label(root, text="Comma-separated Apprise URLs, notified on backup failure/completion. Leave blank to disable.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+notify_urls_hint.grid(row=len(labels) + 5, column=2, padx=10, pady=10, sticky='w')
+
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 5, column=1, pady=25)
+save_button.grid(row=len(labels) + 6, column=1, pady=25)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 6, column=1, pady=25)
+result_label.grid(row=len(labels) + 7, column=1, pady=25)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')

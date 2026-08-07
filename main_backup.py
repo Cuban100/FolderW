@@ -1,6 +1,7 @@
 import os
 import sys
 from db_operations import load_env_value, load_other_variables
+from notifications import notify
 import subprocess
 import schedule
 import time
@@ -14,7 +15,12 @@ def run_regular_backup():
         result = subprocess.run([sys.executable, os.path.join(BASE_DIR, "rsync_incremental.py")], check=True)
         logger.info(f"Backup result: {result}")
     except subprocess.CalledProcessError as e:
+        # Centralized here rather than in rsync_incremental.py itself so
+        # every failure mode is covered with a single notification — not
+        # just rsync failing cleanly, but any unhandled crash in that
+        # script too, since both surface the same way: a non-zero exit.
         logger.error(f"Error running rsync_incremental.py: {e}")
+        notify("FolderW: Backup Failed", f"A backup run failed (exit code {e.returncode}). Check the FolderW logs for details.")
 
 def start_event_backup():
     # rsync_event_handler.py blocks here for as long as it runs successfully

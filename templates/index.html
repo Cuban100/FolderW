@@ -614,8 +614,16 @@
                 <h2>System</h2>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-label">CPU Usage</div>
+                        <div class="stat-label">CPU Usage (avg)</div>
                         <div class="stat-value">{{ cpu_percent if cpu_percent else 'Not Available' }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Busiest Core</div>
+                        <div class="stat-value">{{ cpu_busiest_core if cpu_busiest_core else 'Not Available' }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">CPU Cores</div>
+                        <div class="stat-value">{{ cpu_cores if cpu_cores else 'Not Available' }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">RAM Used</div>

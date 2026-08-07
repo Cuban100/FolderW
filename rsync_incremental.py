@@ -1,10 +1,12 @@
 import os
 import re
+import sys
 import stat
 import threading
 from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value
 from restore_operations import cleanup_old_snapshots
 from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
+from notifications import notify
 from dotenv import load_dotenv
 import sqlite3
 import subprocess
@@ -122,7 +124,11 @@ def ensure_backup_folder_icon():
     _set_folder_icon(full_backup, 'FolderW.png')
     _set_folder_icon(os.path.dirname(full_backup), 'logo.png')
 
-def rsync():
+def rsync(result_holder=None):
+    # result_holder (optional): a dict this function sets 'success' on once
+    # the rsync command finishes — lets __main__ below tell a real failure
+    # apart from a clean run without changing this generator's yield
+    # contract (still just progress lines, unchanged for existing callers).
     # Trailing slash on the source makes rsync copy src_dir's *contents*
     # into full_backup, instead of nesting it as full_backup/<src_dir basename>/.
     src_dir_contents = src_dir.rstrip('/') + '/'
@@ -154,10 +160,16 @@ def rsync():
             process.wait()
             if process.returncode != 0:
                 logger.error(f"Rsync command failed with return code {process.returncode}")
+                if result_holder is not None:
+                    result_holder['success'] = False
             else:
                 logger.success(f"Rsync command executed successfully.")
+                if result_holder is not None:
+                    result_holder['success'] = True
     except Exception as e:
         logger.error(f"Error executing rsync command: {e}")
+        if result_holder is not None:
+            result_holder['success'] = False
 
 PROGRESS_LINE_RE = re.compile(r'^[\d,]+\s+\d+%')
 
@@ -290,8 +302,9 @@ if __name__ == "__main__":
     threading.Thread(target=_compute_dest_baseline, daemon=True).start()
     threading.Thread(target=_compute_source_total, daemon=True).start()
 
+    rsync_result = {'success': None}
     last_percent = None
-    for progress in rsync():
+    for progress in rsync(rsync_result):
         logger.info(f"Progress: {progress}")
         match = re.search(r'^([\d,]+)\s+(\d+)%', progress)
         if not match:
@@ -314,8 +327,19 @@ if __name__ == "__main__":
             set_database_value('BACKUP_PROGRESS_PERCENT', percent_str)
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
 
+    if rsync_result['success'] is False:
+        # rsync itself failed — recording stats/copying an incremental
+        # snapshot against a failed/partial sync would misrepresent it as
+        # a completed backup. Exit non-zero so main_backup.py's
+        # subprocess.run(check=True) sees it as a failure and notifies.
+        logger.error("Backup failed — skipping snapshot bookkeeping.")
+        sys.exit(1)
+
     changes = parse_logfile(rsync_txt)
     store_changes_in_db(changes)
     last_session_number, incremental_folder = copy_files()
     record_backup_statistics(changes, last_session_number, incremental_folder)
     cleanup_old_snapshots(load_env_value('MAX_SNAPSHOTS'))
+
+    if last_session_number <= 1:
+        notify("FolderW: Full Backup Complete", f"The initial full backup to {full_backup} finished successfully.")

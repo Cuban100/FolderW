@@ -7,6 +7,7 @@ import threading
 import queue
 import webbrowser
 import psutil
+import apprise
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, cleanup_old_snapshots
@@ -287,9 +288,15 @@ def get_backup_stats_context(database):
     # interval=None (non-blocking): compares against the last call within
     # this same process rather than sampling over a fixed window, so it
     # doesn't add latency to the page load. The very first call after
-    # startup returns 0.0 — accurate readings kick in from the second
-    # request on.
-    cpu_percent = psutil.cpu_percent(interval=None)
+    # startup returns 0.0 (or [0.0, ...] per-core) — accurate readings
+    # kick in from the second request on.
+    #
+    # Per-core rather than just the overall average: rsync and du (the
+    # actual work FolderW does) are both single-threaded per run, so on a
+    # multi-core machine one core can be fully saturated while the average
+    # still reads low and misleadingly implies plenty of headroom.
+    per_core = psutil.cpu_percent(interval=None, percpu=True)
+    cpu_percent = sum(per_core) / len(per_core) if per_core else 0
     mem = psutil.virtual_memory()
     return {
         "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings'),
@@ -298,6 +305,8 @@ def get_backup_stats_context(database):
         "last_session": get_last_session_number(database),
         "last_session_files": len(list_items_by_session(database)),
         "cpu_percent": f"{cpu_percent:.1f}%",
+        "cpu_cores": len(per_core),
+        "cpu_busiest_core": f"{max(per_core):.1f}%" if per_core else None,
         "ram_used": f"{mem.used / (1024**3):.2f} GB",
         "ram_total": f"{mem.total / (1024**3):.2f} GB",
     }
@@ -592,7 +601,30 @@ async def settings_page(request: Request):
         "interval": load_env_value('BACKUP_INTERVAL'),
         "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
         "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
+        "notify_urls": load_env_value('NOTIFY_URLS'),
     })
+
+
+@app.post("/test-notification")
+async def test_notification(notify_urls: str = Form("")):
+    urls = [u.strip() for u in notify_urls.split(',') if u.strip()]
+    if not urls:
+        return JSONResponse({"success": False, "message": "No notification URL(s) provided."})
+
+    apobj = apprise.Apprise()
+    valid_count = sum(1 for url in urls if apobj.add(url))
+    if valid_count == 0:
+        return JSONResponse({"success": False, "message": "No valid URL(s) — check the format."})
+
+    try:
+        result = apobj.notify(title="FolderW Test Notification", body="If you're seeing this, your notification setup works.")
+    except Exception as e:
+        logger.error(f"Test notification failed: {e}")
+        return JSONResponse({"success": False, "message": f"Error: {e}"})
+
+    if result:
+        return JSONResponse({"success": True, "message": "Sent! Check your device."})
+    return JSONResponse({"success": False, "message": "Apprise reported failure — check the URL and service status."})
 
 
 @app.post("/submit/", response_class=HTMLResponse)
@@ -607,6 +639,7 @@ async def submit_settings(
     monitor: str = Form(None),
     new_password: str = Form(""),
     require_login: str = Form(None),
+    notify_urls: str = Form(""),
 ):
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
@@ -635,6 +668,7 @@ async def submit_settings(
             "interval": load_env_value('BACKUP_INTERVAL'),
             "max_snapshots": max_snapshots,
             "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
+            "notify_urls": load_env_value('NOTIFY_URLS'),
         })
 
     require_login_enabled = require_login is not None
@@ -657,6 +691,7 @@ async def submit_settings(
         "BACKUP_INTERVAL": "False" if monitor_enabled else (interval or load_env_value('BACKUP_INTERVAL') or "hourly"),
         "MAX_SNAPSHOTS": max_snapshots,
         "ADMIN_PASSWORD_HASH": admin_password_hash,
+        "NOTIFY_URLS": notify_urls.strip(),
     }
     save_env_values(new_values)
 
@@ -686,6 +721,7 @@ async def submit_settings(
         "interval": new_values["BACKUP_INTERVAL"],
         "max_snapshots": new_values["MAX_SNAPSHOTS"],
         "login_enabled": bool(new_values["ADMIN_PASSWORD_HASH"]),
+        "notify_urls": new_values["NOTIFY_URLS"],
     })
 
 
