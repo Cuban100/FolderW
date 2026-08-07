@@ -146,51 +146,68 @@ def configure_rsync_sudo():
     """
     rsync_path = shutil.which("rsync") or "/usr/bin/rsync"
     username = os.environ.get("SUDO_USER") or os.environ.get("USER") or os.environ.get("LOGNAME")
+    manual_hint = (f"To let backups read files owned by another user, add manually: "
+                    f"echo '<username> ALL=(root) NOPASSWD: {rsync_path}' | sudo tee {RSYNC_SUDOERS_DROPIN} "
+                    f"&& sudo chmod 0440 {RSYNC_SUDOERS_DROPIN}")
     if not username:
-        print("Could not determine the current username -- skipping rsync sudo setup. To let "
-              f"backups read files owned by another user, add manually: echo '<username> "
-              f"ALL=(root) NOPASSWD: {rsync_path}' | sudo tee {RSYNC_SUDOERS_DROPIN}")
+        print(f"Could not determine the current username -- skipping rsync sudo setup. {manual_hint}")
         return
 
-    check = subprocess.run(["sudo", "-n", "-l", rsync_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if check.returncode == 0:
-        print("rsync can already run passwordlessly under sudo -- nothing to configure.")
-        return
-
-    print("Configuring passwordless sudo for rsync (lets backups read files owned by another "
-          "user, e.g. a Docker container) -- you may be prompted for your password once.")
-    tmp_path = None
+    # Every privileged step below is wrapped in one try/except: sudo itself
+    # (or visudo, its companion binary) isn't guaranteed to exist on every
+    # Linux system this might run on -- a minimal server install, a distro
+    # that ships doas instead, etc. FileNotFoundError there would otherwise
+    # be unhandled and crash the entire setup flow (not just this feature)
+    # for anyone on such a system. Degrading to "skip this, print how to do
+    # it by hand" keeps the rest of setup (systemd autostart, starting the
+    # dashboard) working regardless.
     try:
-        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".folderw-sudoers") as tmp:
-            tmp.write(f"{username} ALL=(root) NOPASSWD: {rsync_path}\n")
-            tmp_path = tmp.name
-
-        # Validate BEFORE installing -- a syntax error in a live sudoers.d
-        # file can break sudo system-wide, so this never touches the real
-        # location without first confirming the grammar is valid. Doesn't
-        # need root: just parses the given file, doesn't touch system state.
-        validate = subprocess.run(["visudo", "-c", "-f", tmp_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if validate.returncode != 0:
-            print(f"Generated sudoers rule failed validation, skipping: {validate.stderr}")
+        check = subprocess.run(["sudo", "-n", "-l", rsync_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if check.returncode == 0:
+            print("rsync can already run passwordlessly under sudo -- nothing to configure.")
             return
 
-        # pkexec (not plain sudo): this is a GUI app with no guaranteed
-        # controlling terminal for sudo to prompt on -- pkexec shows a
-        # proper graphical polkit prompt regardless of how setup.py was
-        # launched. root:root 0440 is sudoers.d's required ownership/mode;
-        # sudo refuses to even read a drop-in file with any other group/
-        # other write access, as its own protection against tampering.
-        install = subprocess.run(
-            ["pkexec", "install", "-m", "0440", "-o", "root", "-g", "root", tmp_path, RSYNC_SUDOERS_DROPIN],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        if install.returncode != 0:
-            print(f"Could not configure sudo for rsync (you may need to do this manually): {install.stderr}")
-            return
-        print("Configured passwordless sudo for rsync.")
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        print("Configuring passwordless sudo for rsync (lets backups read files owned by "
+              "another user, e.g. a Docker container) -- you may be prompted for your password.")
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile("w", delete=False, suffix=".folderw-sudoers") as tmp:
+                tmp.write(f"{username} ALL=(root) NOPASSWD: {rsync_path}\n")
+                tmp_path = tmp.name
+
+            # Validate BEFORE installing -- a syntax error in a live
+            # sudoers.d file can break sudo system-wide, so this never
+            # touches the real location without first confirming the
+            # grammar is valid. Doesn't need root: just parses the given
+            # file, doesn't touch system state.
+            validate = subprocess.run(["visudo", "-c", "-f", tmp_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if validate.returncode != 0:
+                print(f"Generated sudoers rule failed validation, skipping: {validate.stderr}")
+                return
+
+            # Plain sudo (not pkexec): setup.py's only documented entry
+            # point is `./install.sh` -> `python3 setup.py`, always run
+            # from an interactive terminal that sudo can prompt on
+            # directly -- no need for polkit/pkexec, which isn't installed
+            # on every system (especially headless/minimal ones) and would
+            # just be an extra way for this to fail. root:root 0440 is
+            # sudoers.d's required ownership/mode; sudo refuses to even
+            # read a drop-in file with any other group/other write access,
+            # as its own protection against tampering.
+            install = subprocess.run(
+                ["sudo", "install", "-m", "0440", "-o", "root", "-g", "root", tmp_path, RSYNC_SUDOERS_DROPIN],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            if install.returncode != 0:
+                print(f"Could not configure sudo for rsync: {install.stderr.strip()}. {manual_hint}")
+                return
+            print("Configured passwordless sudo for rsync.")
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    except FileNotFoundError as e:
+        print(f"sudo/visudo not found ({e}) -- skipping rsync sudo setup. Backups will still "
+              f"work, just skipping any file they don't have permission to read. {manual_hint}")
 
 def browse_directory(entry):
     directory = filedialog.askdirectory()
