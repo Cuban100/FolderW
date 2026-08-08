@@ -485,7 +485,7 @@
             {% set backup_active = backup_status or backup_in_progress %}
             {% if ready_for_manual_snapshot %}
             <div class="manual-snapshot-banner" id="manual-snapshot-banner" {% if backup_active %}style="display: none;"{% endif %}>
-                <button class="manual-snapshot-button" onclick="startBackup()">Create a Manual Snapshot</button>
+                <button class="manual-snapshot-button" onclick="startBackup(false)">Create a Manual Snapshot</button>
             </div>
             {% endif %}
             {% if watchdog_active %}
@@ -509,7 +509,7 @@
                     {% if backup_active %}
                     <button class="check-button stop" onclick="stopMonitoring(event)">Stop Full Backup</button>
                     {% else %}
-                    <button id="start-backup-btn" class="check-button" onclick="startBackup()">Start Full Backup</button>
+                    <button id="start-backup-btn" class="check-button" onclick="startBackup(true)">Start Full Backup</button>
                     <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 8px;">Starting a backup can take up to a minute while the source directory is scanned — the page may look stuck, please don't click again.</p>
                     {% endif %}
                 </div>
@@ -647,7 +647,7 @@
     </div>
 
     <script>
-        async function startBackup() {
+        async function startBackup(forceFull) {
             const btn = document.getElementById('start-backup-btn');
             if (btn) {
                 btn.disabled = true;
@@ -704,7 +704,7 @@
             }, 200);
 
             try {
-                const response = await fetch('/run-all-steps');
+                const response = await fetch('/run-all-steps?force_full=' + (forceFull ? 'true' : 'false'));
                 const text = await response.text();
                 clearInterval(poll);
                 // document.write(), not a navigation: keeps the address bar

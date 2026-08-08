@@ -427,8 +427,8 @@ async def stop_backup():
     return JSONResponse({"message": f"Stopped {killed} process(es)." if killed else "Nothing was running."})
 
 @app.get("/run-all-steps", response_class=HTMLResponse)
-async def run_all_steps(request: Request):
-    logger.info("Response received from Front End for /run-all-steps")
+async def run_all_steps(request: Request, force_full: bool = False):
+    logger.info(f"Response received from Front End for /run-all-steps (force_full={force_full})")
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
     full_name = load_env_value('FULL_NAME')
@@ -503,12 +503,24 @@ async def run_all_steps(request: Request):
 
     success_message = "All settings, validations, and evaluations are correct. READY"
     set_database_value('CHECK_STEP', 'starting')
-    # A click here is a deliberate request for a real full backup right
-    # now -- clear this unconditionally so main_backup.py's restart-skip
-    # shortcut (see main_backup.py) never applies to this specific path,
-    # only to routine restarts (deploys, crash-restarts, reboots) where
-    # skipping a redundant re-sync is actually wanted.
-    set_database_value('FULL_BACKUP_COMPLETED', '0')
+    # force_full=True (the "Start Full Backup" button, shown before any
+    # full backup exists yet): a deliberate request for a real full
+    # backup right now -- clear this unconditionally so main_backup.py's
+    # restart-skip shortcut (see main_backup.py) never applies to this
+    # specific path, only to routine restarts (deploys, crash-restarts,
+    # reboots) where skipping a redundant re-sync is actually wanted.
+    #
+    # force_full=False (the "Create a Manual Snapshot" button, shown
+    # once a full backup already exists): leaves FULL_BACKUP_COMPLETED
+    # alone, so main_backup.py's restart-skip shortcut applies normally
+    # and this restart goes straight to one regular incremental/
+    # differential snapshot -- not a full re-transfer. Confirmed live,
+    # the hard way: both buttons used to hit this same route with no way
+    # to tell them apart, so "Create a Manual Snapshot" silently forced
+    # a complete full-backup redo every time, same as the real "Start
+    # Full Backup" button.
+    if force_full:
+        set_database_value('FULL_BACKUP_COMPLETED', '0')
 
     try:
         if _backup_service_unit_exists():
