@@ -78,7 +78,8 @@ if __name__ == "__main__":
     set_database_value('BACKUP_ETA', '')
     set_database_value('CURRENT_BACKUP_SIZE', 'Calculating…')
     set_database_value('BACKUP_PREPARING', '')
-    set_database_value('BACKUP_START_TIME', str(time.time()))
+    run_start_time = time.time()
+    set_database_value('BACKUP_START_TIME', str(run_start_time))
 
     baselines = {'source_total': None, 'last_transferred': 0}
 
@@ -130,5 +131,5 @@ if __name__ == "__main__":
     changes = parse_logfile(rsync_txt)
     store_changes_in_db(changes)
     last_session_number = get_last_session_number(database)
-    record_backup_statistics(changes, last_session_number, incremental_folder, backup_type='differential')
+    record_backup_statistics(changes, last_session_number, incremental_folder, backup_type='differential', duration_seconds=time.time() - run_start_time)
     cleanup_old_snapshots(load_env_value('MAX_SNAPSHOTS'))

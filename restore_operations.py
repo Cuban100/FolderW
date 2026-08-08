@@ -228,6 +228,7 @@ def list_backups():
             "file_count": file_count,
             "files_changed": get_files_changed_by_label("Full Backup"),
             "size": human_readable_size(total_size),
+            "size_bytes": total_size,
             "mtime": _snapshot_created_at(full_backup),
             "path": full_backup,
             "note": get_snapshot_note(full_backup),
@@ -280,6 +281,7 @@ def list_backups():
                     # folder id (see record_backup_statistics()).
                     "files_changed": get_files_changed_by_label(snapshot_id),
                     "size": human_readable_size(total_size),
+                    "size_bytes": total_size,
                     "mtime": _snapshot_created_at(snapshot_path),
                     # Real on-disk path -- shown on the Restore page so a
                     # snapshot can also be opened directly in the OS file
@@ -295,6 +297,18 @@ def list_backups():
     for b in backups:
         del b["mtime"]
     return backups
+
+
+def total_destination_size_bytes():
+    """True current footprint of the backup destination -- full backup
+    plus every current snapshot, in bytes. Reuses list_backups()'s
+    existing per-backup cache (_cached_summarize_snapshot(), one
+    .folderw_stats file per backup) rather than a fresh recursive du of
+    the whole destination -- only recomputes for a backup that doesn't
+    have a cached size yet, same as the Restore page already relies on
+    for its own listing to stay fast.
+    """
+    return sum(b["size_bytes"] for b in list_backups())
 
 
 def cleanup_old_snapshots(max_snapshots):

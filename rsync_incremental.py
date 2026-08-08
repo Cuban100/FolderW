@@ -7,7 +7,7 @@ import threading
 import pwd
 import grp
 from db_operations import get_last_session_number, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value, get_database_value
-from restore_operations import cleanup_old_snapshots, mark_snapshot_complete, COMPLETION_MARKER, _chmod_775, _snapshot_created_at
+from restore_operations import cleanup_old_snapshots, mark_snapshot_complete, COMPLETION_MARKER, _chmod_775, _snapshot_created_at, total_destination_size_bytes
 from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
 from notifications import notify
 from dotenv import load_dotenv
@@ -66,7 +66,7 @@ def _parse_rsync_total_size(rsync_txt):
     return None
 
 
-def record_backup_statistics(changes, last_session_number, incremental_folder, backup_type):
+def record_backup_statistics(changes, last_session_number, incremental_folder, backup_type, duration_seconds=None):
     """Record that this backup run happened — the initial full backup, an
     incremental snapshot, or a differential snapshot — plus per-run
     numeric stats. Recording the run itself matters even when 0 files
@@ -81,6 +81,11 @@ def record_backup_statistics(changes, last_session_number, incremental_folder, b
     inferred from last_session_number, since session number alone can no
     longer distinguish incremental from differential (both start at
     session 2).
+
+    duration_seconds: elapsed wall-clock time for this run's transfer
+    (caller captures it around the rsync() loop, before BACKUP_START_TIME
+    is cleared), for the Statistics page's duration chart. None from any
+    caller that doesn't track it.
     """
     total_files_processed = len(changes)
     total_size_processed = 0
@@ -91,6 +96,23 @@ def record_backup_statistics(changes, last_session_number, incremental_folder, b
                 total_size_processed += os.path.getsize(fp)
             except OSError as e:
                 logger.warning(f"Could not get size of {fp}: {e}")
+    # destination_size: the backup destination's TRUE current footprint
+    # (full backup + every current snapshot), not to be confused with
+    # total_size_processed above (just this run's delta) or
+    # CURRENT_BACKUP_SIZE below (which, for differential mode, reflects
+    # only this run's --files-from-restricted transfer, not the whole
+    # destination -- not the same number, kept separate rather than
+    # reused here). Cheap: reuses list_backups()'s existing per-backup
+    # cache, see total_destination_size_bytes().
+    destination_size = total_destination_size_bytes()
+    # Captured once and reused for both inserts below -- performance_
+    # metrics started completely unused (zero rows, ever) until this
+    # duration tracking was added, so it can't be correlated to
+    # statistics/backup_runs by id the way those two already are (see
+    # get_backup_stats_series() in db_operations.py): backup_runs is
+    # already at 18+ rows while performance_metrics restarts at 1. An
+    # exact shared timestamp is what lets the Statistics page join them.
+    run_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         conn = sqlite3.connect(database)
         cursor = conn.cursor()
@@ -98,17 +120,31 @@ def record_backup_statistics(changes, last_session_number, incremental_folder, b
             INSERT INTO statistics (timestamp, total_files_processed, total_size_processed, source_size, destination_size, deleted_empty_folders, average_speed)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            run_timestamp,
             total_files_processed,
             total_size_processed,
             None,
-            None,
+            destination_size,
             0,
             None,
         ))
+        if duration_seconds is not None:
+            cursor.execute('''
+                INSERT INTO performance_metrics (timestamp, backup_duration, success_rate, average_speed, sent_bytes, received_bytes, total_size, speedup)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                run_timestamp,
+                round(duration_seconds),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ))
         conn.commit()
         conn.close()
-        logger.success(f"Recorded backup statistics: {total_files_processed} file(s), {total_size_processed} bytes.")
+        logger.success(f"Recorded backup statistics: {total_files_processed} file(s), {total_size_processed} bytes, destination now {destination_size} bytes.")
     except sqlite3.Error as e:
         logger.error(f"Error recording backup statistics: {e}")
 
@@ -639,7 +675,8 @@ def _run_initial_full_backup_if_needed():
     set_database_value('BACKUP_ETA', '')
     set_database_value('CURRENT_BACKUP_SIZE', 'Calculating…')
     set_database_value('BACKUP_PREPARING', '')
-    set_database_value('BACKUP_START_TIME', str(time.time()))
+    run_start_time = time.time()
+    set_database_value('BACKUP_START_TIME', str(run_start_time))
 
     baselines = {'source_total': None, 'last_transferred': 0}
 
@@ -691,7 +728,7 @@ def _run_initial_full_backup_if_needed():
 
     changes = parse_logfile(rsync_txt)
     store_changes_in_db(changes)
-    record_backup_statistics(changes, 1, "Full Backup", backup_type='full')
+    record_backup_statistics(changes, 1, "Full Backup", backup_type='full', duration_seconds=time.time() - run_start_time)
 
     notify("FolderW: Full Backup Complete", f"The initial full backup to {full_backup} finished successfully.", level='normal')
     # Lets main_backup.py skip straight to monitoring/scheduling on a
@@ -770,7 +807,8 @@ if __name__ == "__main__":
     # Elapsed time is computed by the dashboard (now - this), not rsync
     # itself — rsync only ever reports ETA (time remaining), never how
     # long the run has been going.
-    set_database_value('BACKUP_START_TIME', str(time.time()))
+    run_start_time = time.time()
+    set_database_value('BACKUP_START_TIME', str(run_start_time))
 
     # rsync's own --info=progress2 percentage only counts bytes it actually
     # transfers this run — a file that already matches at the destination
@@ -914,5 +952,5 @@ if __name__ == "__main__":
     changes = parse_logfile(rsync_txt)
     store_changes_in_db(changes)
     last_session_number = get_last_session_number(database)
-    record_backup_statistics(changes, last_session_number, incremental_folder, backup_type='incremental')
+    record_backup_statistics(changes, last_session_number, incremental_folder, backup_type='incremental', duration_seconds=time.time() - run_start_time)
     cleanup_old_snapshots(load_env_value('MAX_SNAPSHOTS'))

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, WebSocket, Form
 from pydantic import BaseModel
 import subprocess
+import json
 import os
 import sys
 import time
@@ -10,7 +11,7 @@ import psutil
 import apprise
 from notifications import _notify_desktop
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
@@ -1039,6 +1040,32 @@ async def backup_history(request: Request, page: int = 1):
         "page": page,
         "total_pages": total_pages,
     })
+
+
+@app.get("/statistics", response_class=HTMLResponse)
+async def statistics_page(request: Request):
+    series = get_backup_stats_series()
+    summary = get_backup_stats_summary()
+    return templates.TemplateResponse("statistics.html", {
+        "request": request,
+        "logo": logo,
+        # Serialized here (not left to the template) so the client-side
+        # chart JS gets exactly the types it needs (numbers, not Jinja-
+        # stringified ones) -- the whole series is small enough (capped
+        # at 200 runs) to embed as one JSON blob and filter/redraw
+        # entirely client-side, rather than a server round-trip per
+        # filter click.
+        "series_json": json.dumps(series),
+        "summary": summary,
+    })
+
+
+@app.get("/statistics/session-detail")
+async def statistics_session_detail(session: int):
+    # Drill-down target: clicking a point/bar on the Statistics page asks
+    # for exactly the files changed in that one run, reusing the same
+    # `changes` table the Restore/dashboard pages already draw from.
+    return JSONResponse({"session": session, "changes": get_changes_by_session(session)})
 
 
 @app.get("/manage-databases", response_class=HTMLResponse)

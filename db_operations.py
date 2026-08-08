@@ -400,6 +400,113 @@ def list_backup_runs(limit, offset):
         logger.error(f"Error listing backup runs: {e}")
         return []
 
+def get_backup_stats_series(limit=200):
+    """Chronological (oldest-first) series for the Statistics page's charts
+    -- one entry per backup run, combining backup_runs (type, files_changed,
+    status), statistics (total_size_processed, destination_size), and
+    performance_metrics (backup_duration).
+
+    statistics/backup_runs joined on id, not a real foreign key: they're
+    only ever inserted into together, in the same order, by a single call
+    site (record_backup_statistics() in rsync_incremental.py inserts into
+    statistics, then calls record_backup_run() for backup_runs), and only
+    ever cleared together (reset_backup_history(), wipe_database_for_
+    fresh_start()) -- confirmed no other code path writes to either table,
+    so their id sequences stay aligned by construction.
+
+    performance_metrics joined on timestamp instead: it sat completely
+    unused (zero rows, ever) until duration tracking was added alongside
+    this function, so its id sequence starts fresh at 1 rather than
+    lining up with statistics/backup_runs' already-existing rows --
+    record_backup_statistics() captures one timestamp and reuses it for
+    both the statistics and performance_metrics inserts specifically so
+    this join has something exact to match on. Runs recorded before
+    duration tracking existed simply have no performance_metrics row and
+    show a None duration.
+
+    Capped at `limit` most recent runs (still returned oldest-first within
+    that window) since backup_runs grows forever and a chart doesn't need
+    every run ever made to be useful.
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT br.id, br.timestamp, br.session, br.backup_type, br.files_changed, br.status,
+                   s.total_size_processed, s.destination_size, pm.backup_duration
+            FROM backup_runs br
+            LEFT JOIN statistics s ON s.id = br.id
+            LEFT JOIN performance_metrics pm ON pm.timestamp = br.timestamp
+            ORDER BY br.id DESC LIMIT ?
+        ''', (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        rows.reverse()
+        return [
+            {
+                "id": r[0],
+                "timestamp": r[1],
+                "session": r[2],
+                "backup_type": r[3],
+                "files_changed": r[4],
+                "status": r[5],
+                "size_processed": r[6] or 0,
+                "destination_size": r[7],
+                "duration_seconds": r[8],
+            }
+            for r in rows
+        ]
+    except sqlite3.Error as e:
+        logger.error(f"Error fetching backup stats series: {e}")
+        return []
+
+def get_backup_stats_summary():
+    """All-time KPI row for the Statistics page -- total runs, full-backup
+    count, success rate, and total data processed across every run ever
+    recorded (not scoped to the `limit`-capped series above).
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*), SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) FROM backup_runs")
+        total, completed = cursor.fetchone()
+        cursor.execute("SELECT COUNT(*) FROM backup_runs WHERE backup_type = 'full'")
+        full_count = cursor.fetchone()[0]
+        cursor.execute("SELECT SUM(total_size_processed) FROM statistics")
+        total_size = cursor.fetchone()[0]
+        conn.close()
+        return {
+            "total_runs": total or 0,
+            "full_runs": full_count or 0,
+            "success_rate": round(100 * completed / total, 1) if total else None,
+            "total_size_processed": total_size or 0,
+        }
+    except sqlite3.Error as e:
+        logger.error(f"Error fetching backup stats summary: {e}")
+        return {"total_runs": 0, "full_runs": 0, "success_rate": None, "total_size_processed": 0}
+
+def get_changes_by_session(session):
+    """Files changed in one specific backup run -- like list_items_by_
+    session(), but for an arbitrary session number rather than always the
+    most recent one, so the Statistics page's drill-down can show the
+    file list for whichever run was clicked, not just the latest.
+    """
+    database = load_env_value('DATABASE')
+    if not check_connection(database):
+        return []
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('SELECT path, action, timestamp FROM changes WHERE session = ? ORDER BY id', (session,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"path": r[0], "action": r[1], "timestamp": r[2]} for r in rows]
+    except sqlite3.Error as e:
+        logger.error(f"Error fetching changes for session {session}: {e}")
+        return []
+
 def save_settings_to_db(log_directory, source_directory, base_backup_directory, database_file, monitor_source_folder, backup_interval):
     try:
         connection = sqlite3.connect(database_file)
