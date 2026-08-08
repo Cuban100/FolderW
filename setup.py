@@ -256,6 +256,8 @@ def save_paths():
     else:
         paths['BACKUP_INTERVAL'] = interval_var.get()
 
+    paths['BACKUP_METHOD'] = backup_method_var.get()
+
     # Validate if all fields are filled
     for key, value in paths.items():
         if not value or "Browse to select" in value:
@@ -469,45 +471,58 @@ autostart_hint.grid(row=len(labels) + 2, column=2, padx=10, pady=10, sticky='w')
 autostart_label = tk.Label(root, text="Autostart:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
 autostart_label.grid(row=len(labels) + 2, column=0, padx=0, pady=10, sticky='e')
 
+# Backup Method: incremental (--link-dest against the most recent
+# snapshot, stays small indefinitely) vs differential (--link-dest always
+# against the original full backup, simpler mental model but snapshots
+# grow larger over time). See rsync_incremental.py/rsync_differential.py.
+backup_method_var = StringVar(value='incremental')
+backup_method_label = tk.Label(root, text="Backup Method:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
+backup_method_dropdown = ttk.Combobox(root, textvariable=backup_method_var, values=["incremental", "differential"], state="readonly")
+backup_method_hint = tk.Label(root, text="Incremental stays small over time; differential is simpler but grows.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+
+backup_method_label.grid(row=len(labels) + 3, column=0, padx=10, pady=10, sticky='e')
+backup_method_dropdown.grid(row=len(labels) + 3, column=1, padx=10, pady=10)
+backup_method_hint.grid(row=len(labels) + 3, column=2, padx=10, pady=10, sticky='w')
+
 # Snapshot retention: optional, blank means keep every snapshot forever
 max_snapshots_label = tk.Label(root, text="Snapshots to Keep:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-max_snapshots_label.grid(row=len(labels) + 3, column=0, padx=0, pady=10, sticky='e')
+max_snapshots_label.grid(row=len(labels) + 4, column=0, padx=0, pady=10, sticky='e')
 
 max_snapshots_entry = ttk.Entry(root, width=50)
-max_snapshots_entry.grid(row=len(labels) + 3, column=1, padx=10, pady=10)
+max_snapshots_entry.grid(row=len(labels) + 4, column=1, padx=10, pady=10)
 set_placeholder(max_snapshots_entry, "Leave blank to keep all snapshots", 'MAX_SNAPSHOTS')
 
 max_snapshots_hint = tk.Label(root, text="Oldest incremental snapshots beyond this count are deleted automatically.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-max_snapshots_hint.grid(row=len(labels) + 3, column=2, padx=10, pady=10, sticky='w')
+max_snapshots_hint.grid(row=len(labels) + 4, column=2, padx=10, pady=10, sticky='w')
 
 # Dashboard password: optional, never prefilled (only the hash is ever
 # stored) — leave blank on a fresh install for no login, or on an existing
 # one to keep whatever password is already set.
 dashboard_password_label = tk.Label(root, text="Dashboard Password:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-dashboard_password_label.grid(row=len(labels) + 4, column=0, padx=0, pady=10, sticky='e')
+dashboard_password_label.grid(row=len(labels) + 5, column=0, padx=0, pady=10, sticky='e')
 
 dashboard_password_entry = ttk.Entry(root, width=50, show='*')
-dashboard_password_entry.grid(row=len(labels) + 4, column=1, padx=10, pady=10)
+dashboard_password_entry.grid(row=len(labels) + 5, column=1, padx=10, pady=10)
 
 dashboard_password_hint = tk.Label(root, text="Leave blank for no login, or to keep the current password unchanged.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-dashboard_password_hint.grid(row=len(labels) + 4, column=2, padx=10, pady=10, sticky='w')
+dashboard_password_hint.grid(row=len(labels) + 5, column=2, padx=10, pady=10, sticky='w')
 
 # Notification URL(s): optional, comma-separated Apprise URLs
 notify_urls_label = tk.Label(root, text="Notification URL(s):", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-notify_urls_label.grid(row=len(labels) + 5, column=0, padx=0, pady=10, sticky='e')
+notify_urls_label.grid(row=len(labels) + 6, column=0, padx=0, pady=10, sticky='e')
 
 notify_urls_entry = ttk.Entry(root, width=50)
-notify_urls_entry.grid(row=len(labels) + 5, column=1, padx=10, pady=10)
+notify_urls_entry.grid(row=len(labels) + 6, column=1, padx=10, pady=10)
 set_placeholder(notify_urls_entry, "e.g. pover://user@token, ntfy://topic", 'NOTIFY_URLS')
 
 notify_urls_hint = tk.Label(root, text="Comma-separated Apprise URLs, notified on backup failure/completion. Leave blank to disable.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-notify_urls_hint.grid(row=len(labels) + 5, column=2, padx=10, pady=10, sticky='w')
+notify_urls_hint.grid(row=len(labels) + 6, column=2, padx=10, pady=10, sticky='w')
 
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 6, column=1, pady=25)
+save_button.grid(row=len(labels) + 7, column=1, pady=25)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 7, column=1, pady=25)
+result_label.grid(row=len(labels) + 8, column=1, pady=25)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')
@@ -519,6 +534,10 @@ else:
 # Safely set the autostart variable
 autostart_value = os.getenv('AUTOSTART')
 autostart_var.set(int(autostart_value)) if autostart_value is not None else autostart_var.set(0)
+
+# Safely set the backup method variable
+backup_method_value = os.getenv('BACKUP_METHOD')
+backup_method_var.set(backup_method_value if backup_method_value in ('incremental', 'differential') else 'incremental')
 
 # Sync the interval widgets' visibility with the loaded monitor value
 toggle_backup_options()
