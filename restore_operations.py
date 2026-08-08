@@ -36,10 +36,13 @@ NOTE_FILE = '.folderw_note'
 
 # Internal bookkeeping files that sit at a snapshot's own root -- never
 # real backed-up data, so never counted, listed, searched, or copied into
-# Restored/ output. One shared tuple instead of repeating the three names
-# at every exclusion site, so adding a fourth later can't be missed at one
-# of them.
-_INTERNAL_FILES = (COMPLETION_MARKER, STATS_CACHE_FILE, NOTE_FILE)
+# Restored/ output. One shared tuple instead of repeating the names at
+# every exclusion site, so adding another later can't be missed at one
+# of them. FolderW.png/.directory only ever land inside a snapshot for
+# full_backup specifically (its own branding, physically written there
+# now that it's a real directory -- see rsync_incremental.py's
+# ensure_backup_folder_icon()), but harmless to exclude everywhere.
+_INTERNAL_FILES = (COMPLETION_MARKER, STATS_CACHE_FILE, NOTE_FILE, 'FolderW.png', '.directory')
 
 _MONTH_NAMES = {
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -157,23 +160,37 @@ def mark_snapshot_complete(snapshot_path):
 
 
 def list_backups():
-    """List every incremental snapshot (Month/Day/Time folders under
-    BASE_DIR/Snapshots), newest first. Each snapshot is now a complete,
-    space-efficient point-in-time tree (rsync --link-dest against the
-    previous one) rather than a delta of changed files -- so the newest
-    snapshot already *is* "the current full backup" (full_backup is a
-    real, independent directory, rebuilt via cheap hardlinks to mirror
-    it after every run -- see rsync_incremental.py's
-    _repoint_full_backup). No separate synthetic "full" entry: keeping
-    one alongside the normal enumeration would list that same content
-    twice, since full_backup always mirrors whichever dated snapshot
-    below is newest.
+    """List every backup, newest first: the one-time initial full backup
+    (id "full", a real, frozen directory -- created once and never
+    touched again, see rsync_incremental.py) plus every incremental/
+    differential snapshot (Month/Day/Time folders under BASE_DIR/
+    Snapshots) since it. Unlike the previous design, full_backup is a
+    genuinely separate, distinct backup now (not a mirror of whichever
+    snapshot is newest), so it needs its own listing entry -- it's the
+    fixed baseline every differential snapshot is measured against, and
+    is itself a complete, restorable point-in-time copy.
     """
     snapshots_root = load_other_variables('snapshots_root')
+    full_backup = load_other_variables('full_backup')
 
     backups = []
 
+    if os.path.isdir(full_backup) and os.path.exists(os.path.join(full_backup, COMPLETION_MARKER)):
+        file_count, total_size = _cached_summarize_snapshot(full_backup)
+        backups.append({
+            "id": "full",
+            "label": "Full Backup",
+            "file_count": file_count,
+            "files_changed": get_files_changed_by_label("Full Backup"),
+            "size": human_readable_size(total_size),
+            "mtime": os.path.getmtime(full_backup),
+            "path": full_backup,
+            "note": get_snapshot_note(full_backup),
+        })
+
     if not os.path.isdir(snapshots_root):
+        for b in backups:
+            del b["mtime"]
         return backups
 
     # Folder *names* under snapshots_root are still validated against
@@ -236,23 +253,18 @@ def list_backups():
 
 
 def cleanup_old_snapshots(max_snapshots):
-    """Delete the oldest incremental snapshots beyond max_snapshots,
-    keeping the newest ones. full_backup (a real directory, rebuilt via
-    hardlinks to mirror the newest snapshot -- see rsync_incremental.py's
-    _repoint_full_backup) is never touched directly -- as long as
-    max_snapshots >= 1, the snapshot it mirrors is always among the
-    newest kept, since list_backups() sorts newest-first and this only
-    ever prunes the tail. A falsy/zero/negative max_snapshots means
-    "keep everything" (no cleanup).
+    """Delete the oldest snapshots (Month/Day/Time folders) beyond
+    max_snapshots, keeping the newest ones. A falsy/zero/negative
+    max_snapshots means "keep everything" (no cleanup).
 
-    original_backup's target is explicitly protected too, regardless of
-    where it falls in the newest-first order -- it's normally the
-    OLDEST snapshot (differential mode's fixed --link-dest anchor, set
-    once on the very first-ever backup and never repointed again), which
-    is exactly what "delete the oldest beyond the limit" would otherwise
-    prune first. Without this, differential mode would start failing
-    every run (the broken-symlink guard in rsync_differential.py refuses
-    to silently full-copy) as soon as retention caught up to it.
+    The initial full backup (id "full") is a separate, one-time, frozen
+    baseline -- excluded from the retention pool entirely (not counted
+    toward max_snapshots, never deleted here), regardless of how old it
+    gets relative to everything else. It's differential mode's whole
+    reason for existing (the fixed reference every differential snapshot
+    is measured against), so it can't be pruned just for being the
+    oldest thing on disk, which -- being created once, right at the
+    start -- it always will be.
     """
     try:
         max_snapshots = int(max_snapshots)
@@ -261,18 +273,10 @@ def cleanup_old_snapshots(max_snapshots):
     if max_snapshots <= 0:
         return []
 
-    original_backup = load_other_variables('original_backup')
-    protected_path = os.path.realpath(original_backup) if os.path.exists(original_backup) else None
-
-    def _is_protected(snapshot):
-        if protected_path is None:
-            return False
-        path = get_backup_path(snapshot["id"])
-        return path is not None and os.path.realpath(path) == protected_path
-
-    snapshots = list_backups()
-    # list_backups() already sorts newest first
-    to_delete = [s for s in snapshots[max_snapshots:] if not _is_protected(s)]
+    # list_backups() already sorts newest first; "full" excluded from
+    # the retention pool entirely, not just protected within it.
+    snapshots = [b for b in list_backups() if b["id"] != "full"]
+    to_delete = snapshots[max_snapshots:]
 
     deleted = []
     for snapshot in to_delete:

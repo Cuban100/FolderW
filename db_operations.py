@@ -54,19 +54,6 @@ def load_other_variables(variable_name):
         base_dir = load_env_value('BASE_DIR')
         full_name = load_env_value('FULL_NAME')
         return os.path.join(base_dir, full_name, 'Full Backup')
-    elif variable_name == 'original_backup':
-        # Differential mode's fixed --link-dest source: the very first
-        # snapshot ever completed. Unlike full_backup (repointed to the
-        # newest snapshot after every run), this symlink is set once and
-        # never moved again -- see rsync_incremental.py's
-        # _repoint_original_backup_if_unset(). Dot-prefixed (hidden) on
-        # purpose: it's a real functional requirement for differential
-        # mode (its --link-dest anchor), not something to browse or open,
-        # so it doesn't need to clutter the folder next to Full Backup/
-        # Snapshots in a normal file manager listing.
-        base_dir = load_env_value('BASE_DIR')
-        full_name = load_env_value('FULL_NAME')
-        return os.path.join(base_dir, full_name, '.original_backup')
     elif variable_name == 'snapshots_root':
         base_dir = load_env_value('BASE_DIR')
         full_name = load_env_value('FULL_NAME')

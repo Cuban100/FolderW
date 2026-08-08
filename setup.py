@@ -39,28 +39,26 @@ def upgrade_packages(requirements_file='requirements.txt'):
 
 DIFFERENTIAL_EXPLANATION = (
     "Differential Backup (default)\n\n"
-    "Every snapshot compares against the ORIGINAL full backup, always -- "
-    "never against the previous snapshot. A file that changed once and "
-    "never again still gets rewritten into every future snapshot, since "
-    "it will always differ from that one fixed original.\n\n"
-    "Snapshots grow larger over time as this drift accumulates. Called "
-    "'differential' because it always measures against one fixed "
-    "reference point -- the traditional distinction from 'incremental' "
-    "is about restoring (differential needs only the full backup + one "
-    "snapshot; incremental needs the whole chain) but that doesn't apply "
-    "here, since every snapshot is hardlinked and already a complete, "
-    "independently restorable copy either way."
+    "One initial full backup is made once, then frozen forever. Every "
+    "snapshot after that compares the live source directly against that "
+    "original full backup and saves ONLY the files that are new or "
+    "changed since it -- not a complete copy of everything.\n\n"
+    "Snapshots grow larger over time as more changes accumulate since "
+    "the original. Restoring a specific point in time needs the full "
+    "backup plus that one differential snapshot together, not the whole "
+    "history -- the standard definition of a differential backup."
 )
 
 INCREMENTAL_EXPLANATION = (
     "Incremental Backup\n\n"
-    "Every snapshot compares against the PREVIOUS snapshot, not a fixed "
-    "original. A file that changed once and never again gets written "
-    "just that one time -- every snapshot after that hardlinks it again "
-    "for free.\n\n"
+    "One initial full backup is made once. Every snapshot after that "
+    "compares against the PREVIOUS snapshot (not the original) and is a "
+    "complete, independently restorable copy of everything -- unchanged "
+    "files are hardlinked in at no extra disk cost, changed files are "
+    "written fresh.\n\n"
     "Snapshots stay small and roughly constant in size no matter how "
-    "long the system has been running. This is how Time Machine and "
-    "Timeshift work."
+    "long the system has been running, and any single snapshot can be "
+    "restored on its own. This is how Time Machine and Timeshift work."
 )
 
 def _show_backup_method_info(mode):

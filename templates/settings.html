@@ -153,7 +153,7 @@
                                 </label>
                             </div>
                             <div class="text-sm text-[var(--text-muted)] mt-1">
-                                Incremental: each snapshot only stores what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores everything changed since the original full backup &mdash; simpler mental model, but snapshots grow larger over time. Both produce complete, independently restorable snapshots.
+                                Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together.
                             </div>
                         </div>
 
