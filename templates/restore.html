@@ -16,8 +16,12 @@
         <div class="content p-8">
             <h2 class="text-2xl font-bold mb-2 text-[var(--text)]">Restore</h2>
             <p class="text-[var(--text-muted)] mb-6">
-                Restoring never overwrites your source directory. Files are copied into a new,
-                timestamped folder under <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">BASE_DIR/Restored/</code>
+                Each snapshot below is a complete, exact copy of your source directory as it
+                existed at that point in time &mdash; not just the files that changed. To look inside
+                one without restoring anything, open its Location path directly in your file
+                manager. Restoring never overwrites your source directory: files are copied into a
+                new, timestamped folder under
+                <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">BASE_DIR/Restored/</code>
                 for you to review and move back yourself.
             </p>
 
@@ -45,6 +49,7 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Date</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Files</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Size</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Location</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-[var(--text-muted)] uppercase">Actions</th>
                         </tr>
                     </thead>
@@ -55,14 +60,12 @@
                             <td class="px-6 py-4 text-[var(--text-muted)]">{{ backup.date }}</td>
                             <td class="px-6 py-4 text-[var(--text-muted)]">{{ backup.file_count }}</td>
                             <td class="px-6 py-4 text-[var(--text-muted)]">{{ backup.size }}</td>
-                            <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                                <a href="/restore/browse/{{ backup.id }}" class="inline-block bg-blue-600 text-white text-sm py-1.5 px-3 rounded hover:bg-blue-700 transition">
-                                    Browse Files
-                                </a>
-                                <form method="post" action="/restore/execute" class="inline-block" onsubmit="return confirm('Restore the entire &quot;{{ backup.label }}&quot; backup to a new folder under Restored/?');">
+                            <td class="px-6 py-4 text-[var(--text-muted)] font-mono text-xs max-w-xs truncate" title="{{ backup.path }}">{{ backup.path }}</td>
+                            <td class="px-6 py-4 text-right whitespace-nowrap">
+                                <form method="post" action="/restore/execute" class="inline-block" onsubmit="return confirm('Restore &quot;{{ backup.label }}&quot; to a new folder under Restored/?');">
                                     <input type="hidden" name="backup_id" value="{{ backup.id }}">
-                                    <button type="submit" class="bg-gray-700 text-white text-sm py-1.5 px-3 rounded hover:bg-gray-800 transition">
-                                        Restore Entire Backup
+                                    <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded hover:bg-blue-700 transition">
+                                        Restore
                                     </button>
                                 </form>
                             </td>
