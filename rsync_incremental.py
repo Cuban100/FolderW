@@ -7,7 +7,7 @@ import threading
 import pwd
 import grp
 from db_operations import get_last_session_number, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value, get_database_value
-from restore_operations import cleanup_old_snapshots, mark_snapshot_complete, COMPLETION_MARKER, _chmod_775
+from restore_operations import cleanup_old_snapshots, mark_snapshot_complete, COMPLETION_MARKER, _chmod_775, _snapshot_created_at
 from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
 from notifications import notify
 from dotenv import load_dotenv
@@ -221,7 +221,12 @@ def _most_recent_snapshot_path():
                     candidates.append(snap_path)
     if not candidates:
         return None
-    return max(candidates, key=os.path.getmtime)
+    # _snapshot_created_at, not directory mtime -- see its docstring in
+    # restore_operations.py. Same vulnerability applies here: any write
+    # into a snapshot folder after creation (stats cache, a note, a
+    # manual cleanup pass) would otherwise be able to make the wrong
+    # snapshot look "most recent" and get picked as --link-dest.
+    return max(candidates, key=_snapshot_created_at)
 
 
 def _migrate_legacy_full_backup():
