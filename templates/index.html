@@ -668,20 +668,37 @@
             ['settings', 'validation', 'evaluation'].forEach(step => {
                 if (dots[step]) dots[step].classList.remove('green');
             });
+            // Settings/validation are plain in-memory checks (env vars,
+            // path.exists) and evaluation's du scan can come back warm-
+            // cached in well under a second — often the whole request
+            // finishes faster than one poll tick, so every dot gets
+            // discovered as "already passed" in the same poll and would
+            // otherwise all flip green together. Chaining each newly-
+            // discovered dot onto a short stagger makes the reveal always
+            // read as sequential, regardless of how fast the real work
+            // actually happened to finish this run.
+            const revealed = new Set();
+            let revealChain = Promise.resolve();
             const poll = setInterval(async () => {
                 try {
                     const response = await fetch('/backup-status');
                     const data = await response.json();
                     const currentIndex = order.indexOf(data.check_step);
                     ['settings', 'validation', 'evaluation'].forEach((step, i) => {
-                        if (dots[step] && currentIndex > i) {
-                            dots[step].classList.add('green');
+                        if (dots[step] && currentIndex > i && !revealed.has(step)) {
+                            revealed.add(step);
+                            revealChain = revealChain.then(() => new Promise(resolve => {
+                                setTimeout(() => {
+                                    dots[step].classList.add('green');
+                                    resolve();
+                                }, 300);
+                            }));
                         }
                     });
                 } catch (error) {
                     console.error('Error polling check step:', error);
                 }
-            }, 500);
+            }, 200);
 
             try {
                 const response = await fetch('/run-all-steps');
