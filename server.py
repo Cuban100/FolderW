@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.concurrency import run_in_threadpool
 import uvicorn
 
 # Initialize FastAPI app
@@ -429,12 +430,19 @@ async def run_all_steps(request: Request):
     backup_interval = load_env_value('BACKUP_INTERVAL')
     # CHECK_STEP: lets the frontend show which of settings/validation/
     # evaluation is currently being checked while this request is still in
-    # flight (polled via /backup-status) — this whole function runs
-    # synchronously before any response goes back, so without a way to
-    # observe progress mid-request the button click just looks frozen for
-    # however long evaluation's real du scan takes.
+    # flight (polled via /backup-status). Each check below is run via
+    # run_in_threadpool rather than called directly: they're plain blocking
+    # functions, and calling them inline on an async def route would block
+    # Uvicorn's single-threaded event loop for as long as they take —
+    # including evaluation's real du scan — during which the server can't
+    # respond to *any* other request, so the polling itself would never get
+    # a response until everything was already done. Found live: every dot
+    # was flipping green in one batch right at the end regardless of how
+    # far apart the steps actually ran, because the poll requests were
+    # queued behind this handler the whole time, not actually blocked by
+    # each other.
     set_database_value('CHECK_STEP', 'settings')
-    settings_sent, settings, missing_vars = check_env_variables()
+    settings_sent, settings, missing_vars = await run_in_threadpool(check_env_variables)
     if not settings_sent:
         return templates.TemplateResponse("index.html", {
             "request": request,
@@ -446,7 +454,7 @@ async def run_all_steps(request: Request):
         })
 
     set_database_value('CHECK_STEP', 'validation')
-    validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
+    validation_status, validation_message = await run_in_threadpool(validate_all_conditions, src_dir, base_dir)
     if not validation_status:
         return templates.TemplateResponse("index.html", {
             "request": request,
@@ -460,7 +468,7 @@ async def run_all_steps(request: Request):
         })
 
     set_database_value('CHECK_STEP', 'evaluation')
-    src_size, dest_space, can_backup, evaluation_message = evaluation_of_resources()
+    src_size, dest_space, can_backup, evaluation_message = await run_in_threadpool(evaluation_of_resources)
     persist_check_results(
         settings_sent=settings_sent,
         validation_status=validation_status,
