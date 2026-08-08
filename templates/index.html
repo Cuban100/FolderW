@@ -674,7 +674,14 @@
             } catch (error) {
                 console.error('Error stopping backup:', error);
             }
-            window.location.reload();
+            // Not reload(): this button can be rendered on the /run-all-steps
+            // page (reached via startBackup()'s navigation), and that route
+            // has a side effect — every GET to it restarts the backup
+            // service if checks pass. Reloading that URL after a stop would
+            // immediately re-trigger a fresh backup, undoing the stop that
+            // just succeeded. Navigating to / always lands on the dashboard
+            // without re-running that side effect.
+            window.location.href = '/';
         }
         async function evaluate() {
             const response = await fetch('/check-evaluation');
