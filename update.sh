@@ -56,7 +56,9 @@ else
 fi
 
 if systemctl --user list-unit-files folderw.service &>/dev/null; then
-    if [ "$backup_running" -eq 1 ]; then
+    if ! systemctl --user is-active --quiet folderw.service; then
+        log "folderw service isn't currently running — leaving it stopped. New code takes effect the next time it's started."
+    elif [ "$backup_running" -eq 1 ]; then
         log "Once it finishes, apply the update with: systemctl --user restart folderw"
     else
         log "Restarting the folderw service (dashboard) so the update takes effect..."
@@ -68,7 +70,16 @@ else
 fi
 
 if systemctl --user list-unit-files folderw-backup.service &>/dev/null; then
-    if [ "$backup_running" -eq 1 ]; then
+    # is-active, not just list-unit-files: main_backup.py runs a real
+    # backup immediately on every start (that's how the dashboard's Start
+    # Full Backup button works — it just restarts this service). The unit
+    # FILE existing doesn't mean a backup/watchdog was actually running --
+    # "restarting" an inactive service just starts it fresh, which would
+    # kick off a backup nobody asked for, found live: running update.sh
+    # with the dashboard open but no backup started launched one anyway.
+    if ! systemctl --user is-active --quiet folderw-backup.service; then
+        log "folderw-backup service isn't currently running — leaving it stopped. New code takes effect the next time a backup is started."
+    elif [ "$backup_running" -eq 1 ]; then
         log "Once it finishes, apply the update with: systemctl --user restart folderw-backup"
     else
         log "Restarting the folderw-backup service (watchdog worker) so the update takes effect..."

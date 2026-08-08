@@ -316,11 +316,19 @@ def save_paths():
     log_dir = os.path.join(APP_DIR, "logs")
     os.makedirs(log_dir, exist_ok=True)
     server_log = open(os.path.join(log_dir, "server.log"), "a")
+    # FOLDERW_OPEN_BROWSER=1: tells server.py this is the genuine first-ever
+    # launch, worth popping a browser window for. Every OTHER way server.py
+    # starts (systemd on boot, a crash-restart, update.sh restarting it to
+    # apply new code) doesn't set this -- found live, the hard way: without
+    # this distinction, server.py opened a browser window on every single
+    # restart, and during any restart loop (a crash loop, or update.sh
+    # hitting one) that meant a new browser window every few seconds.
     subprocess.Popen(
         [sys.executable, os.path.join(APP_DIR, "server.py")],
         stdout=server_log,
         stderr=server_log,
         start_new_session=True,
+        env={**os.environ, "FOLDERW_OPEN_BROWSER": "1"},
     )
     root.destroy()
 

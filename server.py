@@ -913,6 +913,13 @@ def open_dashboard_in_browser(port):
 
 server_port = load_env_value('SERVER_PORT')
 if __name__ == "__main__":
-    # Give uvicorn a moment to bind before opening the dashboard in the browser
-    threading.Timer(1.0, open_dashboard_in_browser, args=[server_port]).start()
+    # FOLDERW_OPEN_BROWSER: only set by setup.py's genuine first-ever
+    # launch. Every other way this process starts (systemd on boot, a
+    # crash-restart, update.sh restarting it to apply new code) doesn't set
+    # it, so it doesn't pop a browser window -- found live, the hard way:
+    # without this check, ANY restart (including every cycle of a restart
+    # loop) opened a new browser window.
+    if os.environ.get("FOLDERW_OPEN_BROWSER") == "1":
+        # Give uvicorn a moment to bind before opening the dashboard in the browser
+        threading.Timer(1.0, open_dashboard_in_browser, args=[server_port]).start()
     uvicorn.run(app, host="0.0.0.0", port=int(server_port))
