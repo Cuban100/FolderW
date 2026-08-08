@@ -207,6 +207,28 @@ def reset_backup_history(database):
     except sqlite3.Error as e:
         logger.error(f"Error resetting backup history: {e}")
 
+def wipe_database_for_fresh_start(database):
+    """Full reset for "start from scratch, same settings" (the Manage
+    Databases page's database-reset action) -- unlike reset_backup_
+    history() (identity changes only, four tables), this also clears
+    'settings' -- every piece of runtime/derived state stored in the
+    database (FULL_BACKUP_COMPLETED, cached sizes, persisted Settings/
+    Validation/Evaluation check results, CURRENT_BACKUP_SIZE, etc.), not
+    just change/session/stats history. .env itself -- the actual
+    configured settings: paths, password, notification URLs -- is a
+    separate file, untouched by this.
+    """
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'settings'):
+            cursor.execute(f"DELETE FROM {table}")
+        conn.commit()
+        conn.close()
+        logger.info(f"Database {database} fully reset for a fresh start (all tables cleared).")
+    except sqlite3.Error as e:
+        logger.error(f"Error resetting database {database} for a fresh start: {e}")
+
 def get_next_session_number():
     database = load_env_value('DATABASE')
     last_session_number = get_last_session_number(database)

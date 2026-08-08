@@ -10,8 +10,8 @@ import psutil
 import apprise
 from notifications import _notify_desktop
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs
-from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start
+from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
@@ -1069,6 +1069,45 @@ async def delete_old_database(request: Request, database_to_delete: str = Form(.
         "request": request,
         "logo": logo,
         "active_database": os.path.basename(load_env_value('DATABASE') or ""),
+        "previous_databases": list_previous_databases(),
+        "error": error,
+        "success": success
+    })
+
+
+@app.post("/reset-active-database/", response_class=HTMLResponse)
+async def reset_active_database(request: Request, confirm_name: str = Form(...)):
+    active_database = os.path.abspath(load_env_value('DATABASE') or "")
+    active_basename = os.path.basename(active_database)
+
+    error = None
+    success = None
+    if confirm_name.strip() != active_basename:
+        error = f"Type the database file name exactly ({active_basename}) to confirm."
+    else:
+        wipe_database_for_fresh_start(active_database)
+        # A cleared database alone wouldn't actually start a fresh full
+        # backup: _run_initial_full_backup_if_needed() (rsync_incremental
+        # .py) decides that by checking whether Full Backup already has
+        # this marker on disk, not anything in the database. Removing
+        # just this one small metadata file -- not any actual backed-up
+        # content -- is what makes the next backup run genuinely redo the
+        # full backup instead of being treated as already-complete and
+        # continuing as a normal snapshot.
+        full_backup = load_other_variables('full_backup')
+        marker_path = os.path.join(full_backup, COMPLETION_MARKER)
+        try:
+            if os.path.exists(marker_path):
+                os.remove(marker_path)
+        except OSError as e:
+            logger.warning(f"Could not remove completion marker at {marker_path}: {e}")
+        success = "Database reset. The next backup run will be a fresh full backup, using the same settings."
+        logger.warning(f"Active database {active_database} reset for a fresh start by user request.")
+
+    return templates.TemplateResponse("manage-databases.html", {
+        "request": request,
+        "logo": logo,
+        "active_database": active_basename,
         "previous_databases": list_previous_databases(),
         "error": error,
         "success": success

@@ -47,6 +47,31 @@
                     {% endif %}
                 </div>
             </div>
+
+            <div class="mt-10 rounded-lg border-2 border-[var(--error-text)] p-5">
+                <h2 class="text-lg font-semibold text-[var(--error-text)]">Start fresh with the same settings</h2>
+                <p class="text-sm text-[var(--text-muted)] mt-1 mb-4">
+                    Wipes every table in <span class="font-medium">{{ active_database or "(none configured)" }}</span>
+                    -- all recorded sessions, changes, statistics, and backup run history. Your actual settings
+                    (Source Directory, Base Backup Directory, password, notifications, etc.) live in a separate
+                    file and are not touched. The next backup run will be a genuine fresh full backup, the same
+                    as changing Source Directory/Base Backup Directory/Full Backup Folder Name in Settings does --
+                    except it re-syncs into the same destination instead of starting a new one.
+                </p>
+                <form method="post" action="/reset-active-database/"
+                      onsubmit="return confirm('This permanently wipes all recorded history in {{ active_database }} and forces a fresh full backup on the next run. This cannot be undone. Continue?');"
+                      class="space-y-3">
+                    <label for="confirm_name" class="text-[var(--text)] font-medium block">
+                        Type the database file name ({{ active_database }}) to confirm:
+                    </label>
+                    <input type="text" id="confirm_name" name="confirm_name" autocomplete="off"
+                           class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
+                           placeholder="{{ active_database }}">
+                    <button type="submit" class="bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition duration-300">
+                        Reset Database &amp; Start Fresh
+                    </button>
+                </form>
+            </div>
         </div>
 </body>
 </html>
