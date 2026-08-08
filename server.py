@@ -948,8 +948,6 @@ async def submit_settings(
 
     if new_values["DATABASE"]:
         create_all_tables(new_values["DATABASE"])
-        # Settings changed — old check results no longer reflect reality
-        clear_persisted_checks()
 
         new_identity = (new_values["SRC_DIR"], new_values["BASE_DIR"], new_values["FULL_NAME"])
         if new_identity != old_identity:
@@ -958,6 +956,18 @@ async def submit_settings(
             # belongs to the previous backup and would otherwise corrupt
             # session numbering and historical stats for the new one.
             reset_backup_history(new_values["DATABASE"])
+            # Old validation/evaluation results (does the source exist, is
+            # there enough destination space) were computed against the
+            # PREVIOUS paths -- no longer meaningful for the new ones.
+            # Scoped to an actual identity change only: found live, this
+            # used to run on every settings save (password, notifications,
+            # MAX_SNAPSHOTS included), which cleared validation_status/
+            # evaluation_status even though paths never changed --
+            # ready_for_manual_snapshot (index.html) requires both to be
+            # True, so the dashboard silently reverted from "Create a
+            # Manual Snapshot" back to "Start Full Backup" after ANY save,
+            # and clicking the only button left forced a full-backup redo.
+            clear_persisted_checks()
 
     logfile = load_other_variables('logfile')
     return templates.TemplateResponse("settings.html", {

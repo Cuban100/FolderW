@@ -384,16 +384,21 @@ def save_paths():
         # never did until now.
         reset_backup_history(paths['DATABASE'])
 
-    # Config saved/changed here — clear any previously persisted check
-    # results (including src/dest sizes from a prior check) so the
-    # dashboard doesn't show stale Settings/Validation/Evaluation results
-    # from before this save. create_all_tables() only ever CREATEs TABLE
-    # IF NOT EXISTS, so a reused database file's old rows would otherwise
-    # survive into what looks like a "fresh" setup.
-    for check_key in ('SETTINGS_CHECK_PASSED', 'VALIDATION_CHECK_PASSED', 'EVALUATION_CHECK_PASSED'):
-        set_database_value(check_key, '0')
-    for stale_key in ('LAST_SRC_SIZE', 'LAST_DEST_SPACE'):
-        set_database_value(stale_key, '')
+        # Old validation/evaluation results (does the source exist, is
+        # there enough destination space) were computed against the
+        # PREVIOUS paths -- no longer meaningful for the new ones. Scoped
+        # to an actual identity change only -- found live (server.py had
+        # the same bug): running this on every save, including a
+        # password-only change, cleared validation_status/evaluation_
+        # status even though paths never changed, which made the
+        # dashboard's ready_for_manual_snapshot (index.html, requires
+        # both True) revert from "Create a Manual Snapshot" back to
+        # "Start Full Backup" -- so clicking the only button left forced
+        # a full-backup redo for no reason.
+        for check_key in ('SETTINGS_CHECK_PASSED', 'VALIDATION_CHECK_PASSED', 'EVALUATION_CHECK_PASSED'):
+            set_database_value(check_key, '0')
+        for stale_key in ('LAST_SRC_SIZE', 'LAST_DEST_SPACE'):
+            set_database_value(stale_key, '')
 
     show_terminal()
 
