@@ -48,6 +48,8 @@ This project is designed to simplify and automate the process of backing up file
 10. **Branded Backup Folder:**
     - The full backup folder shows the FolderW logo as its own folder icon in GNOME Files/Nemo (verified) via `gio set metadata::custom-icon`, so it's recognizable at a glance in your file manager — not just a plain folder with a PNG inside it.
 
+    <p align="center"> <img src="https://github.com/Cuban100/FolderW/blob/main/folder-icon.png" alt="FolderW branded backup folder icon" width="320"> </p>
+
 ## Quick Start
 
 Copy and run the commands below to deploy FolderW:
@@ -195,7 +197,7 @@ A handful of patterns are excluded out of the box, for a few different reasons:
 **FolderW's own files** — if `SRC_DIR` is (or contains) FolderW's own install folder, these stop it from backing up itself:
 - `logs/`, `rsync.log`, `rsync.txt`, `.log` — FolderW's own log files
 - `lib`, `__pycache__` — the Python virtual environment and bytecode cache
-- `FolderW.png`, `.directory` — the branding files FolderW writes into the backup folder itself (see [Branded Backup Folder](#features))
+- `folder-icon.png`, `.directory` — the branding files FolderW writes into the backup folder itself (see [Branded Backup Folder](#features))
 
 **Generic junk** — has no value in a backup regardless of what app created it:
 - `.cache/` — cache directories in general

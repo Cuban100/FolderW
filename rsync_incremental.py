@@ -338,15 +338,14 @@ def ensure_backup_folder_icon():
     # e.g. "Caveman", holding both the symlink and Snapshots/) is never an
     # rsync destination itself, so it's still safe to brand normally.
     #
-    # folder_icon.png (not the raw logo.png/FolderW.png) -- gio's
-    # metadata::custom-icon replaces the folder glyph entirely with
-    # whatever image is given, it doesn't composite it onto a folder
-    # shape automatically. folder_icon.png is a pre-composited flat
-    # folder shape with the badge embedded in the center, generated once
-    # (see git history) from logo.png, so it actually reads as a folder
-    # in a file manager instead of just a floating circular badge.
-    _set_folder_icon(full_backup, 'folder_icon.png', write_physical_files=False)
-    _set_folder_icon(os.path.dirname(full_backup), 'folder_icon.png')
+    # folder-icon.png (not the raw logo.png) -- gio's metadata::custom-icon
+    # replaces the folder glyph entirely with whatever image is given, it
+    # doesn't composite it onto a folder shape automatically. folder-
+    # icon.png is a pre-rendered folder with the badge embedded in the
+    # center (the author's own asset, see git history), so it actually
+    # reads as a folder in a file manager instead of just a floating badge.
+    _set_folder_icon(full_backup, 'folder-icon.png', write_physical_files=False)
+    _set_folder_icon(os.path.dirname(full_backup), 'folder-icon.png')
 
 def rsync(destination, link_dest=None, result_holder=None):
     # destination: the NEW dated snapshot path this run writes into (not
