@@ -300,6 +300,7 @@ def get_backup_stats_context(database):
     cpu_percent = sum(per_core) / len(per_core) if per_core else 0
     mem = psutil.virtual_memory()
     return {
+        "watchdog_active": is_watchdog_active(),
         "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings'),
         "dest_total": f"{total:.2f} GB" if total is not None else None,
         "dest_used": f"{used:.2f} GB" if used is not None else None,
@@ -375,6 +376,7 @@ async def backup_status_endpoint():
         "current_backup_size": get_database_value('CURRENT_BACKUP_SIZE', 'settings') or None,
         "src_size": get_database_value('LAST_SRC_SIZE', 'settings') or None,
         "rsync_tail": rsync_tail,
+        "watchdog_active": is_watchdog_active(),
     })
 
 @app.post("/stop-backup")
@@ -591,7 +593,6 @@ async def root(request: Request):
         "dest_space": persisted["dest_space"],
         "can_backup": persisted["can_backup"],
         "backup_in_progress": is_backup_running(),
-        "watchdog_active": is_watchdog_active(),
         "has_completed_backup": has_completed_backup(database),
         **get_backup_stats_context(database),
         })

@@ -230,6 +230,18 @@
             font-size: 1.5em; /* Make the text bigger */
             font-weight: bold; /* Make the text bold */
         }
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+            background-color: #e53935; /* red: not yet done */
+        }
+        .status-dot.green {
+            background-color: #27ae60; /* matches the success-state green used elsewhere */
+        }
         /* Style for the entire evaluation container */
         .evaluation {
             background-color: var(--surface); /* Theme-aware background */
@@ -515,14 +527,14 @@
                 {% if not settings_sent %}
                 <p class="show">Missing settings (see above) — fill them in on the <a href="/settings">Settings page</a>, then click Start Full Backup.</p>
                 {% endif %}
-                <p class="show"><span class="highlight">Settings:</span> All items from the initial .env file setup are thoroughly checked.
+                <p class="show"><span class="status-dot {{ 'green' if settings_sent else '' }}" id="dot-settings"></span><span class="highlight">Settings:</span> All items from the initial .env file setup are thoroughly checked.
                 The primary goal is to ensure that the Setup step has stored the values accurately.</p>
-                <p class="show"><span class="highlight">Validation:</span> Involves checking the source and destination paths specified in your settings.
+                <p class="show"><span class="status-dot {{ 'green' if validation_status else '' }}" id="dot-validation"></span><span class="highlight">Validation:</span> Involves checking the source and destination paths specified in your settings.
                 This step ensures that the paths exist and are accessible, confirming that the source directory contains the data to be backed up, and the destination directory is ready to receive the backup. By verifying these paths, we prevent potential issues during the backup process, such as missing files or inaccessible directories.</p>
-                <p class="show"><span class="highlight">Evaluation:</span> Involves assessing the available space on both the source and destination directories.
+                <p class="show"><span class="status-dot {{ 'green' if evaluation_status else '' }}" id="dot-evaluation"></span><span class="highlight">Evaluation:</span> Involves assessing the available space on both the source and destination directories.
                 This step ensures that there is enough space on the destination directory to accommodate the backup and that the source directory has the necessary space to complete the backup process. By verifying these space requirements, we prevent potential issues during the backup, such as insufficient storage space or data overflow, ensuring a smooth and successful backup process.</p>
                 {% if monitor == '1' %}
-                <p class="show"><span class="highlight">Watchdog Future (FolderW) is enabled:</span> Enabling the monitoring feature activates the watchdog functionality. This means that the system will continuously watch the source directory for any changes or updates. By choosing to enable monitoring, the watchdog ensures that any new or modified files in the source directory are automatically detected and prepared for backup. This process is incremental, organizing backups by month, day, and time, which means all versions of the same file will be stored in a very organized manner. This ensures your backup is always up-to-date without manual intervention, and you can easily track and retrieve specific versions of your files as needed.</p>
+                <p class="show"><span class="status-dot {{ 'green' if watchdog_active else '' }}" id="dot-watchdog"></span><span class="highlight">Watchdog Future (FolderW) is enabled:</span> Enabling the monitoring feature activates the watchdog functionality. This means that the system will continuously watch the source directory for any changes or updates. By choosing to enable monitoring, the watchdog ensures that any new or modified files in the source directory are automatically detected and prepared for backup. This process is incremental, organizing backups by month, day, and time, which means all versions of the same file will be stored in a very organized manner. This ensures your backup is always up-to-date without manual intervention, and you can easily track and retrieve specific versions of your files as needed. This dot stays red until a full backup completes and the watchdog actually starts watching — not just while it's enabled in Settings.</p>
                 {% endif %}
                 {% if interval == 'hourly' or interval == 'daily' or interval == 'weekly' %}
                 <p class="show"><span class="highlight">Interval Backup is enabled:</span> When the interval option is enabled, backups are scheduled to occur at specified time intervals. This step allows you to configure how frequently backups should take place (e.g., every hour, daily, weekly). The system will automatically initiate a backup at each specified interval, ensuring that your data is continuously protected. Each backup is incremental, meaning only the changes made since the last backup are saved. This approach optimizes storage space and organizes all versions of the same file by month, day, and time. This organized storage makes it easy to track and retrieve specific file versions as needed, providing a reliable and efficient backup solution.</p>
@@ -699,6 +711,7 @@
             const currentSizeValue = document.getElementById('current-backup-size-value');
             const sourceSizeValue = document.getElementById('source-folder-size-value');
             const rsyncTail = document.getElementById('rsync-tail');
+            const dotWatchdog = document.getElementById('dot-watchdog');
             if (!statusMessage || statusMessage.textContent.trim().startsWith('Failed')) {
                 return;
             }
@@ -717,6 +730,9 @@
                     }
                     if (rsyncTail && Array.isArray(data.rsync_tail)) {
                         rsyncTail.textContent = data.rsync_tail.join('\n');
+                    }
+                    if (dotWatchdog) {
+                        dotWatchdog.classList.toggle('green', !!data.watchdog_active);
                     }
                     if (data.running) {
                         const parts = [];
