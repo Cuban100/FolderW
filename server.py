@@ -1009,6 +1009,7 @@ async def manage_databases(request: Request):
     return templates.TemplateResponse("manage-databases.html", {
         "request": request,
         "logo": logo,
+        "active_database": os.path.basename(load_env_value('DATABASE') or ""),
         "previous_databases": list_previous_databases()
     })
 
@@ -1037,6 +1038,7 @@ async def delete_old_database(request: Request, database_to_delete: str = Form(.
     return templates.TemplateResponse("manage-databases.html", {
         "request": request,
         "logo": logo,
+        "active_database": os.path.basename(load_env_value('DATABASE') or ""),
         "previous_databases": list_previous_databases(),
         "error": error,
         "success": success

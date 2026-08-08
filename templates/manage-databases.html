@@ -25,7 +25,11 @@
                     {{ success }}
                 </div>
                 {% endif %}
+                <p class="text-[var(--text)] mb-6">
+                    Current database: <span class="font-medium">{{ active_database or "(none configured)" }}</span>
+                </p>
                 <div>
+                    {% if previous_databases %}
                     <form method="post" action="/delete-old-database/">
                         <label for="database_to_delete" class="text-[var(--text)] font-medium">Select Database to Delete:</label>
                         <select name="database_to_delete" id="database_to_delete" class="form-select mt-1 block w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 py-1">
@@ -35,9 +39,14 @@
                         </select>
                         <button type="submit" class="mt-4 bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition duration-300">Delete Selected Database</button>
                     </form>
+                    {% else %}
+                    <p class="text-[var(--text-muted)]">
+                        No previous databases to manage. This page only lists old database files left behind after
+                        changing the Database name in Settings -- it's expected to be empty until that's happened at least once.
+                    </p>
+                    {% endif %}
                 </div>
             </div>
         </div>
-        <!-- Add a section for manual deletion of old databases -->
 </body>
 </html>
