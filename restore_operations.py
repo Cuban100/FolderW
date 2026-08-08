@@ -3,7 +3,7 @@ import re
 import json
 import shutil
 from datetime import datetime
-from db_operations import load_env_value, load_other_variables
+from db_operations import load_env_value, load_other_variables, get_files_changed_by_label
 from statistics_operations import human_readable_size
 from loguru import logger
 
@@ -204,10 +204,17 @@ def list_backups():
                     # retention (cleanup_old_snapshots) or show up here.
                     continue
                 file_count, total_size = _cached_summarize_snapshot(snapshot_path)
+                snapshot_id = f"{month}/{day}/{time_folder}"
                 backups.append({
-                    "id": f"{month}/{day}/{time_folder}",
+                    "id": snapshot_id,
                     "label": f"{month} {day}, {time_folder}",
                     "file_count": file_count,
+                    # New/modified files in specifically this session, vs
+                    # file_count above (every file in the complete point-
+                    # in-time tree, thanks to --link-dest). None if this
+                    # snapshot predates label consistently matching its own
+                    # folder id (see record_backup_statistics()).
+                    "files_changed": get_files_changed_by_label(snapshot_id),
                     "size": human_readable_size(total_size),
                     "mtime": os.path.getmtime(snapshot_path),
                     # Real on-disk path -- shown on the Restore page so a

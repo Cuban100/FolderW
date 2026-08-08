@@ -312,6 +312,27 @@ def record_backup_run(session, backup_type, label, files_changed, status='comple
     except sqlite3.Error as e:
         logger.error(f"Error recording backup run: {e}")
 
+def get_files_changed_by_label(label):
+    """files_changed for the backup_runs row matching this snapshot's
+    folder id (see record_backup_run's label -- always the real
+    Month/Day/Time id now, not a special-cased "Full Backup" string), so
+    the Restore page can show how many files were actually new/modified
+    in a given snapshot, not just its total file count. None if no
+    matching row exists (a snapshot that predates this being tracked, or
+    the DB was reset separately from the filesystem).
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('SELECT files_changed FROM backup_runs WHERE label = ? ORDER BY id DESC LIMIT 1', (label,))
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else None
+    except sqlite3.Error as e:
+        logger.error(f"Error looking up files_changed for {label}: {e}")
+        return None
+
 def save_settings_to_db(log_directory, source_directory, base_backup_directory, database_file, monitor_source_folder, backup_interval):
     try:
         connection = sqlite3.connect(database_file)

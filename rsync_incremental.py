@@ -65,11 +65,14 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
     except sqlite3.Error as e:
         logger.error(f"Error recording backup statistics: {e}")
 
-    if last_session_number <= 1:
-        backup_type, label = 'full', 'Full Backup'
-    else:
-        backup_type, label = 'incremental', incremental_folder
-    record_backup_run(last_session_number, backup_type, label, total_files_processed)
+    # label is always the real snapshot folder id now (e.g.
+    # "August/08/2:12-AM"), even for the first-ever backup -- every
+    # session is a genuine dated snapshot post --link-dest redesign, there
+    # isn't a separate "Full Backup" thing to name specially anymore. Kept
+    # consistent so the Restore page can look up a snapshot's changed-file
+    # count by matching this label against its own folder id.
+    backup_type = 'full' if last_session_number <= 1 else 'incremental'
+    record_backup_run(last_session_number, backup_type, incremental_folder, total_files_processed)
 
     # Cached here (once per backup run) rather than computed on every
     # dashboard page load — `du` walks the entire full_backup tree, which
