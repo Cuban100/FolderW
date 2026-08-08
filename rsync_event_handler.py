@@ -25,8 +25,10 @@ BACKUP_DELAY_SECONDS = 300
 # incremental backup despite constant activity, because the 300s quiet
 # window was never actually reached. This forces one through regardless
 # of ongoing changes once too much time has passed since the first
-# unflushed one.
-MAX_BACKUP_DELAY_SECONDS = 900
+# unflushed one. Set equal to BACKUP_DELAY_SECONDS on purpose: a backup
+# always runs within 5 minutes of the first pending change, whether
+# things go quiet by then or not.
+MAX_BACKUP_DELAY_SECONDS = 300
 
 rsync_txt = load_other_variables('rsync_txt')
 logfile = load_other_variables('logfile')
