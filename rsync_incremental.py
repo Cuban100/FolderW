@@ -42,8 +42,8 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
         if os.path.isfile(fp):
             try:
                 total_size_processed += os.path.getsize(fp)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.warning(f"Could not get size of {fp}: {e}")
     try:
         conn = sqlite3.connect(database)
         cursor = conn.cursor()
