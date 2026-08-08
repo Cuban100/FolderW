@@ -1,7 +1,7 @@
 <p align="center"> <img src="https://github.com/Cuban100/FolderW/blob/main/logo.png" alt="FolderW Logo" width="200" height="200" style="vertical-align:middle; margin-right: 100px;"> </p>
 <h1>FolderW</h1>
 
-# A Python Incremental Backup with Watchdog or Scheduling, Backup Automation with Tkinter GUI and Event-Driven (when changing, adding, or deleting files) Monitoring
+# A Python Incremental/Differential Backup with Watchdog or Scheduling, Backup Automation with Tkinter GUI and Event-Driven (when changing, adding, or deleting files) Monitoring
 
 
 This project is designed to simplify and automate the process of backing up files from a specified source directory to a target directory. Key features include:
@@ -40,13 +40,16 @@ This project is designed to simplify and automate the process of backing up file
    - Optional checkbox in the setup GUI installs a systemd user service so the dashboard starts automatically on login/boot.
 
 8. **Restore:**
-   - Dashboard page listing the full backup and every incremental snapshot, with the ability to restore an entire backup or hand-pick individual files.
+   - Dashboard page listing the full backup and every snapshot, with the ability to restore an entire backup or browse/search and hand-pick individual files.
 
 9. **Snapshot Retention:**
-   - Optional limit on how many incremental snapshots to keep — oldest ones are deleted automatically after each backup. The full backup is never affected.
+   - Optional limit on how many snapshots to keep — oldest ones are deleted automatically after each backup. The full backup is never part of this pool.
 
-10. **Branded Backup Folder:**
-    - The full backup folder shows the FolderW logo as its own folder icon in GNOME Files/Nemo (verified) via `gio set metadata::custom-icon`, so it's recognizable at a glance in your file manager — not just a plain folder with a PNG inside it.
+10. **Backup History:**
+    - Dashboard page listing every backup run ever recorded (timestamp, type, snapshot, files changed, status), separate from the `/manage-databases` page for cleaning up leftover `.db` files.
+
+11. **Branded Backup Folder:**
+    - Both the full backup and its container folder get their own custom folder icon (a physical icon file plus `gio set metadata::custom-icon`, so it shows correctly across file managers), recognizable at a glance instead of a plain folder.
 
     <p align="center"> <img src="https://github.com/Cuban100/FolderW/blob/main/folder-icon.png" alt="FolderW branded backup folder icon" width="320"> </p>
 
@@ -94,8 +97,9 @@ It shows a warning and asks for confirmation before doing anything. Once confirm
 - **`install.sh`:** Bash script to create a virtual environment, install dependencies, and run the setup script.
 - **`update.sh`:** Bash script to update an existing installation to the latest version. See [Updating](#updating) below.
 - **`setup.py`:** Tkinter-based GUI for configuring backup settings and initializing the environment.
-- **`rsync_incremental.py`:** Python script utilizing `rsync` for performing backups.
-- **`main_backup.py`:** Script triggered to start the backup process.
+- **`rsync_incremental.py`:** Runs the initial full backup (shared by both methods) and every Incremental-mode snapshot after it.
+- **`rsync_differential.py`:** Runs every Differential-mode snapshot; reuses `rsync_incremental.py`'s shared machinery directly. See [Backup Method](#backup-method).
+- **`main_backup.py`:** Script triggered to start the backup process; picks whichever of the two above matches the configured Backup Method.
 
 ## Usage
 
@@ -178,7 +182,7 @@ FolderW supports two strategies for every backup after the initial one (set in t
 For any backup you can either:
 
 - **Restore Entire Backup** — copies everything in it, or
-- **Browse Files** — drills into that one backup and lets you select individual files to restore.
+- **Browse / Search** — drills into that one backup, with a search box, and lets you select individual files to restore.
 
 Restoring **never overwrites `SRC_DIR`**. Files are always copied into a new, timestamped folder at `BASE_DIR/Restored/<timestamp>_<backup>/` for you to review and move back into place yourself — a wrong pick can't clobber current data.
 
@@ -205,11 +209,12 @@ A handful of patterns are excluded out of the box, for a few different reasons:
 **FolderW's own files** — if `SRC_DIR` is (or contains) FolderW's own install folder, these stop it from backing up itself:
 - `logs/`, `rsync.log`, `rsync.txt`, `.log` — FolderW's own log files
 - `lib`, `__pycache__` — the Python virtual environment and bytecode cache
-- `folder-icon.png`, `.directory` — the branding files FolderW writes into the backup folder itself (see [Branded Backup Folder](#features))
+- `folder-icon.png`, `FolderW.png`, `.directory` — the branding files FolderW writes into the backup folder itself (see [Branded Backup Folder](#features))
 
 **Generic junk** — has no value in a backup regardless of what app created it:
 - `.cache/` — cache directories in general
 - `*.tmp`, `*.swp`, `*.swx`, `~*` — temp files and editor swap/backup files
+- `*.db-journal` — transient SQLite rollback journals, recreated every transaction, never meaningful to restore
 
 **Sparse virtual-disk and container/VM tooling state** — the important one to understand. Tools like Docker Desktop and dev VM sandboxes create disk image files with a huge *apparent* size but a much smaller *real* size on disk (a "sparse" file — mostly empty space, not actually allocated). A naive backup doesn't know the difference: it reads through the whole apparent size and can end up writing a multi-hundred-GB file to your backup destination for a few real GB of content, and along the way it can make progress percentages look wildly wrong (rsync reports having "transferred" the file's huge logical size long before real progress reflects it). None of this is data you'd actually want to restore anyway — it's regenerable tooling state, not personal files:
 - `overlay2/`, `**/.local/share/docker` — Docker's storage driver and full data directory (images, containers, volumes, build cache)
@@ -225,7 +230,7 @@ If you use other tools with similar sparse virtual-disk files (VirtualBox, VMwar
 
 Pattern syntax follows `rsync`'s filter rules: a bare name (`node_modules`) matches that name anywhere in the tree; a pattern with a `/` in it (other than a trailing one) is anchored to `SRC_DIR`'s root; use a `**/` prefix (e.g. `**/some/nested/path`) to match a nested path at any depth, and to reliably exclude that path from FolderW's own size/progress calculations too (which use a slightly different wildcard engine than `rsync` itself — `**/` is the form verified to work correctly for both).
 
-This one file drives both **what gets backed up** (rsync's `--exclude-from`) and **what the watchdog reacts to** — a change inside an excluded path won't reset the 5-minute debounce timer either, so a busy cache directory can't perpetually delay a real backup. Changes to this file take effect the next time a backup runs or the watchdog restarts.
+This one file drives both **what gets backed up** (rsync's `--exclude-from`) and **what the watchdog reacts to** — a change inside an excluded path won't reset the 2-minute debounce timer either, so a busy cache directory can't perpetually delay a real backup. Changes to this file take effect the next time a backup runs or the watchdog restarts.
 
 ## Permissions
 
@@ -236,5 +241,7 @@ Why: files under `SRC_DIR` aren't always owned by you. A common case is Docker c
 This is scoped as narrowly as sudo allows: the rule grants `NOPASSWD` on the `rsync` binary specifically (found via `shutil.which`), not blanket root access, and only after checking a rule allowing this doesn't already exist (some systems already have broader passwordless sudo configured for other reasons — in that case nothing new is added). The sudoers file is written to `/etc/sudoers.d/folderw-rsync` and validated with `visudo -c` before ever being installed, so a malformed rule can't break `sudo` system-wide.
 
 If setup couldn't configure this automatically (`sudo`/`visudo` not installed, etc.), it prints the exact command to run manually — or backups will still work either way, just skipping (not hanging on) any file they don't have permission to read.
+
+**Every copy in the backup always comes out owned by whoever runs FolderW, mode `775`** — regardless of the source file's own owner or permissions. Reading as root is only what lets rsync see files it otherwise couldn't; what actually lands in the backup is deliberately normalized (`--chown`/`--chmod`) rather than preserving another UID or a restrictive mode from the source.
 
 This project aims to streamline backup operations, providing a reliable and user-friendly solution for both regular and event-driven file backups.
