@@ -3,6 +3,8 @@ import re
 import sys
 import time
 import threading
+import pwd
+import grp
 from db_operations import get_last_session_number, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value, get_database_value
 from restore_operations import cleanup_old_snapshots, mark_snapshot_complete
 from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
@@ -24,6 +26,16 @@ snapshots_root = load_other_variables('snapshots_root')
 rsync_txt = load_other_variables('rsync_txt')
 database = load_env_value('DATABASE')
 logger.add(logfile, level="INFO", format="{time} - {level} - {message}")
+
+# This process's own real user/group (not root -- rsync itself runs
+# under sudo so it can read files owned by another UID, e.g. a Docker
+# container's bind-mounted config, but the copies it WRITES should
+# always end up owned by whoever actually runs FolderW, with a fixed
+# permission mode, regardless of the source file's own owner/mode).
+# os.getuid()/getgid() here reflect this script's own (non-root) process,
+# not the elevated rsync subprocess it launches below.
+OWNER_USER = pwd.getpwuid(os.getuid()).pw_name
+OWNER_GROUP = grp.getgrgid(os.getgid()).gr_name
 
 
 
@@ -425,7 +437,17 @@ def rsync(destination, link_dest=None, result_holder=None):
     # command. Safe now specifically because the icon files are no longer
     # written into this rsync-managed tree at all (see _set_folder_icon),
     # so nothing excluded needs protecting from active deletion.
-    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--delete", "--delete-excluded", "--info=progress2", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}']
+    # --chown/--chmod: -a (via sudo, root) would otherwise preserve each
+    # source file's own owner/group/permissions verbatim -- exactly what
+    # lets rsync read another UID's files in the first place, but not
+    # what should land in the backup itself. Every copy should come out
+    # owned by whoever actually runs FolderW (not root, and not whatever
+    # UID happened to own it at the source, e.g. a Docker container's UID
+    # 2000) with a fixed, predictable permission mode, regardless of the
+    # source's own mode. Both apply after -a's normal owner/group/perms
+    # handling, overriding just those, not the rest of -a (mtimes,
+    # symlinks, recursion, etc.).
+    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--delete", "--delete-excluded", "--info=progress2", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}', f'--chown={OWNER_USER}:{OWNER_GROUP}', '--chmod=775']
     if link_dest:
         rsync_command.append(f'--link-dest={link_dest}')
     rsync_command += [src_dir_contents, destination]
