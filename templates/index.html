@@ -799,10 +799,16 @@
 
             progressContainer.classList.add('active');
 
-            const interval = setInterval(async () => {
+            // Server-Sent Events, not a poll: one held connection instead
+            // of a fresh fetch() every 2 seconds -- see /backup-status-
+            // stream (server.py). EventSource auto-reconnects by default
+            // on a naturally-closed stream, which would silently re-poll
+            // forever after the backup finishes -- explicitly .close()
+            // once `running` goes false to prevent that.
+            const source = new EventSource('/backup-status-stream');
+            source.onmessage = (event) => {
                 try {
-                    const response = await fetch('/backup-status');
-                    const data = await response.json();
+                    const data = JSON.parse(event.data);
                     if (currentSizeValue && data.current_backup_size) {
                         currentSizeValue.textContent = data.current_backup_size;
                     }
@@ -811,6 +817,10 @@
                     }
                     if (rsyncTail && Array.isArray(data.rsync_tail)) {
                         rsyncTail.textContent = data.rsync_tail.join('\n');
+                        // Keeps the most recent log line in view without
+                        // the user having to manually scroll down as new
+                        // ones arrive.
+                        rsyncTail.scrollTop = rsyncTail.scrollHeight;
                     }
                     if (dotWatchdog) {
                         dotWatchdog.classList.toggle('green', !!data.watchdog_active);
@@ -835,7 +845,7 @@
                         }
                     }
                     if (!data.running) {
-                        clearInterval(interval);
+                        source.close();
                         progressContainer.classList.remove('active');
                         progressBar.classList.remove('determinate');
                         progressBar.style.width = '';
@@ -862,9 +872,19 @@
                         }, 4000);
                     }
                 } catch (error) {
-                    console.error('Error checking backup status:', error);
+                    console.error('Error parsing backup status event:', error);
                 }
-            }, 2000);
+            };
+            source.onerror = (error) => {
+                // A genuine connection error (server restart, network
+                // blip) -- not the same as a clean "running: false" close
+                // above, which already .close()s the source itself before
+                // this could fire. Left to the browser's default
+                // reconnect behavior rather than treated as fatal: a
+                // transient drop shouldn't stop the progress bar from
+                // recovering once the connection comes back.
+                console.error('Backup status stream error:', error);
+            };
         })();
     </script>
 

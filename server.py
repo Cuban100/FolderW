@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, WebSocket, Form
 from pydantic import BaseModel
 import subprocess
+import asyncio
 import json
 import os
 import sys
@@ -16,7 +17,7 @@ from restore_operations import list_backups, get_backup_path, list_files_in_back
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.concurrency import run_in_threadpool
@@ -361,8 +362,7 @@ def is_backup_running():
             continue
     return False
 
-@app.get("/backup-status")
-async def backup_status_endpoint():
+def _backup_status_payload():
     percent = get_database_value('BACKUP_PROGRESS_PERCENT', 'settings')
     eta = get_database_value('BACKUP_ETA', 'settings')
     start_time_raw = get_database_value('BACKUP_START_TIME', 'settings')
@@ -389,7 +389,7 @@ async def backup_status_endpoint():
         rsync_tail = [line for line in tail_result.stdout.decode('utf-8', errors='replace').splitlines() if line.strip()]
     except Exception:
         pass
-    return JSONResponse({
+    return {
         "running": is_backup_running(),
         "percent": percent or None,
         "eta": eta or None,
@@ -399,7 +399,36 @@ async def backup_status_endpoint():
         "rsync_tail": rsync_tail,
         "watchdog_active": is_watchdog_active(),
         "check_step": get_database_value('CHECK_STEP', 'settings') or None,
-    })
+    }
+
+
+@app.get("/backup-status")
+async def backup_status_endpoint():
+    return JSONResponse(_backup_status_payload())
+
+
+@app.get("/backup-status-stream")
+async def backup_status_stream():
+    # Server-Sent Events -- replaces the dashboard's old 2-second fetch()
+    # poll for the same data (progress %, ETA, current size, watchdog
+    # dot, live rsync log tail) with one held connection instead of a
+    # fresh HTTP request every 2 seconds: less request/response overhead
+    # per update, and updates can push at whatever cadence the server
+    # wants rather than being capped at the client's poll interval.
+    #
+    # Ends the stream (rather than holding it open indefinitely) once
+    # running is False -- the client explicitly closes its EventSource
+    # on that same signal, since a naturally-ended SSE stream otherwise
+    # triggers the browser's automatic reconnect, which would silently
+    # re-poll forever after a backup finishes.
+    async def event_generator():
+        while True:
+            payload = _backup_status_payload()
+            yield f"data: {json.dumps(payload)}\n\n"
+            if not payload["running"]:
+                break
+            await asyncio.sleep(1)
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.post("/stop-backup")
 async def stop_backup():
