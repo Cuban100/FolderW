@@ -35,17 +35,10 @@ logfile = load_other_variables('logfile')
 src_dir = load_env_value('SRC_DIR')
 backup_interval = load_env_value('BACKUP_INTERVAL')
 
-def _load_exclude_patterns():
-    # Reuses rsync's own exclude file (logs/rsync_exclude.txt) rather than
-    # a separate list, so a change/tmp/cache directory only needs to be
-    # excluded in one place to be skipped by both the actual backup and
-    # the watchdog that triggers it — otherwise every write inside an
-    # excluded directory (e.g. a busy browser cache) would still reset the
-    # debounce timer for no reason, delaying real backups indefinitely.
-    exclude_file = load_other_variables('exclude_file')
+def _load_patterns(path):
     patterns = []
     try:
-        with open(exclude_file, 'r') as f:
+        with open(path, 'r') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
@@ -54,7 +47,27 @@ def _load_exclude_patterns():
         pass
     return patterns
 
+def _load_exclude_patterns():
+    # Reuses rsync's own exclude file (logs/rsync_exclude.txt) rather than
+    # a separate list, so a change/tmp/cache directory only needs to be
+    # excluded in one place to be skipped by both the actual backup and
+    # the watchdog that triggers it — otherwise every write inside an
+    # excluded directory (e.g. a busy browser cache) would still reset the
+    # debounce timer for no reason, delaying real backups indefinitely.
+    return _load_patterns(load_other_variables('exclude_file'))
+
 EXCLUDE_PATTERNS = _load_exclude_patterns()
+
+# Separate from EXCLUDE_PATTERNS on purpose: these files ARE still backed
+# up normally (rsync never sees this list), they just don't get to
+# trigger/reschedule a backup on their own. For files that are constantly
+# rewritten by a long-running host/container service regardless of real
+# user activity (confirmed, not guessed -- see the file's own header) --
+# without this, that alone is enough to keep the watchdog's 300s ceiling
+# firing around the clock.
+TRIGGER_EXEMPT_PATTERNS = _load_patterns(
+    os.path.join(os.path.dirname(load_other_variables('exclude_file')), 'watchdog_trigger_exempt.txt')
+)
 
 def run_backup_script():
     try:
@@ -136,16 +149,9 @@ class BackupHandler(FileSystemEventHandler):
             logger.debug(f"File deleted: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
             self._schedule_backup()
 
-    def should_ignore(self, file_path):
-        if file_path in (rsync_txt, logfile):
-            return True
-        try:
-            rel_path = os.path.relpath(file_path, src_dir)
-        except ValueError:
-            rel_path = file_path
-        parts = rel_path.split(os.sep)
-        basename = os.path.basename(file_path)
-        for pattern in EXCLUDE_PATTERNS:
+    @staticmethod
+    def _matches_any(patterns, rel_path, parts, basename):
+        for pattern in patterns:
             if fnmatch.fnmatch(rel_path, pattern) or fnmatch.fnmatch(basename, pattern):
                 return True
             if any(fnmatch.fnmatch(part, pattern) for part in parts):
@@ -164,6 +170,25 @@ class BackupHandler(FileSystemEventHandler):
                 for i in range(len(parts) - len(anchor_parts) + 1):
                     if all(fnmatch.fnmatch(parts[i + j], anchor_parts[j]) for j in range(len(anchor_parts))):
                         return True
+        return False
+
+    def should_ignore(self, file_path):
+        if file_path in (rsync_txt, logfile):
+            return True
+        try:
+            rel_path = os.path.relpath(file_path, src_dir)
+        except ValueError:
+            rel_path = file_path
+        parts = rel_path.split(os.sep)
+        basename = os.path.basename(file_path)
+        if self._matches_any(EXCLUDE_PATTERNS, rel_path, parts, basename):
+            return True
+        # Trigger-exempt files are NOT excluded from rsync -- only checked
+        # here, so a write to one still can't reschedule a backup, but the
+        # backup itself (whenever one runs for another reason) still picks
+        # up its current contents like any other included file.
+        if self._matches_any(TRIGGER_EXEMPT_PATTERNS, rel_path, parts, basename):
+            return True
         return False
 
 def notify_stop():
