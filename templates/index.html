@@ -834,25 +834,24 @@
                         progressBar.style.width = '';
                         progressText.textContent = 'Backup complete.';
                         statusMessage.textContent = 'Backup complete.';
-                        // Reveal "Create a Manual Snapshot" now that this run
-                        // has actually finished — it was hidden at render
-                        // time so it couldn't appear alongside an in-progress
-                        // backup and imply another one could be started.
-                        const snapshotBanner = document.getElementById('manual-snapshot-banner');
-                        if (snapshotBanner) {
-                            snapshotBanner.style.display = '';
-                        }
-                        // Briefly confirm completion, then hide the whole
-                        // banner/progress group rather than leaving stale
-                        // "Backup in progress…"/"Backup started." text (or
-                        // the progress bar itself) sitting on screen forever.
+                        // This page was rendered (via document.write, see
+                        // startBackup()) at the moment the backup *started*
+                        // — has_completed_backup was still false then, so
+                        // the server never rendered the manual-snapshot
+                        // banner element at all (it's inside a server-side
+                        // {% if ready_for_manual_snapshot %}, not just
+                        // hidden with CSS), and nothing here ever swaps the
+                        // Stop Full Backup button back to Start. Found live:
+                        // the Stop button just sat there indefinitely after
+                        // a backup actually finished. Reloading re-renders
+                        // the whole page with fresh state instead of trying
+                        // to patch every affected element by hand. Safe to
+                        // reload here specifically because the address bar
+                        // is always / at this point (never /run-all-steps),
+                        // so it can't re-trigger a fresh backup the way
+                        // reloading that route would.
                         setTimeout(() => {
-                            statusMessage.style.display = 'none';
-                            progressText.style.display = 'none';
-                            const tailContainer = document.getElementById('rsync-tail-container');
-                            if (tailContainer) {
-                                tailContainer.style.display = 'none';
-                            }
+                            window.location.reload();
                         }, 4000);
                     }
                 } catch (error) {
