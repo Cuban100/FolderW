@@ -292,6 +292,14 @@ def save_paths():
             result_label.config(text=f"Error: {key.replace('_', ' ')} is required.", foreground='#FF0000')  # Set to red
             return
 
+    # Database must end in .db -- create_all_tables() below happily
+    # creates a SQLite file under any name at all, so nothing else
+    # catches a typo'd extension (or none at all) until much later,
+    # if ever.
+    if not paths['DATABASE'].lower().endswith('.db'):
+        result_label.config(text="Error: Database file name must end with .db", foreground='#FF0000')
+        return
+
     # Snapshots to keep is optional — blank means "keep everything" — so it's
     # validated separately rather than through the required-fields loop above.
     max_snapshots = max_snapshots_entry.get().strip()
