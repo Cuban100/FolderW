@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import tempfile
 import time
 import threading
 import pwd
@@ -162,30 +163,6 @@ def _check_sudo_rsync_available():
 
 def _new_snapshot_path(incremental_folder):
     return os.path.join(snapshots_root, incremental_folder)
-
-
-def _prune_empty_dirs(root):
-    """Remove directories left empty inside `root` -- differential mode
-    only (see rsync_differential.py). --compare-dest skips individual
-    unchanged files but still creates every directory that exists in the
-    source, even ones where nothing inside actually changed; confirmed
-    empirically that --prune-empty-dirs doesn't help here, since it only
-    prunes directories emptied by filter/exclude rules, not ones emptied
-    by --compare-dest's own per-file skipping. Walked bottom-up, re-
-    checking os.listdir() at prune time (not the os.walk dirnames/
-    filenames tuple, which reflects each directory's contents as scanned
-    before its children were removed) so a chain of now-empty nested
-    directories collapses in one pass. Never removes `root` itself, even
-    on a zero-change run -- it's about to receive the completion marker.
-    """
-    for dirpath, _dirnames, _filenames in os.walk(root, topdown=False):
-        if dirpath == root:
-            continue
-        try:
-            if not os.listdir(dirpath):
-                os.rmdir(dirpath)
-        except OSError as e:
-            logger.warning(f"Could not remove empty directory {dirpath}: {e}")
 
 
 def _unique_new_snapshot_path(incremental_folder):
@@ -467,10 +444,50 @@ def rsync(destination, link_dest=None, compare_dest=None, result_holder=None):
     # latest differential, not a hardlink-complete tree per snapshot).
     # Both omitted on the first-ever backup (nothing exists yet to
     # compare against).
+    #
+    # differential mode doesn't actually pass --compare-dest to the real
+    # transfer below, though -- confirmed empirically, --compare-dest only
+    # skips individual unchanged FILES; rsync still walks into and creates
+    # every directory that exists in the source, changed or not, leaving
+    # a full mirror of empty directories behind for anything that didn't
+    # change. Deleting those afterward would only be cleaning up a mess
+    # rsync didn't need to make: a dry-run comparison pass here gets the
+    # exact list of files that actually differ, and the real transfer is
+    # then restricted to just those via --files-from, so rsync only ever
+    # creates the directories those specific files need in the first
+    # place -- an unchanged directory is never created at all.
+    files_from_path = None
+    if compare_dest:
+        dry_run_command = ["sudo", "-n", "rsync", "-n", "-r", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}', f'--compare-dest={compare_dest}', src_dir_contents, destination]
+        logger.warning(f"Executing differential dry-run comparison {dry_run_command}")
+        try:
+            dry_run = subprocess.run(dry_run_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        except Exception as e:
+            logger.error(f"Error running differential dry-run comparison: {e}")
+            if result_holder is not None:
+                result_holder['success'] = False
+            return
+        changed_files = []
+        for line in dry_run.stdout.splitlines():
+            match = CHANGED_LINE_RE.match(line.strip())
+            if not match:
+                continue
+            path = match.group(1)
+            if path in ('.', './') or path.endswith('/'):
+                continue  # directory entries -- only files belong in --files-from
+            changed_files.append(path)
+        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".folderw-files-from") as tmp:
+            tmp.write('\n'.join(changed_files))
+            files_from_path = tmp.name
+        logger.info(f"Differential dry-run found {len(changed_files)} changed file(s).")
+
     # --delete-excluded (not just --delete): matches Timeshift's actual
     # command. Safe now specifically because the icon files are no longer
     # written into this rsync-managed tree at all (see _set_folder_icon),
-    # so nothing excluded needs protecting from active deletion.
+    # so nothing excluded needs protecting from active deletion. Only
+    # meaningful for --link-dest -- differential's --files-from transfer
+    # is already restricted to an explicit file list, so there's nothing
+    # extraneous for --delete to ever find.
     # --chown/--chmod: -a (via sudo, root) would otherwise preserve each
     # source file's own owner/group/permissions verbatim -- exactly what
     # lets rsync read another UID's files in the first place, but not
@@ -481,14 +498,14 @@ def rsync(destination, link_dest=None, compare_dest=None, result_holder=None):
     # source's own mode. Both apply after -a's normal owner/group/perms
     # handling, overriding just those, not the rest of -a (mtimes,
     # symlinks, recursion, etc.).
-    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--delete", "--delete-excluded", "--info=progress2", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}', f'--chown={OWNER_USER}:{OWNER_GROUP}', '--chmod=775']
+    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--info=progress2", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}', f'--chown={OWNER_USER}:{OWNER_GROUP}', '--chmod=775']
     if link_dest:
-        rsync_command.append(f'--link-dest={link_dest}')
-    elif compare_dest:
-        rsync_command.append(f'--compare-dest={compare_dest}')
+        rsync_command += ['--delete', '--delete-excluded', f'--link-dest={link_dest}']
+    elif files_from_path:
+        rsync_command.append(f'--files-from={files_from_path}')
     rsync_command += [src_dir_contents, destination]
     logger.warning(f"Executing rsync command {rsync_command}")
-        
+
     try:
         with open(rsync_txt, 'w') as log_f:
             # Run the rsync command and capture output in real-time.
@@ -537,6 +554,12 @@ def rsync(destination, link_dest=None, compare_dest=None, result_holder=None):
         logger.error(f"Error executing rsync command: {e}")
         if result_holder is not None:
             result_holder['success'] = False
+    finally:
+        if files_from_path:
+            try:
+                os.unlink(files_from_path)
+            except OSError as e:
+                logger.warning(f"Could not remove temporary files-from list {files_from_path}: {e}")
 
 # Matches lines rsync prints because of --out-format='CHANGED:%n' (see the
 # rsync_command construction above) -- an unambiguous marker for a file

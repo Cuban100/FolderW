@@ -1,14 +1,22 @@
 """Differential-mode backup runner. Every run compares the live source
 directly against full_backup (the one-time initial backup, frozen
-forever) via rsync's --compare-dest -- unlike --link-dest, unchanged
-files are simply skipped, not hardlinked, so each dated snapshot under
-Snapshots/ ends up containing ONLY what's new or changed since that
-original. A true delta, matching the industry-standard definition of
-"differential backup" (full backup + all cumulative changes since it,
-confirmed against Wikipedia/Acronis/Redstor) -- not the complete,
-hardlink-based point-in-time tree rsync_incremental.py's --link-dest
-chain produces. Snapshots grow larger over time as more changes
-accumulate since the fixed original; that's expected, not a bug.
+forever) -- unlike --link-dest, unchanged files are simply skipped, not
+hardlinked, so each dated snapshot under Snapshots/ ends up containing
+ONLY what's new or changed since that original. A true delta, matching
+the industry-standard definition of "differential backup" (full backup
++ all cumulative changes since it, confirmed against Wikipedia/Acronis/
+Redstor) -- not the complete, hardlink-based point-in-time tree
+rsync_incremental.py's --link-dest chain produces. Snapshots grow larger
+over time as more changes accumulate since the fixed original; that's
+expected, not a bug.
+
+Under the hood (see rsync()'s compare_dest branch in rsync_incremental.py):
+a dry-run --compare-dest pass first finds exactly which files differ,
+then the real transfer is restricted to just those via --files-from --
+plain --compare-dest only skips individual unchanged files while still
+creating every directory that exists in the source, so a naive
+implementation leaves a full mirror of empty directories behind for
+everything that didn't change.
 
 Kept as a separate script from rsync_incremental.py, selected by the
 user's BACKUP_METHOD setting (see main_backup.py/rsync_event_handler.py),
@@ -37,7 +45,7 @@ from notifications import notify
 from rsync_incremental import (
     _check_sudo_rsync_available, _migrate_legacy_full_backup,
     _run_initial_full_backup_if_needed, _unique_new_snapshot_path,
-    _prune_empty_dirs, ensure_backup_folder_icon, rsync, parse_logfile,
+    ensure_backup_folder_icon, rsync, parse_logfile,
     generate_incremental_folder, record_backup_statistics,
 )
 
@@ -116,7 +124,6 @@ if __name__ == "__main__":
         logger.error("Differential backup failed — skipping snapshot bookkeeping.")
         sys.exit(1)
 
-    _prune_empty_dirs(new_snapshot_path)
     mark_snapshot_complete(new_snapshot_path)
     ensure_backup_folder_icon()
 
