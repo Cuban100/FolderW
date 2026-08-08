@@ -110,6 +110,22 @@
                                 <input type="text" id="database" name="database" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ database or '' }}">
                                 <div class="text-sm text-[var(--text-muted)] mt-1">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
                             </div>
+                            <div>
+                                <label class="block text-[var(--text)] font-medium mb-2">Backup Method:</label>
+                                <div class="flex space-x-4">
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
+                                        <span class="ml-2 text-[var(--text)]">Incremental</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'incremental' %}checked{% endif %}>
+                                        <span class="ml-2 text-[var(--text)]">Differential</span>
+                                    </label>
+                                </div>
+                                <div class="text-sm text-[var(--text-muted)] mt-1">
+                                    Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together. Switching between the two starts a new full backup, so snapshots never end up mixing both shapes in the same Snapshots folder.
+                                </div>
+                            </div>
                         </div>
 
                         <div class="rounded-lg border-2 border-[var(--border)] p-5 space-y-6">
@@ -151,23 +167,6 @@
                                             <span class="ml-2 text-[var(--text)]">Weekly</span>
                                         </label>
                                     </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="block text-[var(--text)] font-medium mb-2">Backup Method:</label>
-                                <div class="flex space-x-4">
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Incremental</span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'incremental' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Differential</span>
-                                    </label>
-                                </div>
-                                <div class="text-sm text-[var(--text-muted)] mt-1">
-                                    Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together.
                                 </div>
                             </div>
 

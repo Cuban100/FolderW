@@ -839,11 +839,18 @@ async def submit_settings(
 
     # Captured before save_env_values overwrites .env, so we can tell
     # afterward whether the backup identity itself changed (as opposed to,
-    # say, just the snapshot retention count or interval).
+    # say, just the snapshot retention count or interval). BACKUP_METHOD
+    # is included too: switching between incremental (--link-dest, each
+    # snapshot a complete tree) and differential (--compare-dest, each
+    # snapshot a delta against the original) mid-stream would otherwise
+    # leave a mix of both snapshot shapes under the same Snapshots
+    # folder, which cleanup_old_snapshots()/list_backups() don't
+    # distinguish between.
     old_identity = (
         load_env_value('SRC_DIR'),
         load_env_value('BASE_DIR'),
         load_env_value('FULL_NAME'),
+        load_env_value('BACKUP_METHOD'),
     )
 
     def _settings_error(error, max_snapshots_value):
@@ -949,7 +956,7 @@ async def submit_settings(
     if new_values["DATABASE"]:
         create_all_tables(new_values["DATABASE"])
 
-        new_identity = (new_values["SRC_DIR"], new_values["BASE_DIR"], new_values["FULL_NAME"])
+        new_identity = (new_values["SRC_DIR"], new_values["BASE_DIR"], new_values["FULL_NAME"], new_values["BACKUP_METHOD"])
         if new_identity != old_identity:
             # Pointed FolderW at a different backup (source, destination, or
             # container folder) — old session/change/statistics history

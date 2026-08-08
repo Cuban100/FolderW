@@ -282,7 +282,12 @@ def save_paths():
     # Captured before anything below overwrites .env, so identity change
     # can be detected the same way server.py's web Settings page already
     # does -- see the reset_backup_history() call further down.
-    old_identity = (os.getenv('SRC_DIR'), os.getenv('BASE_DIR'), os.getenv('FULL_NAME'))
+    # BACKUP_METHOD is included too: switching between incremental
+    # (--link-dest, each snapshot a complete tree) and differential
+    # (--compare-dest, each snapshot a delta against the original)
+    # mid-stream would otherwise leave a mix of both snapshot shapes
+    # under the same Snapshots folder.
+    old_identity = (os.getenv('SRC_DIR'), os.getenv('BASE_DIR'), os.getenv('FULL_NAME'), os.getenv('BACKUP_METHOD'))
 
     paths = {
         'SRC_DIR': src_dir_entry.get(),
@@ -371,7 +376,7 @@ def save_paths():
 
     create_all_tables(paths['DATABASE'])
 
-    new_identity = (paths['SRC_DIR'], paths['BASE_DIR'], paths['FULL_NAME'])
+    new_identity = (paths['SRC_DIR'], paths['BASE_DIR'], paths['FULL_NAME'], paths['BACKUP_METHOD'])
     if new_identity != old_identity:
         # Pointed FolderW at a different backup (source, destination, or
         # container folder) -- old session/change/statistics history
