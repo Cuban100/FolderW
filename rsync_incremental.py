@@ -200,14 +200,28 @@ def rsync(result_holder=None):
                 if "%" in line:
                     yield line.strip()  # Stream progress to the frontend
             process.wait()
-            if process.returncode != 0:
+            # rsync exit codes 23 ("partial transfer due to error", e.g. one
+            # file hit a permission problem) and 24 ("partial transfer due
+            # to vanished source files") are routine on a large, actively-
+            # used source tree during a long run -- not full failures. Found
+            # live: a ~1.5 hour run that transferred cleanly the whole way
+            # through, then hit code 24 because a handful of transient files
+            # (temp files, browser caches) vanished while rsync was still
+            # finishing its scan near the very end. Treating that as a hard
+            # failure (as this used to) skipped session/stats recording and
+            # the completion notification entirely for a backup that, in
+            # practice, transferred everything it could reach.
+            if process.returncode in (0, 23, 24):
+                if process.returncode != 0:
+                    logger.warning(f"Rsync completed with code {process.returncode} (partial transfer -- some files were skipped or vanished mid-run, not treated as a failure).")
+                else:
+                    logger.success(f"Rsync command executed successfully.")
+                if result_holder is not None:
+                    result_holder['success'] = True
+            else:
                 logger.error(f"Rsync command failed with return code {process.returncode}")
                 if result_holder is not None:
                     result_holder['success'] = False
-            else:
-                logger.success(f"Rsync command executed successfully.")
-                if result_holder is not None:
-                    result_holder['success'] = True
     except Exception as e:
         logger.error(f"Error executing rsync command: {e}")
         if result_holder is not None:
