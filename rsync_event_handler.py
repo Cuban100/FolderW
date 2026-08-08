@@ -16,6 +16,18 @@ import signal
 # into a single backup once things go quiet, instead of firing repeatedly.
 BACKUP_DELAY_SECONDS = 300
 
+# Ceiling on how long a backup can be postponed by continuous activity.
+# The resetting debounce above has no upper bound on its own -- on a live
+# desktop, *something* inside the source tree (Docker container logs,
+# browser cookie/webstorage journals, app logs) is essentially always
+# being written, so a pure "wait for quiet" timer can end up never firing
+# at all. Found live: watched a real run go 45+ minutes without a single
+# incremental backup despite constant activity, because the 300s quiet
+# window was never actually reached. This forces one through regardless
+# of ongoing changes once too much time has passed since the first
+# unflushed one.
+MAX_BACKUP_DELAY_SECONDS = 900
+
 rsync_txt = load_other_variables('rsync_txt')
 logfile = load_other_variables('logfile')
 src_dir = load_env_value('SRC_DIR')
@@ -68,21 +80,43 @@ def run_weekly_backup():
     run_backup_script()
 
 class BackupHandler(FileSystemEventHandler):
-    def __init__(self, delay_seconds=BACKUP_DELAY_SECONDS):
+    def __init__(self, delay_seconds=BACKUP_DELAY_SECONDS, max_delay_seconds=MAX_BACKUP_DELAY_SECONDS):
         self.delay_seconds = delay_seconds
+        self.max_delay_seconds = max_delay_seconds
         self.timer = None
+        self.first_pending_change = None
         self.lock = threading.Lock()
 
     def _schedule_backup(self):
+        run_now = False
         with self.lock:
-            if self.timer is not None:
-                self.timer.cancel()
-            self.timer = threading.Timer(self.delay_seconds, self._run_backup)
-            self.timer.daemon = True
-            self.timer.start()
+            now = time.time()
+            if self.first_pending_change is None:
+                self.first_pending_change = now
+            if now - self.first_pending_change >= self.max_delay_seconds:
+                # Continuous activity has kept resetting the quiet-period
+                # timer past the ceiling -- run now instead of waiting for
+                # a lull that may never come.
+                if self.timer is not None:
+                    self.timer.cancel()
+                self.first_pending_change = None
+                run_now = True
+            else:
+                if self.timer is not None:
+                    self.timer.cancel()
+                self.timer = threading.Timer(self.delay_seconds, self._run_backup)
+                self.timer.daemon = True
+                self.timer.start()
+        # Run outside the lock: this blocks for the whole backup (a real
+        # rsync run), and holding the lock through that would stall every
+        # other file-event thread trying to record a change in the meantime.
+        if run_now:
+            self._run_backup()
 
     def _run_backup(self):
-        logger.info(f"Running backup after {self.delay_seconds}s of inactivity")
+        with self.lock:
+            self.first_pending_change = None
+        logger.info(f"Running backup after {self.delay_seconds}s of inactivity (or {self.max_delay_seconds}s ceiling reached)")
         run_backup_script()
 
     def on_modified(self, event):
