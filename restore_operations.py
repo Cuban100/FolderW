@@ -257,15 +257,51 @@ def get_backup_path(backup_id):
     return path_real
 
 
-def restore_backup(backup_id):
-    """Copy an entire backup/snapshot -- an exact mirror of it, top-level
-    entry by top-level entry -- into a new timestamped folder under
-    BASE_DIR/Restored/. Never writes into SRC_DIR, so a bad pick can't
-    clobber current data. No in-app file browsing/selective restore: a
-    snapshot is now the user's whole source tree, not a small delta, so
-    picking individual files is what their own OS file manager is for --
-    it can already open the snapshot's real path on the destination drive
-    directly (see the path shown on the Restore page).
+def list_files_in_backup(backup_path, search=None, limit=2000):
+    """Recursively list files in a single backup/snapshot, capped at
+    `limit` so a huge full-mirror snapshot (hundreds of thousands of
+    files) can't render an unbounded page.
+
+    Without a search term, this is just the alphabetically-first `limit`
+    files -- fine for a quick look, but on a snapshot this size it's a
+    small, fairly arbitrary slice. With a search term, matches are found
+    by walking the *entire* tree (not stopping at the first `limit` hits
+    encountered), so a search doesn't silently miss something that
+    happens to sort later than the first 2000 matches -- this costs more
+    time than the unfiltered case (no early exit), but that's the point.
+    """
+    files = []
+    truncated = False
+    search_lower = search.lower() if search else None
+    for dirpath, _, filenames in os.walk(backup_path):
+        for f in sorted(filenames):
+            if f in (COMPLETION_MARKER, STATS_CACHE_FILE) and dirpath == backup_path:
+                continue
+            fp = os.path.join(dirpath, f)
+            rel = os.path.relpath(fp, backup_path)
+            if search_lower and search_lower not in rel.lower():
+                continue
+            if len(files) >= limit:
+                truncated = True
+                if not search_lower:
+                    break
+                continue
+            try:
+                size = os.path.getsize(fp)
+            except OSError:
+                size = 0
+            files.append({"path": rel, "size": human_readable_size(size)})
+        if truncated and not search_lower:
+            break
+    files.sort(key=lambda f: f["path"])
+    return files, truncated
+
+
+def restore_backup(backup_id, selected_paths=None):
+    """Copy an entire backup/snapshot -- an exact mirror of it -- or just
+    the given relative file paths within it, into a new timestamped
+    folder under BASE_DIR/Restored/. Never writes into SRC_DIR, so a bad
+    pick can't clobber current data.
     """
     backup_path = get_backup_path(backup_id)
     if backup_path is None:
@@ -277,15 +313,32 @@ def restore_backup(backup_id):
     dest_root = os.path.join(base_dir, "Restored", f"{timestamp}_{label}")
     os.makedirs(dest_root, exist_ok=True)
 
-    for entry in os.listdir(backup_path):
-        if entry in (COMPLETION_MARKER, STATS_CACHE_FILE):
-            continue
-        src = os.path.join(backup_path, entry)
-        dst = os.path.join(dest_root, entry)
-        if os.path.isdir(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True)
-        else:
-            shutil.copy2(src, dst)
+    backup_real = os.path.realpath(backup_path)
+
+    if not selected_paths:
+        for entry in os.listdir(backup_path):
+            if entry in (COMPLETION_MARKER, STATS_CACHE_FILE):
+                continue
+            src = os.path.join(backup_path, entry)
+            dst = os.path.join(dest_root, entry)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+            else:
+                shutil.copy2(src, dst)
+    else:
+        for rel_path in selected_paths:
+            src = os.path.realpath(os.path.join(backup_path, rel_path))
+            if src != backup_real and not src.startswith(backup_real + os.sep):
+                logger.warning(f"Rejected restore of path outside backup: {rel_path}")
+                continue
+            if not os.path.exists(src):
+                continue
+            dst = os.path.join(dest_root, rel_path)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+            else:
+                shutil.copy2(src, dst)
 
     file_count, _ = summarize_folder(dest_root)
     logger.success(f"Restored {file_count} file(s) from {backup_id} to {dest_root}")

@@ -10,7 +10,7 @@ import psutil
 import apprise
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup
-from restore_operations import list_backups, restore_backup
+from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
@@ -658,10 +658,30 @@ async def restore_page(request: Request):
         "backups": list_backups(),
     })
 
+@app.get("/restore/browse/{backup_id:path}", response_class=HTMLResponse)
+async def restore_browse(request: Request, backup_id: str, search: str = ""):
+    backup_path = get_backup_path(backup_id)
+    if backup_path is None:
+        return templates.TemplateResponse("restore.html", {
+            "request": request,
+            "logo": logo,
+            "backups": list_backups(),
+            "error": f"Backup not found: {backup_id}",
+        })
+    files, truncated = list_files_in_backup(backup_path, search=search or None)
+    return templates.TemplateResponse("restore_browse.html", {
+        "request": request,
+        "logo": logo,
+        "backup_id": backup_id,
+        "files": files,
+        "truncated": truncated,
+        "search": search,
+    })
+
 @app.post("/restore/execute", response_class=HTMLResponse)
-async def restore_execute(request: Request, backup_id: str = Form(...)):
+async def restore_execute(request: Request, backup_id: str = Form(...), selected_paths: list[str] = Form(default=[])):
     try:
-        dest_root, file_count = restore_backup(backup_id)
+        dest_root, file_count = restore_backup(backup_id, selected_paths or None)
         return templates.TemplateResponse("restore.html", {
             "request": request,
             "logo": logo,
