@@ -329,12 +329,23 @@ def is_backup_running():
     # frontend poll took to mean a just-started backup had already
     # finished, stopping the poll and showing "Backup complete" right as
     # the real backup was about to start.
-    if get_database_value('BACKUP_PREPARING', 'settings') == '1':
-        return True
+    #
+    # But the flag alone isn't trustworthy on its own: it's only cleared by
+    # two "normal" exit paths (prerequisites failing, or rsync_incremental.py
+    # starting), so an abrupt kill in between (a crash, uninstall.sh, `kill
+    # -9`) orphans it at '1' forever — found live: with nothing at all
+    # running, the dashboard still showed a phantom "backup in progress"
+    # because a stale flag from an earlier killed run was never cleared.
+    # Cross-checking that main_backup.py is actually still alive catches
+    # that: a stale flag with no matching process is ignored instead of
+    # trusted blindly.
+    preparing = get_database_value('BACKUP_PREPARING', 'settings') == '1'
     for proc in psutil.process_iter(['cmdline']):
         try:
             cmdline = proc.info['cmdline'] or []
             if any('rsync_incremental.py' in part for part in cmdline):
+                return True
+            if preparing and any('main_backup.py' in part for part in cmdline):
                 return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
