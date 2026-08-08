@@ -394,6 +394,13 @@ async def backup_status_endpoint():
 
 @app.post("/stop-backup")
 async def stop_backup():
+    # A stopped run isn't a completed one — the Settings/Validation/
+    # Evaluation dots are driven by these persisted flags (see load_
+    # persisted_checks in the / route), and previously nothing cleared them
+    # on stop, so they stayed green from whatever the last successful run
+    # left behind even though nothing is currently confirmed or running.
+    clear_persisted_checks()
+    set_database_value('CHECK_STEP', '')
     if _backup_service_unit_exists():
         try:
             subprocess.run(["systemctl", "--user", "stop", BACKUP_SERVICE_NAME], check=True)
