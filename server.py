@@ -388,6 +388,7 @@ async def backup_status_endpoint():
         "src_size": get_database_value('LAST_SRC_SIZE', 'settings') or None,
         "rsync_tail": rsync_tail,
         "watchdog_active": is_watchdog_active(),
+        "check_step": get_database_value('CHECK_STEP', 'settings') or None,
     })
 
 @app.post("/stop-backup")
@@ -426,6 +427,13 @@ async def run_all_steps(request: Request):
     database = load_env_value('DATABASE')
     monitor = load_env_value('MONITOR')
     backup_interval = load_env_value('BACKUP_INTERVAL')
+    # CHECK_STEP: lets the frontend show which of settings/validation/
+    # evaluation is currently being checked while this request is still in
+    # flight (polled via /backup-status) — this whole function runs
+    # synchronously before any response goes back, so without a way to
+    # observe progress mid-request the button click just looks frozen for
+    # however long evaluation's real du scan takes.
+    set_database_value('CHECK_STEP', 'settings')
     settings_sent, settings, missing_vars = check_env_variables()
     if not settings_sent:
         return templates.TemplateResponse("index.html", {
@@ -437,6 +445,7 @@ async def run_all_steps(request: Request):
             **get_backup_stats_context(database),
         })
 
+    set_database_value('CHECK_STEP', 'validation')
     validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
     if not validation_status:
         return templates.TemplateResponse("index.html", {
@@ -450,6 +459,7 @@ async def run_all_steps(request: Request):
             **get_backup_stats_context(database),
         })
 
+    set_database_value('CHECK_STEP', 'evaluation')
     src_size, dest_space, can_backup, evaluation_message = evaluation_of_resources()
     persist_check_results(
         settings_sent=settings_sent,
@@ -474,7 +484,8 @@ async def run_all_steps(request: Request):
         })
 
     success_message = "All settings, validations, and evaluations are correct. READY"
-    
+    set_database_value('CHECK_STEP', 'starting')
+
     try:
         if _backup_service_unit_exists():
             # restart (not start) so re-clicking while a backup/watchdog is

@@ -644,14 +644,64 @@
     </div>
 
     <script>
-        function startBackup() {
+        async function startBackup() {
             const btn = document.getElementById('start-backup-btn');
             if (btn) {
                 btn.disabled = true;
                 btn.textContent = 'Starting Backup… (this can take up to a minute)';
                 btn.style.cursor = 'wait';
             }
-            window.location.href = '/run-all-steps';
+
+            // /run-all-steps runs settings/validation/evaluation checks
+            // synchronously before it returns, so fetch() it in the
+            // background and poll /backup-status's check_step in parallel
+            // to light up each dot as that step is reached — the request
+            // itself doesn't report progress, only the DB row it writes to
+            // along the way does. Order matters: 'starting' means all three
+            // checks passed, so it counts as being past every dot.
+            const order = ['settings', 'validation', 'evaluation', 'starting'];
+            const dots = {
+                settings: document.getElementById('dot-settings'),
+                validation: document.getElementById('dot-validation'),
+                evaluation: document.getElementById('dot-evaluation'),
+            };
+            ['settings', 'validation', 'evaluation'].forEach(step => {
+                if (dots[step]) dots[step].classList.remove('green');
+            });
+            const poll = setInterval(async () => {
+                try {
+                    const response = await fetch('/backup-status');
+                    const data = await response.json();
+                    const currentIndex = order.indexOf(data.check_step);
+                    ['settings', 'validation', 'evaluation'].forEach((step, i) => {
+                        if (dots[step] && currentIndex > i) {
+                            dots[step].classList.add('green');
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error polling check step:', error);
+                }
+            }, 500);
+
+            try {
+                const response = await fetch('/run-all-steps');
+                const text = await response.text();
+                clearInterval(poll);
+                // document.write(), not a navigation: keeps the address bar
+                // on / rather than /run-all-steps, so a later manual page
+                // refresh can't re-hit that side-effecting route again.
+                document.open();
+                document.write(text);
+                document.close();
+            } catch (error) {
+                clearInterval(poll);
+                console.error('Error starting backup:', error);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Start Full Backup';
+                    btn.style.cursor = '';
+                }
+            }
         }
         async function stopMonitoring(event) {
             if (!confirm('Stop monitoring and any backup currently in progress?')) {
