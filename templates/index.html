@@ -479,15 +479,6 @@
                         <div class="progress-bar"></div>
                     </div>
                     <div class="progress-bar-text" id="backup-progress-text">Backup running&hellip;</div>
-                    <div class="rsync-tail-container" id="rsync-tail-container">
-                        <div class="rsync-tail-titlebar">
-                            <span class="rsync-tail-dot" style="background:#ff5f56;"></span>
-                            <span class="rsync-tail-dot" style="background:#ffbd2e;"></span>
-                            <span class="rsync-tail-dot" style="background:#27c93f;"></span>
-                            <span class="rsync-tail-title">rsync activity</span>
-                        </div>
-                        <pre class="rsync-tail" id="rsync-tail"></pre>
-                    </div>
                     {% endif %}
             {% set ready_for_manual_snapshot = settings_sent == True and validation_status == True and evaluation_status == True and has_completed_backup %}
             {% set backup_active = backup_status or backup_in_progress %}
@@ -639,6 +630,17 @@
                 {% endif %}
             </div>
         </div>
+        {% if backup_status or backup_in_progress %}
+        <div class="rsync-tail-container" id="rsync-tail-container">
+            <div class="rsync-tail-titlebar">
+                <span class="rsync-tail-dot" style="background:#ff5f56;"></span>
+                <span class="rsync-tail-dot" style="background:#ffbd2e;"></span>
+                <span class="rsync-tail-dot" style="background:#27c93f;"></span>
+                <span class="rsync-tail-title">rsync activity</span>
+            </div>
+            <pre class="rsync-tail" id="rsync-tail"></pre>
+        </div>
+        {% endif %}
 
     </div>
     </div>
