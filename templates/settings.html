@@ -84,112 +84,126 @@
                     {% endif %}
                     
                     <form method="post" action="/submit/" class="space-y-6">
-                        <div class="grid grid-cols-3 gap-4 items-center">
-                            <label for="log_dir" class="text-[var(--text)] font-medium">Log Directory:</label>
-                            <input type="text" id="log_dir" name="log_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ log_dir or '' }}">
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Specify the directory where the rsync log file, typically named 'rsync.log', will be stored.</div>
-                        </div>
-                        <div class="grid grid-cols-3 gap-4 items-center">
-                            <label for="src_dir" class="text-[var(--text)] font-medium">Source Directory:</label>
-                            <input type="text" id="src_dir" name="src_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ src_dir or '' }}">
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Specify the path of the folder or device you want to back up. Example: /home/user/Documents</div>
-                        </div>
-                        <div class="grid grid-cols-3 gap-4 items-center">
-                            <label for="base_dir" class="text-[var(--text)] font-medium">Base Backup Directory:</label>
-                            <input type="text" id="base_dir" name="base_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ base_dir or '' }}">
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
-                        </div>
-                        <div class="grid grid-cols-3 gap-4 items-center">
-                            <label for="full_name" class="text-[var(--text)] font-medium">Full Backup Folder Name:</label>
-                            <input type="text" id="full_name" name="full_name" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ full_name or '' }}">
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Name of the folder created inside the Base Backup Directory to hold "Full Backup" and "Snapshots". Example: Documents</div>
-                        </div>
-                        <div class="grid grid-cols-3 gap-4 items-center">
-                            <label for="database" class="text-[var(--text)] font-medium">Database File:</label>
-                            <input type="text" id="database" name="database" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ database or '' }}">
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
-                        </div>
-                        <!-- Monitor Source Folder -->
-                        <div class="flex items-center space-x-4">
-                            <input type="checkbox" id="monitor" name="monitor" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if monitor_checked %}checked{% endif %}>
-                            <label for="monitor" class="text-[var(--text)]">Monitor Source Folder</label>
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Enable this option to monitor changes in the source directory continuously.</div>
-                        </div>
-                        
-                        <!-- Schedule Fields -->
-                        <div id="schedule-fields" style="display: {% if interval %}block{% else %}none{% endif %};">
+
+                        <div class="rounded-lg border-2 border-[var(--error-text)] p-5 space-y-6">
                             <div>
-                                <label for="interval" class="block text-[var(--text)] font-medium mb-2">Backup Interval:</label>
-                                <div class="flex space-x-4">
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" id="interval" name="interval" value="hourly" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'hourly' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Hourly</span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" id="interval" name="interval" value="half-day" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'half-day' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Half-Day</span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" id="interval" name="interval" value="daily" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'daily' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Daily</span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" id="interval" name="interval" value="weekly" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'weekly' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Weekly</span>
-                                    </label>
+                                <h2 class="text-lg font-semibold text-[var(--error-text)]">Changing these starts a new full backup</h2>
+                                <p class="text-sm text-[var(--text-muted)] mt-1">These identify which backup this is. Changing any of them means FolderW is now pointed at a different backup, so the old one's history is cleared and a fresh full backup runs from scratch.</p>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="src_dir" class="text-[var(--text)] font-medium">Source Directory:</label>
+                                <input type="text" id="src_dir" name="src_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ src_dir or '' }}">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Specify the path of the folder or device you want to back up. Example: /home/user/Documents</div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="base_dir" class="text-[var(--text)] font-medium">Base Backup Directory:</label>
+                                <input type="text" id="base_dir" name="base_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ base_dir or '' }}">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="full_name" class="text-[var(--text)] font-medium">Full Backup Folder Name:</label>
+                                <input type="text" id="full_name" name="full_name" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ full_name or '' }}">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Name of the folder created inside the Base Backup Directory to hold "Full Backup" and "Snapshots". Example: Documents</div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="database" class="text-[var(--text)] font-medium">Database File:</label>
+                                <input type="text" id="database" name="database" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ database or '' }}">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
+                            </div>
+                        </div>
+
+                        <div class="rounded-lg border-2 border-[var(--border)] p-5 space-y-6">
+                            <div>
+                                <h2 class="text-lg font-semibold text-[var(--text)]">Everything else</h2>
+                                <p class="text-sm text-[var(--text-muted)] mt-1">These don't identify the backup itself, so changing them never resets history or starts a new full backup.</p>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="log_dir" class="text-[var(--text)] font-medium">Log Directory:</label>
+                                <input type="text" id="log_dir" name="log_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ log_dir or '' }}">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Specify the directory where the rsync log file, typically named 'rsync.log', will be stored.</div>
+                            </div>
+                            <!-- Monitor Source Folder -->
+                            <div class="flex items-center space-x-4">
+                                <input type="checkbox" id="monitor" name="monitor" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if monitor_checked %}checked{% endif %}>
+                                <label for="monitor" class="text-[var(--text)]">Monitor Source Folder</label>
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Enable this option to monitor changes in the source directory continuously.</div>
+                            </div>
+
+                            <!-- Schedule Fields -->
+                            <div id="schedule-fields" style="display: {% if interval %}block{% else %}none{% endif %};">
+                                <div>
+                                    <label for="interval" class="block text-[var(--text)] font-medium mb-2">Backup Interval:</label>
+                                    <div class="flex space-x-4">
+                                        <label class="inline-flex items-center">
+                                            <input type="radio" id="interval" name="interval" value="hourly" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'hourly' %}checked{% endif %}>
+                                            <span class="ml-2 text-[var(--text)]">Hourly</span>
+                                        </label>
+                                        <label class="inline-flex items-center">
+                                            <input type="radio" id="interval" name="interval" value="half-day" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'half-day' %}checked{% endif %}>
+                                            <span class="ml-2 text-[var(--text)]">Half-Day</span>
+                                        </label>
+                                        <label class="inline-flex items-center">
+                                            <input type="radio" id="interval" name="interval" value="daily" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'daily' %}checked{% endif %}>
+                                            <span class="ml-2 text-[var(--text)]">Daily</span>
+                                        </label>
+                                        <label class="inline-flex items-center">
+                                            <input type="radio" id="interval" name="interval" value="weekly" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'weekly' %}checked{% endif %}>
+                                            <span class="ml-2 text-[var(--text)]">Weekly</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-[var(--text)] font-medium mb-2">Backup Method:</label>
-                            <div class="flex space-x-4">
-                                <label class="inline-flex items-center">
-                                    <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
-                                    <span class="ml-2 text-[var(--text)]">Incremental</span>
-                                </label>
-                                <label class="inline-flex items-center">
-                                    <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'incremental' %}checked{% endif %}>
-                                    <span class="ml-2 text-[var(--text)]">Differential</span>
-                                </label>
-                            </div>
-                            <div class="text-sm text-[var(--text-muted)] mt-1">
-                                Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together.
-                            </div>
-                        </div>
 
-                        <div class="grid grid-cols-3 gap-4 items-center">
-                            <label for="max_snapshots" class="text-[var(--text)] font-medium">Snapshots to Keep:</label>
-                            <input type="number" min="1" step="1" id="max_snapshots" name="max_snapshots" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ max_snapshots or '' }}" placeholder="Leave blank to keep all">
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Oldest incremental snapshots beyond this count are deleted automatically after each backup.</div>
-                        </div>
-
-                        <div class="grid grid-cols-3 gap-4 items-center">
-                            <label for="new_password" class="text-[var(--text)] font-medium">Dashboard Password:</label>
-                            <input type="password" id="new_password" name="new_password" autocomplete="new-password" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" placeholder="Leave blank to keep the current password">
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Set or change the password required to log in to this dashboard. Leave blank to keep it unchanged.</div>
-                        </div>
-                        <div class="flex items-center space-x-4">
-                            <input type="checkbox" id="require_login" name="require_login" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if login_enabled %}checked{% endif %}>
-                            <label for="require_login" class="text-[var(--text)]">Require Login</label>
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Uncheck to disable the login page entirely.</div>
-                        </div>
-
-                        <div class="grid grid-cols-3 gap-4 items-center">
-                            <label for="notify_urls" class="text-[var(--text)] font-medium">Notification URL(s):</label>
-                            <input type="text" id="notify_urls" name="notify_urls" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ notify_urls or '' }}" placeholder="e.g. pover://user@token, ntfy://topic">
-                            <div class="text-sm text-[var(--text-muted)] mt-1">
-                                Comma-separated <a href="https://github.com/caronc/apprise#supported-notifications" target="_blank" rel="noopener" class="underline">Apprise URLs</a> (Pushover, ntfy, Pushbullet, email, Discord, and 100+ others). Notified on backup failure and full backup completion. Leave blank if you only want desktop notifications below.
+                            <div>
+                                <label class="block text-[var(--text)] font-medium mb-2">Backup Method:</label>
+                                <div class="flex space-x-4">
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
+                                        <span class="ml-2 text-[var(--text)]">Incremental</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'incremental' %}checked{% endif %}>
+                                        <span class="ml-2 text-[var(--text)]">Differential</span>
+                                    </label>
+                                </div>
+                                <div class="text-sm text-[var(--text-muted)] mt-1">
+                                    Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together.
+                                </div>
                             </div>
-                        </div>
-                        <div class="flex items-center space-x-4">
-                            <input type="checkbox" id="notify_send_always" name="notify_send_always" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if notify_send_always %}checked{% endif %}>
-                            <label for="notify_send_always" class="text-[var(--text)]">Always send a desktop notification</label>
-                            <div class="text-sm text-[var(--text-muted)] mt-1">Uses <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">notify-send</code> to show a notification on this machine's own desktop, independent of (or in addition to) the URL(s) above.</div>
-                        </div>
-                        <div class="flex items-center space-x-4">
-                            <button type="button" onclick="testNotification()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">Send Test Notification</button>
-                            <span id="test-notify-result" class="text-sm text-[var(--text-muted)]"></span>
+
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="max_snapshots" class="text-[var(--text)] font-medium">Snapshots to Keep:</label>
+                                <input type="number" min="1" step="1" id="max_snapshots" name="max_snapshots" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ max_snapshots or '' }}" placeholder="Leave blank to keep all">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Oldest incremental snapshots beyond this count are deleted automatically after each backup.</div>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="new_password" class="text-[var(--text)] font-medium">Dashboard Password:</label>
+                                <input type="password" id="new_password" name="new_password" autocomplete="new-password" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" placeholder="Leave blank to keep the current password">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Set or change the password required to log in to this dashboard. Leave blank to keep it unchanged.</div>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <input type="checkbox" id="require_login" name="require_login" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if login_enabled %}checked{% endif %}>
+                                <label for="require_login" class="text-[var(--text)]">Require Login</label>
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Uncheck to disable the login page entirely.</div>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="notify_urls" class="text-[var(--text)] font-medium">Notification URL(s):</label>
+                                <input type="text" id="notify_urls" name="notify_urls" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ notify_urls or '' }}" placeholder="e.g. pover://user@token, ntfy://topic">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">
+                                    Comma-separated <a href="https://github.com/caronc/apprise#supported-notifications" target="_blank" rel="noopener" class="underline">Apprise URLs</a> (Pushover, ntfy, Pushbullet, email, Discord, and 100+ others). Notified on backup failure and full backup completion. Leave blank if you only want desktop notifications below.
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <input type="checkbox" id="notify_send_always" name="notify_send_always" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if notify_send_always %}checked{% endif %}>
+                                <label for="notify_send_always" class="text-[var(--text)]">Always send a desktop notification</label>
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Uses <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">notify-send</code> to show a notification on this machine's own desktop, independent of (or in addition to) the URL(s) above.</div>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <button type="button" onclick="testNotification()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">Send Test Notification</button>
+                                <span id="test-notify-result" class="text-sm text-[var(--text-muted)]"></span>
+                            </div>
                         </div>
 
                         <div class="pt-6">
