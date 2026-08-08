@@ -9,7 +9,7 @@ import webbrowser
 import psutil
 import apprise
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
@@ -896,9 +896,26 @@ def list_previous_databases():
     return previous
 
 
+HISTORY_PAGE_SIZE = 25
+
 @app.get("/backup-history", response_class=HTMLResponse)
-async def backup_history(request: Request):
+async def backup_history(request: Request, page: int = 1):
+    total = count_backup_runs()
+    total_pages = max(1, (total + HISTORY_PAGE_SIZE - 1) // HISTORY_PAGE_SIZE)
+    page = min(max(1, page), total_pages)
+    runs = list_backup_runs(HISTORY_PAGE_SIZE, (page - 1) * HISTORY_PAGE_SIZE)
     return templates.TemplateResponse("backup-history.html", {
+        "request": request,
+        "logo": logo,
+        "runs": runs,
+        "page": page,
+        "total_pages": total_pages,
+    })
+
+
+@app.get("/manage-databases", response_class=HTMLResponse)
+async def manage_databases(request: Request):
+    return templates.TemplateResponse("manage-databases.html", {
         "request": request,
         "logo": logo,
         "previous_databases": list_previous_databases()
@@ -926,7 +943,7 @@ async def delete_old_database(request: Request, database_to_delete: str = Form(.
             error = f"Failed to delete database: {e}"
             logger.error(error)
 
-    return templates.TemplateResponse("backup-history.html", {
+    return templates.TemplateResponse("manage-databases.html", {
         "request": request,
         "logo": logo,
         "previous_databases": list_previous_databases(),

@@ -333,6 +333,51 @@ def get_files_changed_by_label(label):
         logger.error(f"Error looking up files_changed for {label}: {e}")
         return None
 
+def count_backup_runs():
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM backup_runs')
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+    except sqlite3.Error as e:
+        logger.error(f"Error counting backup runs: {e}")
+        return 0
+
+def list_backup_runs(limit, offset):
+    """Paginated, newest-first log of every backup run recorded (see
+    record_backup_run) -- unlike the Restore page's snapshot list, this
+    grows forever (nothing prunes backup_runs the way cleanup_old_
+    snapshots prunes the filesystem), so it's paginated at the SQL level
+    (LIMIT/OFFSET) rather than fetching everything and slicing in Python.
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT timestamp, session, backup_type, label, files_changed, status
+            FROM backup_runs ORDER BY id DESC LIMIT ? OFFSET ?
+        ''', (limit, offset))
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                "timestamp": r[0],
+                "session": r[1],
+                "backup_type": r[2],
+                "label": r[3],
+                "files_changed": r[4],
+                "status": r[5],
+            }
+            for r in rows
+        ]
+    except sqlite3.Error as e:
+        logger.error(f"Error listing backup runs: {e}")
+        return []
+
 def save_settings_to_db(log_directory, source_directory, base_backup_directory, database_file, monitor_source_folder, backup_interval):
     try:
         connection = sqlite3.connect(database_file)
