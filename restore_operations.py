@@ -224,9 +224,11 @@ def list_backups():
                     "note": get_snapshot_note(snapshot_path),
                 })
 
+    # mtime only ever existed to sort by -- label already spells out the
+    # same date/time (e.g. "August 08, 2:30-AM"), so there's no separate
+    # display value to keep around after sorting.
     backups.sort(key=lambda b: b["mtime"], reverse=True)
     for b in backups:
-        b["date"] = datetime.fromtimestamp(b["mtime"]).strftime('%Y-%m-%d %H:%M')
         del b["mtime"]
     return backups
 
