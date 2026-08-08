@@ -307,6 +307,14 @@ def get_backup_stats_context(database):
         "dest_used": f"{used:.2f} GB" if used is not None else None,
         "last_session": get_last_session_number(database),
         "last_session_files": len(list_items_by_session(database)),
+        # Snapshots physically on disk right now (Restore page's own count,
+        # "full" excluded) -- deliberately NOT last_session/count_backup_
+        # runs(), both of which only ever grow and don't reflect retention
+        # (MAX_SNAPSHOTS) deleting old ones. Confirmed live this session:
+        # showing an all-time run count next to a disk-truth Restore
+        # listing reads as a bug ("6 backups shown, only 3 exist") even
+        # though both numbers are individually correct for what they mean.
+        "snapshot_count": len([b for b in list_backups() if b["id"] != "full"]),
         "cpu_percent": f"{cpu_percent:.1f}%",
         "cpu_cores": len(per_core),
         "cpu_busiest_core": f"{max(per_core):.1f}%" if per_core else None,

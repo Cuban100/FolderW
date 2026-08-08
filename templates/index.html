@@ -587,6 +587,10 @@
                         <div class="stat-label">Files Changed (Last Session)</div>
                         <div class="stat-value">{{ last_session_files if last_session_files is defined else 0 }}</div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Snapshots on Disk</div>
+                        <div class="stat-value">{{ snapshot_count if snapshot_count is defined else 0 }}</div>
+                    </div>
                 </div>
             </div>
 
