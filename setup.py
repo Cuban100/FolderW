@@ -367,14 +367,27 @@ def save_paths():
      
 def show_terminal():
     log_text = tk.Text(root, height=10, width=50, bg='#2d2d2d', font=('Courier', 10))
-    log_text.tag_configure("neon_green", foreground="#39FF14") 
+    log_text.tag_configure("neon_green", foreground="#39FF14")
     log_text.config(state=tk.NORMAL)
     sys.stdout = Logger(log_text)
-    log_text.place(x=180, y=480, width=400, height=150)
+    # Gridded like every other widget in this window, not .place()'d at a
+    # hardcoded pixel position -- x=180,y=480 was tuned for a shorter
+    # form and started overlapping the Backup Method row (and covering
+    # Snapshots to Keep/Dashboard Password entirely) once rows were added
+    # above it (the logo banner, Backup Method itself). Gridding it right
+    # after the last existing row means it always lands below the form's
+    # actual current content, however tall that turns out to be.
+    log_text.grid(row=len(labels) + 10, column=0, columnspan=3, padx=10, pady=10)
     log_text.config(state=tk.NORMAL)
-    new_height = 660
-    new_width = 700
-    root.geometry(f"{new_width}x{new_height}")
+    # Previously a hardcoded 700x660 -- stale as soon as the form grew
+    # wider/taller than that (same root cause as the overlap above), which
+    # visibly shrank the window back down on every Save. Clearing the
+    # geometry center_window() pinned at startup and letting Tk recompute
+    # the natural size for the window's actual current content fixes both
+    # at once, and keeps working regardless of how the form changes later.
+    root.geometry("")
+    root.update_idletasks()
+    root.geometry(f"{root.winfo_reqwidth()}x{root.winfo_reqheight()}")
 
 
 # Function to set placeholders in Entry fields, if corresponding .env value is empty
