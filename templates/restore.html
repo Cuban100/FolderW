@@ -77,6 +77,19 @@
                     </tbody>
                 </table>
             </div>
+            {% if total_pages > 1 %}
+            <div class="flex items-center justify-between mt-4 text-sm text-[var(--text-muted)]">
+                <div>Page {{ page }} of {{ total_pages }}</div>
+                <div class="space-x-2">
+                    {% if page > 1 %}
+                    <a href="/restore?page={{ page - 1 }}" class="inline-block bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] py-1.5 px-3 rounded hover:bg-[var(--surface-alt)] transition">&larr; Previous</a>
+                    {% endif %}
+                    {% if page < total_pages %}
+                    <a href="/restore?page={{ page + 1 }}" class="inline-block bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] py-1.5 px-3 rounded hover:bg-[var(--surface-alt)] transition">Next &rarr;</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
             {% endif %}
         </div>
 </body>

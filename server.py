@@ -650,12 +650,30 @@ async def root(request: Request):
         **get_backup_stats_context(database),
         })
 
+RESTORE_PAGE_SIZE = 20
+
+def _restore_page_context(page=1):
+    """Shared pagination slicing for every route that renders restore.html
+    -- list_backups() itself is fast (cached stats, see restore_operations
+    .py), but a snapshot list in the dozens (MAX_SNAPSHOTS) is still a lot
+    of rows to dump in one table.
+    """
+    all_backups = list_backups()
+    total_pages = max(1, (len(all_backups) + RESTORE_PAGE_SIZE - 1) // RESTORE_PAGE_SIZE)
+    page = min(max(1, page), total_pages)
+    start = (page - 1) * RESTORE_PAGE_SIZE
+    return {
+        "backups": all_backups[start:start + RESTORE_PAGE_SIZE],
+        "page": page,
+        "total_pages": total_pages,
+    }
+
 @app.get("/restore", response_class=HTMLResponse)
-async def restore_page(request: Request):
+async def restore_page(request: Request, page: int = 1):
     return templates.TemplateResponse("restore.html", {
         "request": request,
         "logo": logo,
-        "backups": list_backups(),
+        **_restore_page_context(page),
     })
 
 @app.get("/restore/browse/{backup_id:path}", response_class=HTMLResponse)
@@ -665,8 +683,8 @@ async def restore_browse(request: Request, backup_id: str, search: str = ""):
         return templates.TemplateResponse("restore.html", {
             "request": request,
             "logo": logo,
-            "backups": list_backups(),
             "error": f"Backup not found: {backup_id}",
+            **_restore_page_context(),
         })
     files, truncated = list_files_in_backup(backup_path, search=search or None)
     return templates.TemplateResponse("restore_browse.html", {
@@ -685,15 +703,15 @@ async def restore_execute(request: Request, backup_id: str = Form(...), selected
         return templates.TemplateResponse("restore.html", {
             "request": request,
             "logo": logo,
-            "backups": list_backups(),
             "success": f"Restored {file_count} file(s) to {dest_root}",
+            **_restore_page_context(),
         })
     except ValueError as e:
         return templates.TemplateResponse("restore.html", {
             "request": request,
             "logo": logo,
-            "backups": list_backups(),
             "error": str(e),
+            **_restore_page_context(),
         })
 
 
