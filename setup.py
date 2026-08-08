@@ -303,6 +303,26 @@ def save_paths():
         result_label.config(text="Error: Snapshots to Keep must be a positive whole number, or left blank.", foreground='#FF0000')
         return
 
+    # Base Backup Directory + Full Folder Name must never collide with
+    # FolderW's own install directory (APP_DIR) -- confirmed live: with
+    # Full Folder Name set to the same name as this install's own folder
+    # and Base Backup Directory pointing at its parent, the backup
+    # container ended up being the exact same directory as FolderW's own
+    # code, and ensure_backup_folder_icon() tagged FolderW's own install
+    # folder with a custom folder icon (gio metadata persists per-path
+    # independent of file content, so it kept showing even after a fresh
+    # reinstall at the same path).
+    container_dir = os.path.realpath(os.path.join(paths['BASE_DIR'], paths['FULL_NAME']))
+    app_dir_real = os.path.realpath(APP_DIR)
+    if (container_dir == app_dir_real
+            or app_dir_real.startswith(container_dir + os.sep)
+            or container_dir.startswith(app_dir_real + os.sep)):
+        result_label.config(
+            text=f"Error: Base Backup Directory + Full Folder Name ({container_dir}) can't overlap with FolderW's own install directory ({app_dir_real}).",
+            foreground='#FF0000'
+        )
+        return
+
     # Save values to .env file
     for key, value in paths.items():
         set_key(env_path, key.upper(), value)

@@ -839,6 +839,45 @@ async def submit_settings(
         "NOTIFY_URLS": notify_urls.strip(),
         "BACKUP_METHOD": "incremental" if backup_method == "incremental" else "differential",
     }
+
+    # BASE_DIR (module-level, this file's own directory) is FolderW's own
+    # install location -- container_dir (BASE_DIR/FULL_NAME from the form,
+    # confusingly the same setting name but a user-chosen backup
+    # destination) must never collide with it. Found live: FULL_NAME set
+    # to the same name as the app's own folder, with BASE_DIR pointing at
+    # its parent, made the backup container the exact same directory as
+    # the app's install -- ensure_backup_folder_icon() then tagged
+    # FolderW's own code directory with a custom folder icon (gio
+    # metadata persists per-path independent of file content, so it kept
+    # showing even after a fresh reinstall at the same path). Checked
+    # here, before saving, rather than after the fact.
+    container_dir = os.path.realpath(os.path.join(new_values["BASE_DIR"], new_values["FULL_NAME"]))
+    app_dir_real = os.path.realpath(BASE_DIR)
+    if (container_dir == app_dir_real
+            or app_dir_real.startswith(container_dir + os.sep)
+            or container_dir.startswith(app_dir_real + os.sep)):
+        logfile = load_other_variables('logfile')
+        return templates.TemplateResponse("settings.html", {
+            "request": request,
+            "logo": logo,
+            "error": (
+                f"Base Backup Directory + Full Backup Folder Name ({container_dir}) "
+                f"can't overlap with FolderW's own install directory ({app_dir_real}) -- "
+                "choose a different Full Backup Folder Name or Base Backup Directory."
+            ),
+            "log_dir": os.path.dirname(logfile),
+            "src_dir": load_env_value('SRC_DIR'),
+            "base_dir": load_env_value('BASE_DIR'),
+            "full_name": load_env_value('FULL_NAME'),
+            "database": load_env_value('DATABASE'),
+            "monitor_checked": monitor_enabled,
+            "interval": load_env_value('BACKUP_INTERVAL'),
+            "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
+            "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
+            "notify_urls": load_env_value('NOTIFY_URLS'),
+            "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+        })
+
     save_env_values(new_values)
 
     if new_values["DATABASE"]:
