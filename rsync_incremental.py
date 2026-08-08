@@ -84,6 +84,33 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
 COMPLETION_MARKER = '.folderw_complete'
 
 
+def _check_sudo_rsync_available():
+    """Fail fast with a clear, specific message if passwordless sudo isn't
+    configured for rsync, rather than letting it surface later as a
+    generic "Rsync command failed with return code 1" -- correct on its
+    own (sudo -n already refuses to hang waiting for a password nobody can
+    type from a headless service, and the exit-code handling below already
+    catches and notifies on that failure), but not obviously actionable
+    without knowing sudo was the actual cause. `rsync --version` is a
+    read-only, side-effect-free command, so this only tests whether sudo
+    itself would prompt -- it doesn't touch the source or destination.
+    """
+    check = subprocess.run(
+        ["sudo", "-n", "rsync", "--version"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+    )
+    if check.returncode != 0:
+        message = (
+            "Passwordless sudo isn't configured for rsync -- backups can't "
+            "run. This is normally set up automatically by setup.py "
+            "(configure_rsync_sudo()); re-run it, or see the README's "
+            "Permissions section to configure it manually."
+        )
+        logger.error(f"{message} (sudo -n rsync --version: {check.stderr.strip()})")
+        notify("FolderW: Backup Failed", message)
+        sys.exit(1)
+
+
 def _new_snapshot_path(incremental_folder):
     return os.path.join(snapshots_root, incremental_folder)
 
@@ -420,6 +447,11 @@ def generate_incremental_folder():
 
 
 if __name__ == "__main__":
+    # First thing, before any other work: if this is going to fail because
+    # sudo isn't configured, fail now with a specific, actionable message
+    # rather than after migration/baseline scans/etc. have already run.
+    _check_sudo_rsync_available()
+
     # One-time (idempotent, cheap to re-check every run) migration for
     # installs from before the --link-dest redesign, where full_backup was
     # a real directory instead of a symlink to the newest snapshot.
