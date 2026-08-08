@@ -5,17 +5,16 @@ import os
 import sys
 import time
 import threading
-import queue
 import webbrowser
 import psutil
 import apprise
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup
-from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, cleanup_old_snapshots
+from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.concurrency import run_in_threadpool
@@ -904,59 +903,6 @@ async def delete_old_database(request: Request, database_to_delete: str = Form(.
         "error": error,
         "success": success
     })
-
-
-rsync_progress_queue = queue.Queue()
-rsync_running = False
-rsync_lock = threading.Lock()
-
-
-def _run_rsync_job():
-    global rsync_running
-    from rsync_incremental import rsync, parse_logfile, copy_files, record_backup_statistics
-    from db_operations import store_changes_in_db
-    try:
-        for line in rsync():
-            rsync_progress_queue.put(line)
-        rsync_txt = load_other_variables('rsync_txt')
-        changes = parse_logfile(rsync_txt)
-        store_changes_in_db(changes)
-        last_session_number, incremental_folder = copy_files()
-        record_backup_statistics(changes, last_session_number, incremental_folder)
-        cleanup_old_snapshots(load_env_value('MAX_SNAPSHOTS'))
-        rsync_progress_queue.put("DONE: 100% - Backup complete")
-    except Exception as e:
-        logger.error(f"Error running backup job: {e}")
-        rsync_progress_queue.put(f"ERROR: {e}")
-    finally:
-        rsync_running = False
-
-
-@app.get("/progress", response_class=HTMLResponse)
-async def progress_page(request: Request):
-    return templates.TemplateResponse("progess.html", {"request": request})
-
-
-@app.get("/start_rsync")
-async def start_rsync():
-    global rsync_running
-    with rsync_lock:
-        if rsync_running:
-            return JSONResponse({"message": "Backup already running."})
-        rsync_running = True
-        threading.Thread(target=_run_rsync_job, daemon=True).start()
-    return JSONResponse({"message": "Backup started."})
-
-
-@app.get("/rsync_progress")
-async def rsync_progress():
-    def event_stream():
-        while True:
-            line = rsync_progress_queue.get()
-            yield f"data: {line}\n\n"
-            if line.startswith("DONE") or line.startswith("ERROR"):
-                break
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 def open_dashboard_in_browser(port):

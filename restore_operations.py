@@ -6,11 +6,24 @@ from db_operations import load_env_value, load_other_variables
 from statistics_operations import human_readable_size
 from loguru import logger
 
+# Must match rsync_incremental.py's COMPLETION_MARKER -- duplicated rather
+# than imported to avoid a circular import (rsync_incremental.py already
+# imports cleanup_old_snapshots from this module). Written into a snapshot
+# only after rsync finishes successfully, so its presence is how a
+# complete, restorable snapshot is told apart from a partial/interrupted
+# one left behind by a crash, kill, or power loss mid-run.
+COMPLETION_MARKER = '.folderw_complete'
+
 _MONTH_NAMES = {
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
 }
-_TIME_FOLDER_RE = re.compile(r'^\d{1,2}:\d{2}-(AM|PM)$')
+# Trailing (-\d+)? accepts a disambiguation suffix (e.g. "1:46-AM-2"):
+# rsync_incremental.py's _unique_new_snapshot_path() appends one when two
+# snapshot-creating calls land in the same clock-minute, which happens in
+# the normal course of a legacy-install migration immediately followed by
+# that install's first real backup (kept in lockstep with that function).
+_TIME_FOLDER_RE = re.compile(r'^\d{1,2}:\d{2}-(AM|PM)(-\d+)?$')
 
 
 def _is_month_folder(name):
@@ -30,6 +43,11 @@ def _summarize_folder(path):
     total_size = 0
     for dirpath, _, filenames in os.walk(path):
         for f in filenames:
+            # Internal bookkeeping, not real backed-up data -- shouldn't
+            # count toward a snapshot's displayed file count/size, and
+            # only ever sits at a snapshot's own root, never in a subdir.
+            if f == COMPLETION_MARKER and dirpath == path:
+                continue
             fp = os.path.join(dirpath, f)
             try:
                 total_size += os.path.getsize(fp)
@@ -40,23 +58,19 @@ def _summarize_folder(path):
 
 
 def list_backups():
-    """List the full mirror (BASE_DIR/Full Backup) plus every incremental
-    snapshot (Month/Day/Time folders under BASE_DIR/Snapshots/Months),
-    newest first."""
-    full_backup = load_other_variables('full_backup')
+    """List every incremental snapshot (Month/Day/Time folders under
+    BASE_DIR/Snapshots), newest first. Each snapshot is now a complete,
+    space-efficient point-in-time tree (rsync --link-dest against the
+    previous one) rather than a delta of changed files -- so the newest
+    snapshot already *is* "the current full backup" (full_backup is just a
+    symlink to it). No separate synthetic "full" entry: keeping one
+    alongside the normal enumeration would list that same physical
+    directory twice, since full_backup's target is always one of the
+    dated snapshots below.
+    """
     snapshots_root = load_other_variables('snapshots_root')
 
     backups = []
-
-    if os.path.isdir(full_backup):
-        file_count, total_size = _summarize_folder(full_backup)
-        backups.append({
-            "id": "full",
-            "label": "Full Backup (latest)",
-            "file_count": file_count,
-            "size": human_readable_size(total_size),
-            "mtime": os.path.getmtime(full_backup),
-        })
 
     if not os.path.isdir(snapshots_root):
         return backups
@@ -64,8 +78,8 @@ def list_backups():
     # Folder *names* under snapshots_root are still validated against
     # FolderW's own Month/Day/Time convention as defense in depth (e.g.
     # against a stray unrelated folder someone drops in there), even though
-    # nesting snapshots under BASE_DIR/Snapshots/Months/ already keeps this
-    # walk away from any unrelated content sitting elsewhere under BASE_DIR.
+    # nesting snapshots under BASE_DIR/Snapshots/ already keeps this walk
+    # away from any unrelated content sitting elsewhere under BASE_DIR.
     for month in sorted(os.listdir(snapshots_root)):
         if not _is_month_folder(month):
             continue
@@ -83,6 +97,12 @@ def list_backups():
                     continue
                 snapshot_path = os.path.join(day_path, time_folder)
                 if not os.path.isdir(snapshot_path):
+                    continue
+                if not os.path.exists(os.path.join(snapshot_path, COMPLETION_MARKER)):
+                    # Missing marker means rsync never finished this one
+                    # (crash, kill, power loss mid-run) -- not a valid,
+                    # restorable backup, so it doesn't count toward
+                    # retention (cleanup_old_snapshots) or show up here.
                     continue
                 file_count, total_size = _summarize_folder(snapshot_path)
                 backups.append({
@@ -102,9 +122,12 @@ def list_backups():
 
 def cleanup_old_snapshots(max_snapshots):
     """Delete the oldest incremental snapshots beyond max_snapshots,
-    keeping the newest ones. Never touches the full backup — that's a
-    continuously-synced mirror, not a snapshot. A falsy/zero/negative
-    max_snapshots means "keep everything" (no cleanup).
+    keeping the newest ones. full_backup (a symlink to the newest
+    snapshot) is never touched directly -- as long as max_snapshots >= 1,
+    the snapshot it points at is always among the newest kept, since
+    list_backups() sorts newest-first and this only ever prunes the tail.
+    A falsy/zero/negative max_snapshots means "keep everything" (no
+    cleanup).
     """
     try:
         max_snapshots = int(max_snapshots)
@@ -113,7 +136,7 @@ def cleanup_old_snapshots(max_snapshots):
     if max_snapshots <= 0:
         return []
 
-    snapshots = [b for b in list_backups() if b["id"] != "full"]
+    snapshots = list_backups()
     # list_backups() already sorts newest first
     to_delete = snapshots[max_snapshots:]
 
@@ -175,6 +198,8 @@ def list_files_in_backup(backup_path, limit=2000):
     truncated = False
     for dirpath, _, filenames in os.walk(backup_path):
         for f in sorted(filenames):
+            if f == COMPLETION_MARKER and dirpath == backup_path:
+                continue
             if len(files) >= limit:
                 truncated = True
                 break
@@ -210,6 +235,8 @@ def restore_backup(backup_id, selected_paths=None):
 
     if not selected_paths:
         for entry in os.listdir(backup_path):
+            if entry == COMPLETION_MARKER:
+                continue
             src = os.path.join(backup_path, entry)
             dst = os.path.join(dest_root, entry)
             if os.path.isdir(src):

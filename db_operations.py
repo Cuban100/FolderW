@@ -57,7 +57,7 @@ def load_other_variables(variable_name):
     elif variable_name == 'snapshots_root':
         base_dir = load_env_value('BASE_DIR')
         full_name = load_env_value('FULL_NAME')
-        return os.path.join(base_dir, full_name, 'Snapshots', 'Months')
+        return os.path.join(base_dir, full_name, 'Snapshots')
     elif variable_name == 'env_file':
         return os.path.join(os.path.dirname(__file__), '.env')
     elif variable_name == 'logfile':

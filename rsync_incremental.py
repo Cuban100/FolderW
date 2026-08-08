@@ -1,10 +1,9 @@
 import os
 import re
 import sys
-import stat
 import time
 import threading
-from db_operations import get_last_session_number, list_items_by_session, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value
+from db_operations import get_last_session_number, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value, get_database_value
 from restore_operations import cleanup_old_snapshots
 from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
 from notifications import notify
@@ -75,63 +74,183 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
     # Cached here (once per backup run) rather than computed on every
     # dashboard page load — `du` walks the entire full_backup tree, which
     # can take minutes on a large backup and would make the dashboard feel
-    # hung if run synchronously on every visit.
+    # hung if run synchronously on every visit. full_backup is a symlink to
+    # the snapshot this run just created (already repointed by the time
+    # this runs) — get_folder_size_du/-D dereferences it correctly.
     current_size = get_folder_size_du(full_backup)
     if current_size:
         set_database_value('CURRENT_BACKUP_SIZE', current_size)
 
-def _set_folder_icon(folder, icon_filename):
+COMPLETION_MARKER = '.folderw_complete'
+
+
+def _new_snapshot_path(incremental_folder):
+    return os.path.join(snapshots_root, incremental_folder)
+
+
+def _unique_new_snapshot_path(incremental_folder):
+    """Like _new_snapshot_path, but guarantees a path that doesn't already
+    exist, appending -2/-3/... if needed. Two callers can legitimately
+    generate the same minute-granularity folder name in quick succession
+    -- confirmed live: the migration step below and this run's own
+    incremental_folder computation happen milliseconds apart in the same
+    process invocation, so a same-minute collision isn't a rare edge case,
+    it's the *normal* case on any install that needs migrating. Without
+    this, the first real backup after a migration would rsync directly
+    into (and use as its own --link-dest source) the very snapshot that
+    migration just created from the legacy directory, corrupting its
+    point-in-time integrity. The -N suffix is accepted by restore_
+    operations.py's folder-name validators (kept in lockstep, see
+    _TIME_FOLDER_RE there) so a disambiguated snapshot still shows up
+    normally in the restore UI.
+    """
+    base_folder = incremental_folder
+    suffix = 1
+    path = _new_snapshot_path(base_folder)
+    while os.path.exists(path):
+        suffix += 1
+        path = _new_snapshot_path(base_folder) + f"-{suffix}"
+    return path
+
+
+def _previous_snapshot_path():
+    """The snapshot full_backup currently points at, or None if this is the
+    very first backup ever (full_backup doesn't exist yet). Used both as
+    the --link-dest source and as the size baseline for progress
+    percentage — always a *complete*, successfully-finished snapshot,
+    never a partial one, since full_backup is only ever repointed after a
+    run's completion marker is written (see the atomic repoint below)."""
+    if os.path.exists(full_backup):
+        return os.path.realpath(full_backup)
+    return None
+
+
+def _repoint_full_backup(target_path):
+    """Atomically make full_backup a symlink pointing at target_path.
+    Writes a temp symlink alongside it, then os.replace() over the real
+    path -- so a reader (dashboard du/isdir calls, etc.) never observes a
+    missing or broken full_backup mid-update. Removes any stale temp name
+    left behind by a prior crash between the write and the replace."""
+    parent = os.path.dirname(full_backup)
+    os.makedirs(parent, exist_ok=True)
+    tmp_path = full_backup + '.tmp-relink'
+    if os.path.lexists(tmp_path):
+        if os.path.isdir(tmp_path) and not os.path.islink(tmp_path):
+            shutil.rmtree(tmp_path)
+        else:
+            os.remove(tmp_path)
+    os.symlink(target_path, tmp_path)
+    os.replace(tmp_path, full_backup)
+    logger.info(f"full_backup now points at: {target_path}")
+
+
+def _migrate_legacy_full_backup():
+    """One-time migration for installs from before the --link-dest redesign,
+    where full_backup was a real, continuously-synced mirror directory
+    instead of a symlink to the newest snapshot. Folds that existing real
+    directory into the new scheme as a proper dated snapshot (a fast,
+    atomic same-filesystem rename -- not a copy, regardless of size) so
+    existing backup data isn't discarded and can still be used as a
+    --link-dest source for the very next run.
+
+    Safe to call on every startup: no-ops immediately if full_backup is
+    already a symlink (already migrated) or doesn't exist (fresh install,
+    nothing to migrate).
+    """
+    if os.path.islink(full_backup):
+        return
+    if not os.path.exists(full_backup):
+        if get_database_value('FULL_BACKUP_COMPLETED', 'settings') == '1':
+            # full_backup missing but a completed backup was recorded --
+            # something is inconsistent (interrupted migration, or the
+            # symlink was deleted manually). Do NOT silently fall through
+            # to a fresh full backup: that would re-transfer everything
+            # from scratch while an already-migrated snapshot might be
+            # sitting under snapshots_root, orphaned and unlinked. Surface
+            # this loudly instead of guessing.
+            logger.error(
+                "full_backup is missing but FULL_BACKUP_COMPLETED is set -- "
+                "refusing to silently start a fresh full backup. Check "
+                f"{snapshots_root} for an orphaned snapshot and either "
+                "restore the full_backup symlink manually or clear "
+                "FULL_BACKUP_COMPLETED if a fresh backup is really intended."
+            )
+            sys.exit(1)
+        return
+
+    logger.warning(f"Migrating legacy full_backup directory into the snapshot scheme: {full_backup}")
+    new_path = _unique_new_snapshot_path(generate_incremental_folder())
+    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+    os.rename(full_backup, new_path)
+    with open(os.path.join(new_path, COMPLETION_MARKER), 'w') as f:
+        f.write(datetime.now().isoformat())
+    _repoint_full_backup(new_path)
+    logger.success(f"Migrated legacy full_backup to snapshot: {new_path}")
+
+def _set_folder_icon(folder, icon_filename, write_physical_files=True):
     """Make `folder` itself show a branded icon in the file manager, rather
     than just containing a PNG a user has to open to notice.
 
-    Two mechanisms, since no single one covers every file manager:
-    - gio set metadata::custom-icon: what GNOME Files/Nemo (GTK/GVFS-based)
-      actually use — verified empirically, since the older .directory
-      convention below is silently ignored by current Nemo/Nautilus.
-    - .directory (freedesktop.org convention): still honored by some other
-      file managers (e.g. KDE Dolphin), and travels with the folder itself
-      rather than living in a per-user GVFS metadata database, so it's kept
-      as a portable fallback even though it's inert on this desktop.
+    write_physical_files=False for full_backup specifically: it's a symlink
+    to whichever snapshot is newest, not a stable directory of its own.
+    Copying a PNG/.directory file "into" a symlink writes into whatever
+    real snapshot directory it currently resolves to — confirmed live,
+    this would silently plant two housekeeping files inside every single
+    dated snapshot, inflating file counts and appearing in restored
+    output. gio metadata is applied with --nofollow-symlinks instead,
+    which tags the symlink path itself (confirmed this persists correctly
+    even after the symlink is later deleted and recreated pointing
+    elsewhere) rather than whatever it currently points at. This does mean
+    full_backup loses the KDE Dolphin .directory-file fallback (gio
+    metadata alone doesn't help non-GVFS file managers) -- a UX tradeoff,
+    not a data-integrity one, and unavoidable without polluting snapshots.
     """
-    icon_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), icon_filename)
-    icon_dest = os.path.join(folder, icon_filename)
-    os.makedirs(folder, exist_ok=True)
-    if os.path.exists(icon_source) and not os.path.exists(icon_dest):
-        shutil.copy2(icon_source, icon_dest)
-        logger.info(f"Added icon to folder: {icon_dest}")
+    if write_physical_files:
+        icon_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), icon_filename)
+        icon_dest = os.path.join(folder, icon_filename)
+        os.makedirs(folder, exist_ok=True)
+        if os.path.exists(icon_source) and not os.path.exists(icon_dest):
+            shutil.copy2(icon_source, icon_dest)
+            logger.info(f"Added icon to folder: {icon_dest}")
 
-    directory_file = os.path.join(folder, '.directory')
-    if not os.path.exists(directory_file):
-        with open(directory_file, 'w') as f:
-            f.write(f"[Desktop Entry]\nIcon={icon_dest}\n")
-        logger.info(f"Set folder icon via {directory_file}")
+        directory_file = os.path.join(folder, '.directory')
+        if not os.path.exists(directory_file):
+            with open(directory_file, 'w') as f:
+                f.write(f"[Desktop Entry]\nIcon={icon_dest}\n")
+            logger.info(f"Set folder icon via {directory_file}")
 
     try:
-        subprocess.run(
-            ["gio", "set", folder, "metadata::custom-icon", f"file://{icon_dest}"],
-            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+        gio_command = ["gio", "set"]
+        if not write_physical_files:
+            gio_command.append("--nofollow-symlinks")
+        icon_uri = f"file://{os.path.join(folder, icon_filename)}" if write_physical_files else f"file://{os.path.join(os.path.dirname(os.path.abspath(__file__)), icon_filename)}"
+        gio_command += [folder, "metadata::custom-icon", icon_uri]
+        subprocess.run(gio_command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         logger.info(f"Set folder icon via gio metadata::custom-icon: {folder}")
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         logger.warning(f"Could not set folder icon via gio (non-fatal): {e}")
 
 def ensure_backup_folder_icon():
-    # full_backup (rsync's actual destination) gets FolderW.png, listed in
-    # the rsync exclude file so it isn't wiped as an "extra" file on every
-    # sync. Its FULL_NAME container folder (one level up — e.g. "Caveman",
-    # holding both Full Backup/ and Snapshots/) is never an rsync
-    # destination itself, so it's safe to brand with logo.png without any
-    # exclude-list entry.
-    _set_folder_icon(full_backup, 'FolderW.png')
+    # full_backup is a symlink to the newest snapshot -- tag the symlink
+    # itself via gio (see _set_folder_icon), never write physical icon
+    # files through it. Its FULL_NAME container folder (one level up --
+    # e.g. "Caveman", holding both the symlink and Snapshots/) is never an
+    # rsync destination itself, so it's still safe to brand normally.
+    _set_folder_icon(full_backup, 'FolderW.png', write_physical_files=False)
     _set_folder_icon(os.path.dirname(full_backup), 'logo.png')
 
-def rsync(result_holder=None):
+def rsync(destination, link_dest=None, result_holder=None):
+    # destination: the NEW dated snapshot path this run writes into (not
+    # the old fixed full_backup target) -- see the --link-dest redesign.
+    # link_dest: realpath of the previous snapshot (full_backup's current
+    # target before this run), or None on the very first-ever backup.
+    #
     # result_holder (optional): a dict this function sets 'success' on once
     # the rsync command finishes — lets __main__ below tell a real failure
     # apart from a clean run without changing this generator's yield
     # contract (still just progress lines, unchanged for existing callers).
     # Trailing slash on the source makes rsync copy src_dir's *contents*
-    # into full_backup, instead of nesting it as full_backup/<src_dir basename>/.
+    # into destination, instead of nesting it as destination/<src_dir basename>/.
     src_dir_contents = src_dir.rstrip('/') + '/'
     # --info=progress2 reports overall transfer progress (a single running
     # percentage across the whole run) rather than per-file progress, which
@@ -175,7 +294,33 @@ def rsync(result_holder=None):
     # immediately with a clear error instead of hanging forever waiting on
     # a password prompt that, from a headless service, can never come — the
     # same "never let it hang silently" reasoning as the stderr fix.
-    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--delete", "--info=progress2", f'--exclude-from={exclude_file}', src_dir_contents, full_backup]
+    # --out-format='CHANGED:%n': an unambiguous marker for parse_logfile()
+    # to key off of. -vv's output mixes real transferred files in with a
+    # lot of diagnostic noise (bracketed [sender]/[generator] messages,
+    # "<file> is uptodate", internal buffer-expansion lines, exclude-
+    # pattern notices) that looks like ordinary lines during the file-list
+    # section, indistinguishable from real relative paths by the old
+    # heuristic filtering. Found live: those diagnostic lines were getting
+    # recorded as "changed files", including one literally containing a
+    # path separator ("hiding directory .cache because of pattern
+    # .cache/"), which the old copy_files() then tried to copy, creating a
+    # real directory on disk named after that diagnostic message.
+    # --out-format only affects the per-file transfer listing, not rsync's
+    # own protocol/debug chatter, so prefixing it makes real changes
+    # trivially and reliably distinguishable from everything else.
+    # --link-dest=<previous snapshot>: the actual Timeshift-style mechanism
+    # -- unchanged files (matching by quick-check against link_dest) become
+    # instant hardlinks instead of being re-transferred, so destination is
+    # a complete, space-efficient point-in-time tree every run, not just a
+    # delta. Omitted entirely on the first-ever backup (link_dest is None).
+    # --delete-excluded (not just --delete): matches Timeshift's actual
+    # command. Safe now specifically because the icon files are no longer
+    # written into this rsync-managed tree at all (see _set_folder_icon),
+    # so nothing excluded needs protecting from active deletion.
+    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--delete", "--delete-excluded", "--info=progress2", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}']
+    if link_dest:
+        rsync_command.append(f'--link-dest={link_dest}')
+    rsync_command += [src_dir_contents, destination]
     logger.warning(f"Executing rsync command {rsync_command}")
         
     try:
@@ -227,45 +372,33 @@ def rsync(result_holder=None):
         if result_holder is not None:
             result_holder['success'] = False
 
-PROGRESS_LINE_RE = re.compile(r'^[\d,]+\s+\d+%')
+# Matches lines rsync prints because of --out-format='CHANGED:%n' (see the
+# rsync_command construction above) -- an unambiguous marker for a file
+# rsync actually transferred, deliberately distinct from -vv's diagnostic
+# noise (bracketed [sender]/[generator] messages, "<file> is uptodate",
+# buffer-expansion lines, exclude-pattern notices) which used to be
+# indistinguishable from real relative paths by the old heuristic
+# filtering. Verified empirically: deletions and "is uptodate" lines
+# never get this prefix (they're logged via a separate, unformatted
+# message path), so no separate exclusion logic is needed for either.
+CHANGED_LINE_RE = re.compile(r'^CHANGED:(.+)$')
 
 def parse_logfile(rsync_txt):
     changes = []
-    capturing = False
     try:
         with open(rsync_txt, 'r') as f:
             for line in f:
-                #logger.debug(f"Reading line from rsync_txt: {line.strip()}")
-                line = line.strip()
-                # --no-inc-recursive changes rsync's header from "sending
-                # incremental file list" to "building file list ... done" —
-                # both mark the start of the actual file listing.
-                if "sending incremental file list" in line or "building file list" in line:
-                    capturing = True
-                    continue
-                if capturing:
-                    if line == "":
-                        continue
-                    if "sent" in line or "received" in line or "total size" in line:
-                        continue
-                    if PROGRESS_LINE_RE.match(line):
-                        # --info=progress2 interleaves per-update transfer
-                        # stat lines (bytes, percent, speed, ETA) among the
-                        # real filenames on stdout — without this filter
-                        # these get mistaken for changed file paths.
-                        continue
-                    if "Server/" in line:
-                        line = line.replace("Server/", "")
-                    if line in (".", "./"):
+                match = CHANGED_LINE_RE.match(line.strip())
+                if match:
+                    path = match.group(1)
+                    if path in ('.', './'):
                         # rsync emits this for the destination root itself
-                        # (e.g. on a deletion-only run) — it's not a real
-                        # file/subdirectory. Treating it as one would resolve
-                        # to src_dir itself and copytree the entire source
-                        # tree into what's supposed to be a small incremental
-                        # snapshot.
+                        # (the top of the transfer, always "touched" since
+                        # it's the target of the whole run) -- not a real
+                        # file/subdirectory, would inflate "files changed"
+                        # by one on every single run otherwise.
                         continue
-                    if line and not line.startswith("deleting"):  # Exclude deletion lines
-                        changes.append(("update", line))
+                    changes.append(("update", path))
     except FileNotFoundError:
         logger.error(f"Rsync log file not found: {rsync_txt}")
     except Exception as e:
@@ -284,52 +417,43 @@ def generate_incremental_folder():
     logger.debug(f"Generated incremental folder name: {folder}")
     return folder
 
-def _safe_copy2(source_path, destination_path):
-    """Like shutil.copy2, but tolerates a destination that already exists
-    and is read-only — e.g. immutable/content-addressed files like git
-    objects can legitimately be referenced unchanged across sessions, and
-    plain shutil.copy2 raises PermissionError trying to overwrite them.
-    Made writable first instead of failing; used directly for single files
-    and as copytree's copy_function so it also applies to every file
-    inside a copied directory tree.
-    """
-    if os.path.exists(destination_path) and not os.access(destination_path, os.W_OK):
-        os.chmod(destination_path, stat.S_IWUSR | stat.S_IRUSR)
-    shutil.copy2(source_path, destination_path)
-
-
-def copy_files():
-    incremental_folder = generate_incremental_folder()
-    session_items = list_items_by_session(database)
-    last_session_number = get_last_session_number(database)
-
-    if last_session_number > 1:
-        logger.info(f"Folder Created: {incremental_folder}")
-        #logger.info(f"Paths to be copied: {session_items}")
-        # With the trailing slash on the rsync source, item_path is already
-        # relative to src_dir itself (no basename prefix to strip).
-        for item_path in session_items:
-            source_path = os.path.join(src_dir, item_path)
-            destination_path = os.path.join(snapshots_root, incremental_folder, item_path)
-            try:
-                if os.path.isdir(source_path):
-                    shutil.copytree(source_path, destination_path, dirs_exist_ok=True, copy_function=_safe_copy2)
-                    #logger.success(f"Copied directory {source_path} to {destination_path}")
-                else:
-                    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
-                    _safe_copy2(source_path, destination_path)
-                    #logger.success(f"Copied file {source_path} to {destination_path}")
-            except Exception as e:
-                logger.error(f"Error copying {source_path} to {destination_path}: {e}")
-    else:
-        logger.info("No files to copy.")
-
-    return last_session_number, incremental_folder
 
 
 if __name__ == "__main__":
-    logger.info(f"Full Backup is: {full_backup}")
-    ensure_backup_folder_icon()
+    # One-time (idempotent, cheap to re-check every run) migration for
+    # installs from before the --link-dest redesign, where full_backup was
+    # a real directory instead of a symlink to the newest snapshot.
+    _migrate_legacy_full_backup()
+
+    # Captured now, before this run's rsync touches anything -- this is
+    # always a *complete*, previously-successful snapshot (or None on the
+    # very first-ever backup), since full_backup is only ever repointed
+    # after a run's completion marker is written further down. Used both
+    # as the --link-dest source and as the progress-percent baseline.
+    previous_snapshot = _previous_snapshot_path()
+
+    # Computed once and reused everywhere below (the rsync destination,
+    # --link-dest lookup already done above, the post-success symlink
+    # target, and record_backup_statistics()'s label) -- generate_
+    # incremental_folder() uses datetime.now(), so calling it more than
+    # once in the same run risks two different folder names if the run
+    # straddles a minute boundary.
+    new_snapshot_path = _unique_new_snapshot_path(generate_incremental_folder())
+    # Relative to snapshots_root, reflecting the -N suffix if a same-minute
+    # collision was disambiguated above -- used as record_backup_statistics()'s
+    # label, so it needs to match the real folder, not the pre-collision name.
+    incremental_folder = os.path.relpath(new_snapshot_path, snapshots_root)
+    # Created as this process's own user (caveman), not left for root's
+    # sudo rsync to create via --mkpath -- confirmed empirically that
+    # intermediate directories rsync-as-root creates end up root-owned,
+    # silently locking cleanup_old_snapshots()/_prune_empty_parents() (both
+    # run as caveman, both already swallow OSError silently) out of ever
+    # deleting them again. Pre-creating here as caveman avoids that; rsync
+    # then writes into an already-existing directory and leaves its
+    # ownership alone.
+    os.makedirs(new_snapshot_path, exist_ok=True)
+    logger.info(f"New snapshot destination: {new_snapshot_path} (link-dest: {previous_snapshot})")
+
     # Cleared up front so a stale percentage/size/ETA from a previous run
     # can't be shown on the dashboard during the icon-setup gap before
     # rsync's first progress line actually arrives.
@@ -351,10 +475,11 @@ if __name__ == "__main__":
     # percentage badly understates true progress (verified empirically: a
     # run that only needed to send one small new file into an otherwise
     # complete 50MB destination reported "0%" throughout). Computing our
-    # own baseline — what's already at the destination — lets us report
-    # (baseline + transferred-this-run) / true-source-total instead. Both
-    # numbers come from `du`, run in background threads so neither blocks
-    # rsync from starting and both run concurrently with each other.
+    # own baseline — what's already effectively at the destination via
+    # --link-dest hardlinks — lets us report (baseline + transferred-this-
+    # run) / true-source-total instead. Both numbers come from `du`, run in
+    # background threads so neither blocks rsync from starting and both run
+    # concurrently with each other.
     # transferred_offset is the value of transferred_bytes (rsync's own
     # running counter, read in the main loop below) at the moment
     # dest_baseline was last measured. The live per-progress-line estimate
@@ -366,7 +491,12 @@ if __name__ == "__main__":
     baselines = {'dest_baseline': None, 'source_total': None, 'transferred_offset': 0, 'last_transferred': 0}
 
     def _compute_dest_baseline():
-        size = get_folder_size_bytes_du(full_backup)
+        # The *previous* snapshot, not the new (currently empty) one: at
+        # t=0, new_snapshot_path has nothing in it yet -- previous_snapshot
+        # is the correct "what's already effectively there" anchor, since
+        # --link-dest will hardlink most of it into the new snapshot at
+        # near-zero transfer cost.
+        size = get_folder_size_bytes_du(previous_snapshot) if previous_snapshot else 0
         baselines['dest_baseline'] = size
         baselines['transferred_offset'] = baselines['last_transferred']
         logger.info(f"Destination baseline size: {size}")
@@ -403,12 +533,18 @@ if __name__ == "__main__":
 
     def _refresh_current_size_periodically():
         # Wait before the first scan too — _compute_dest_baseline above
-        # already `du`s this exact same path once at startup; running a
-        # second, redundant concurrent scan of it at the same moment just
-        # adds I/O contention for no benefit.
+        # already `du`s the previous snapshot once at startup; running a
+        # redundant concurrent scan of a different (still mostly empty)
+        # path at the same moment just adds I/O contention for no benefit.
         stop_size_refresh.wait(60)
         while not stop_size_refresh.is_set():
-            size_bytes = get_folder_size_bytes_du(full_backup)
+            # The NEW, currently-being-written snapshot -- not full_backup,
+            # which stays pointed at the OLD snapshot for this run's entire
+            # duration (only repointed after success, at the very end).
+            # Measuring full_backup here would freeze CURRENT_BACKUP_SIZE/
+            # percent at a stale value for the rest of a potentially
+            # hours-long run.
+            size_bytes = get_folder_size_bytes_du(new_snapshot_path)
             source_total = baselines['source_total']
             # Both gated on the same condition, updated together — size_bytes
             # not None on its own used to be enough to update
@@ -430,7 +566,7 @@ if __name__ == "__main__":
     last_percent = None
     last_eta = None
     last_size_str = None
-    for progress in rsync(rsync_result):
+    for progress in rsync(new_snapshot_path, link_dest=previous_snapshot, result_holder=rsync_result):
         # Groups: bytes-transferred-so-far, rsync's own percent, ETA
         # (time *remaining* — verified empirically with a throttled
         # transfer that it counts down to 0:00:00, not up).
@@ -490,16 +626,32 @@ if __name__ == "__main__":
     stop_size_refresh.set()
 
     if rsync_result['success'] is False:
-        # rsync itself failed — recording stats/copying an incremental
-        # snapshot against a failed/partial sync would misrepresent it as
-        # a completed backup. Exit non-zero so main_backup.py's
-        # subprocess.run(check=True) sees it as a failure and notifies.
+        # rsync itself failed — repointing full_backup or recording stats
+        # against a failed/partial sync would misrepresent it as a
+        # completed backup. full_backup is left untouched (still pointing
+        # at the last good snapshot); new_snapshot_path is left in place
+        # without a completion marker, so the restore/cleanup side ignores
+        # it as a partial run rather than treating it as valid. Exit
+        # non-zero so main_backup.py's subprocess.run(check=True) sees it
+        # as a failure and notifies.
         logger.error("Backup failed — skipping snapshot bookkeeping.")
         sys.exit(1)
 
+    # Mark the snapshot complete and atomically repoint full_backup to it
+    # BEFORE any further bookkeeping — so a later failure in stats/
+    # notification can't leave full_backup stale relative to a snapshot
+    # that actually finished successfully.
+    with open(os.path.join(new_snapshot_path, COMPLETION_MARKER), 'w') as f:
+        f.write(datetime.now().isoformat())
+    _repoint_full_backup(new_snapshot_path)
+    # Only safe to call now that full_backup exists as a real symlink --
+    # on the very first-ever backup, it doesn't exist until the repoint
+    # above just happened.
+    ensure_backup_folder_icon()
+
     changes = parse_logfile(rsync_txt)
     store_changes_in_db(changes)
-    last_session_number, incremental_folder = copy_files()
+    last_session_number = get_last_session_number(database)
     record_backup_statistics(changes, last_session_number, incremental_folder)
     cleanup_old_snapshots(load_env_value('MAX_SNAPSHOTS'))
 
