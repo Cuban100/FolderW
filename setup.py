@@ -377,7 +377,7 @@ def show_terminal():
     # above it (the logo banner, Backup Method itself). Gridding it right
     # after the last existing row means it always lands below the form's
     # actual current content, however tall that turns out to be.
-    log_text.grid(row=len(labels) + 10, column=0, columnspan=3, padx=10, pady=10)
+    log_text.grid(row=len(labels) + 9, column=0, columnspan=3, padx=10, pady=4)
     log_text.config(state=tk.NORMAL)
     # Previously a hardcoded 700x660 -- stale as soon as the form grew
     # wider/taller than that (same root cause as the overlap above), which
@@ -473,9 +473,9 @@ placeholders = {
 
 # Create and place widgets
 for i, (label, env_key) in enumerate(labels):
-    tk.Label(root, text=label, foreground='#ffffff', background='#1a1a1a').grid(row=i, column=0, padx=10, pady=10, sticky='e')
+    tk.Label(root, text=label, foreground='#ffffff', background='#1a1a1a').grid(row=i, column=0, padx=10, pady=4, sticky='e')
     entry = ttk.Entry(root, width=50)
-    entry.grid(row=i, column=1, padx=10, pady=10)
+    entry.grid(row=i, column=1, padx=10, pady=4)
     entries.append(entry)
     
     # Set placeholder text
@@ -484,34 +484,37 @@ for i, (label, env_key) in enumerate(labels):
     
     if "Directory" in label or "Backup" in label:
         button = ttk.Button(root, text="Browse...", command=lambda e=entry: browse_directory(e))
-        button.grid(row=i, column=2, padx=10, pady=10)
+        button.grid(row=i, column=2, padx=10, pady=4)
     elif "File" in label:
         button = ttk.Button(root, text="Browse...", command=lambda e=entry: browse_file(e))
-        button.grid(row=i, column=2, padx=10, pady=10)
+        button.grid(row=i, column=2, padx=10, pady=4)
 
 src_dir_entry, base_dir_entry, full_folder_name_entry, database_entry, server_port_entry = entries  # Include server port entry
 
-# Logo banner, in the right column under the Browse buttons above (same
-# column those sit in). Kept as a module-level reference
-# (_logo_banner_image), same reasoning as _window_icon further down -- a
-# PhotoImage with no live Python reference gets silently garbage-collected
-# and the label just goes blank.
+# Logo banner, in the same column as the Browse buttons above it, but
+# spanning the three rows below them (Full Folder Name/Database/Server
+# Port) that never get a Browse button and would otherwise sit empty --
+# rather than a dedicated row of its own, which wasted a full row's
+# height with two of its three columns blank. Kept as a module-level
+# reference (_logo_banner_image), same reasoning as _window_icon further
+# down -- a PhotoImage with no live Python reference gets silently
+# garbage-collected and the label just goes blank.
 _logo_banner_image = ImageTk.PhotoImage(Image.open(os.path.join(APP_DIR, 'logo.png')).resize((96, 96), Image.LANCZOS))
 logo_banner = tk.Label(root, image=_logo_banner_image, background='#1a1a1a')
-logo_banner.grid(row=len(labels), column=2, padx=10, pady=10)
+logo_banner.grid(row=2, column=2, rowspan=3, padx=10, pady=4)
 
 # Monitor checkbox setup
 monitor_var = tk.IntVar(value=1)  
 monitor_checkbox = tk.Checkbutton(root, text="Monitor source folder for automated backups on changes", variable=monitor_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71', command=toggle_backup_options)
-monitor_checkbox.grid(row=len(labels) + 1, column=1, padx=10, pady=10, sticky='w')  # Aligned with other fields
+monitor_checkbox.grid(row=len(labels), column=1, padx=10, pady=4, sticky='w')  # Aligned with other fields
 
 # Short hint: monitoring and scheduled backups are mutually exclusive
 monitor_hint = tk.Label(root, text="Backs up as soon as a file changes.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-monitor_hint.grid(row=len(labels) + 1, column=2, padx=10, pady=10, sticky='w')
+monitor_hint.grid(row=len(labels), column=2, padx=10, pady=4, sticky='w')
 
 # Create the label next to the checkbox
-monitor_label = tk.Label(root, text="Watchdog Future:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-monitor_label.grid(row=len(labels) + 1, column=0, padx=0, pady=10, sticky='e')  # Place it in the same row as the checkbox, to the left (column 0)
+monitor_label = tk.Label(root, text="Watchdog Future:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+monitor_label.grid(row=len(labels), column=0, padx=0, pady=4, sticky='e')  # Place it in the same row as the checkbox, to the left (column 0)
 
 # Dynamic Backup Interval Options
 interval_var = StringVar(value='hourly')
@@ -520,20 +523,20 @@ interval_dropdown = ttk.Combobox(root, textvariable=interval_var, values=["hourl
 interval_hint = tk.Label(root, text="Backs up on this fixed schedule instead.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
 interval_widgets = [interval_label, interval_dropdown, interval_hint]
 
-interval_label.grid(row=len(labels) + 2, column=0, padx=10, pady=10, sticky='e')
-interval_dropdown.grid(row=len(labels) + 2, column=1, padx=10, pady=10)
-interval_hint.grid(row=len(labels) + 2, column=2, padx=10, pady=10, sticky='w')
+interval_label.grid(row=len(labels) + 1, column=0, padx=10, pady=4, sticky='e')
+interval_dropdown.grid(row=len(labels) + 1, column=1, padx=10, pady=4)
+interval_hint.grid(row=len(labels) + 1, column=2, padx=10, pady=4, sticky='w')
 
 # Autostart on boot checkbox setup
 autostart_var = tk.IntVar(value=0)
 autostart_checkbox = tk.Checkbutton(root, text="Start FolderW automatically at system boot", variable=autostart_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71')
-autostart_checkbox.grid(row=len(labels) + 3, column=1, padx=10, pady=10, sticky='w')
+autostart_checkbox.grid(row=len(labels) + 2, column=1, padx=10, pady=4, sticky='w')
 
 autostart_hint = tk.Label(root, text="Installs a systemd user service that runs the dashboard on login.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-autostart_hint.grid(row=len(labels) + 3, column=2, padx=10, pady=10, sticky='w')
+autostart_hint.grid(row=len(labels) + 2, column=2, padx=10, pady=4, sticky='w')
 
-autostart_label = tk.Label(root, text="Autostart:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-autostart_label.grid(row=len(labels) + 3, column=0, padx=0, pady=10, sticky='e')
+autostart_label = tk.Label(root, text="Autostart:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+autostart_label.grid(row=len(labels) + 2, column=0, padx=0, pady=4, sticky='e')
 
 # Backup Method: incremental (--link-dest against the most recent
 # snapshot, stays small indefinitely) vs differential (--link-dest always
@@ -544,7 +547,7 @@ autostart_label.grid(row=len(labels) + 3, column=0, padx=0, pady=10, sticky='e')
 # both" rather than something a Checkbutton pair would need extra code
 # to enforce.
 backup_method_var = StringVar(value='differential')
-backup_method_label = tk.Label(root, text="Backup Method:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
+backup_method_label = tk.Label(root, text="Backup Method:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
 backup_method_frame = tk.Frame(root, bg='#1a1a1a')
 
 differential_radio = tk.Radiobutton(backup_method_frame, text="Differential Backup", variable=backup_method_var, value='differential', background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71', activebackground='#1a1a1a', activeforeground='#ffffff')
@@ -557,48 +560,48 @@ incremental_radio.pack(side=tk.LEFT)
 incremental_info = ttk.Button(backup_method_frame, text="?", width=2, command=lambda: _show_backup_method_info('incremental'))
 incremental_info.pack(side=tk.LEFT)
 
-backup_method_label.grid(row=len(labels) + 4, column=0, padx=10, pady=10, sticky='e')
-backup_method_frame.grid(row=len(labels) + 4, column=1, columnspan=2, padx=10, pady=10, sticky='w')
+backup_method_label.grid(row=len(labels) + 3, column=0, padx=10, pady=4, sticky='e')
+backup_method_frame.grid(row=len(labels) + 3, column=1, columnspan=2, padx=10, pady=4, sticky='w')
 
 # Snapshot retention: optional, blank means keep every snapshot forever
-max_snapshots_label = tk.Label(root, text="Snapshots to Keep:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-max_snapshots_label.grid(row=len(labels) + 5, column=0, padx=0, pady=10, sticky='e')
+max_snapshots_label = tk.Label(root, text="Snapshots to Keep:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+max_snapshots_label.grid(row=len(labels) + 4, column=0, padx=0, pady=4, sticky='e')
 
 max_snapshots_entry = ttk.Entry(root, width=50)
-max_snapshots_entry.grid(row=len(labels) + 5, column=1, padx=10, pady=10)
+max_snapshots_entry.grid(row=len(labels) + 4, column=1, padx=10, pady=4)
 set_placeholder(max_snapshots_entry, "Leave blank to keep all snapshots", 'MAX_SNAPSHOTS')
 
 max_snapshots_hint = tk.Label(root, text="Oldest incremental snapshots beyond this count are deleted automatically.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-max_snapshots_hint.grid(row=len(labels) + 5, column=2, padx=10, pady=10, sticky='w')
+max_snapshots_hint.grid(row=len(labels) + 4, column=2, padx=10, pady=4, sticky='w')
 
 # Dashboard password: optional, never prefilled (only the hash is ever
 # stored) — leave blank on a fresh install for no login, or on an existing
 # one to keep whatever password is already set.
-dashboard_password_label = tk.Label(root, text="Dashboard Password:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-dashboard_password_label.grid(row=len(labels) + 6, column=0, padx=0, pady=10, sticky='e')
+dashboard_password_label = tk.Label(root, text="Dashboard Password:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+dashboard_password_label.grid(row=len(labels) + 5, column=0, padx=0, pady=4, sticky='e')
 
 dashboard_password_entry = ttk.Entry(root, width=50, show='*')
-dashboard_password_entry.grid(row=len(labels) + 6, column=1, padx=10, pady=10)
+dashboard_password_entry.grid(row=len(labels) + 5, column=1, padx=10, pady=4)
 
 dashboard_password_hint = tk.Label(root, text="Leave blank for no login, or to keep the current password unchanged.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-dashboard_password_hint.grid(row=len(labels) + 6, column=2, padx=10, pady=10, sticky='w')
+dashboard_password_hint.grid(row=len(labels) + 5, column=2, padx=10, pady=4, sticky='w')
 
 # Notification URL(s): optional, comma-separated Apprise URLs
-notify_urls_label = tk.Label(root, text="Notification URL(s):", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-notify_urls_label.grid(row=len(labels) + 7, column=0, padx=0, pady=10, sticky='e')
+notify_urls_label = tk.Label(root, text="Notification URL(s):", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+notify_urls_label.grid(row=len(labels) + 6, column=0, padx=0, pady=4, sticky='e')
 
 notify_urls_entry = ttk.Entry(root, width=50)
-notify_urls_entry.grid(row=len(labels) + 7, column=1, padx=10, pady=10)
+notify_urls_entry.grid(row=len(labels) + 6, column=1, padx=10, pady=4)
 set_placeholder(notify_urls_entry, "e.g. pover://user@token, ntfy://topic", 'NOTIFY_URLS')
 
 notify_urls_hint = tk.Label(root, text="Comma-separated Apprise URLs, notified on backup failure/completion. Leave blank to disable.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-notify_urls_hint.grid(row=len(labels) + 7, column=2, padx=10, pady=10, sticky='w')
+notify_urls_hint.grid(row=len(labels) + 6, column=2, padx=10, pady=4, sticky='w')
 
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 8, column=1, pady=25)
+save_button.grid(row=len(labels) + 7, column=1, pady=4)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 9, column=1, pady=25)
+result_label.grid(row=len(labels) + 8, column=1, pady=4)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')
