@@ -26,6 +26,33 @@ logger.add(logfile, level="INFO", format="{time} - {level} - {message}")
 
 
 
+TOTAL_SIZE_RE = re.compile(r'^total size is ([\d,]+)\s+speedup')
+
+
+def _parse_rsync_total_size(rsync_txt):
+    """rsync's own closing summary line ("total size is X  speedup is Y")
+    already reports the exact number record_backup_statistics() below
+    needs for CURRENT_BACKUP_SIZE -- the sum of every file rsync's file
+    list considered (already exclude-aware, since --exclude-from removes
+    those before this sum is computed), as a natural byproduct of the
+    transfer that just ran. Reading it here avoids a second, redundant
+    full `du` scan of the multi-hundred-thousand-file tree rsync just
+    spent minutes building. Only available in the closing summary (not
+    knowable earlier -- see the -vv/--out-format comments on incremental
+    recursion in rsync() above), so this can't help with the *live*
+    in-progress percentage, only this final, post-completion number.
+    """
+    try:
+        with open(rsync_txt, 'r') as f:
+            for line in f:
+                match = TOTAL_SIZE_RE.match(line.strip())
+                if match:
+                    return int(match.group(1).replace(',', ''))
+    except OSError:
+        pass
+    return None
+
+
 def record_backup_statistics(changes, last_session_number, incremental_folder):
     """Record that this backup run happened — the full backup (session 1)
     or a specific incremental snapshot — plus per-run numeric stats.
@@ -75,12 +102,16 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
     record_backup_run(last_session_number, backup_type, incremental_folder, total_files_processed)
 
     # Cached here (once per backup run) rather than computed on every
-    # dashboard page load — `du` walks the entire full_backup tree, which
-    # can take minutes on a large backup and would make the dashboard feel
-    # hung if run synchronously on every visit. full_backup is a symlink to
-    # the snapshot this run just created (already repointed by the time
-    # this runs) — get_folder_size_du/-D dereferences it correctly.
-    current_size = get_folder_size_du(full_backup)
+    # dashboard page load. Prefer rsync's own "total size is X" summary
+    # line (see _parse_rsync_total_size) over a fresh `du` scan -- rsync
+    # already computed this exact number as part of the transfer that just
+    # finished, so re-walking the tree a second time to ask the same
+    # question again is pure waste. Falls back to `du` (full_backup is a
+    # symlink to the snapshot this run just created, already repointed by
+    # the time this runs; get_folder_size_du/-D dereferences it correctly)
+    # only if the summary line wasn't found for some reason.
+    total_size_bytes = _parse_rsync_total_size(rsync_txt)
+    current_size = human_readable_size(total_size_bytes) if total_size_bytes is not None else get_folder_size_du(full_backup)
     if current_size:
         set_database_value('CURRENT_BACKUP_SIZE', current_size)
 
@@ -485,12 +516,20 @@ if __name__ == "__main__":
     os.makedirs(new_snapshot_path, exist_ok=True)
     logger.info(f"New snapshot destination: {new_snapshot_path} (link-dest: {previous_snapshot})")
 
-    # Cleared up front so a stale percentage/size/ETA from a previous run
-    # can't be shown on the dashboard during the icon-setup gap before
-    # rsync's first progress line actually arrives.
+    # Cleared up front so a stale percentage/ETA from a previous run can't
+    # be shown on the dashboard during the icon-setup gap before rsync's
+    # first progress line actually arrives.
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
     set_database_value('BACKUP_ETA', '')
-    set_database_value('CURRENT_BACKUP_SIZE', '')
+    # Set once, here, rather than live-updated per progress line: without
+    # the periodic du-based re-anchoring (removed -- see the comment above
+    # the main progress loop), the running estimate has no correction for
+    # the rest of a long run and can drift into a number that looks
+    # precise but isn't. Better to say plainly that it isn't known yet
+    # than show a value that might be wrong. The real number appears the
+    # moment the run finishes (record_backup_statistics, sourced from
+    # rsync's own closing summary, not an estimate).
+    set_database_value('CURRENT_BACKUP_SIZE', 'Calculating…')
     # main_backup.py sets this while it's still running its own prerequisite
     # checks, before this process even exists — clear it now that this
     # script (the actual work is_backup_running() looks for) has taken over.
@@ -513,12 +552,10 @@ if __name__ == "__main__":
     # concurrently with each other.
     # transferred_offset is the value of transferred_bytes (rsync's own
     # running counter, read in the main loop below) at the moment
-    # dest_baseline was last measured. The live per-progress-line estimate
-    # is dest_baseline + (transferred_bytes - transferred_offset) rather
-    # than dest_baseline + transferred_bytes: both get re-anchored together
-    # on every real `du` scan (initial and periodic, below), so the fast
-    # estimate keeps converging back to ground truth instead of drifting
-    # further from it, unbounded, for the rest of the run.
+    # dest_baseline was measured. The live per-progress-line estimate is
+    # dest_baseline + (transferred_bytes - transferred_offset) -- anchored
+    # once, at the start, not re-corrected during the run (see the comment
+    # below on why periodic `du`-based re-anchoring was removed).
     baselines = {'dest_baseline': None, 'source_total': None, 'transferred_offset': 0, 'last_transferred': 0}
 
     def _compute_dest_baseline():
@@ -553,50 +590,23 @@ if __name__ == "__main__":
 
     # CURRENT_BACKUP_SIZE and BACKUP_PROGRESS_PERCENT (set below, per
     # progress line) are a live estimate off dest_baseline — cheap and
-    # immediate, but it double-counts modified files: the old version's
+    # immediate, but it double-counts modified files (the old version's
     # bytes are already in the baseline, and the new version's size gets
-    # added on top too. It also has no idea about deletions (--delete is
-    # on). This loop periodically re-`du`s the real destination and
-    # re-anchors both dest_baseline and the estimate to ground truth.
-    # Self-rescheduling — waits 60s after each scan *completes*, not on a
-    # fixed clock — so scans on a huge tree can never overlap or pile up.
-    stop_size_refresh = threading.Event()
-
-    def _refresh_current_size_periodically():
-        # Wait before the first scan too — _compute_dest_baseline above
-        # already `du`s the previous snapshot once at startup; running a
-        # redundant concurrent scan of a different (still mostly empty)
-        # path at the same moment just adds I/O contention for no benefit.
-        stop_size_refresh.wait(60)
-        while not stop_size_refresh.is_set():
-            # The NEW, currently-being-written snapshot -- not full_backup,
-            # which stays pointed at the OLD snapshot for this run's entire
-            # duration (only repointed after success, at the very end).
-            # Measuring full_backup here would freeze CURRENT_BACKUP_SIZE/
-            # percent at a stale value for the rest of a potentially
-            # hours-long run.
-            size_bytes = get_folder_size_bytes_du(new_snapshot_path)
-            source_total = baselines['source_total']
-            # Both gated on the same condition, updated together — size_bytes
-            # not None on its own used to be enough to update
-            # CURRENT_BACKUP_SIZE, leaving BACKUP_PROGRESS_PERCENT stuck at
-            # whatever it was if source_total's own du scan (a separate,
-            # independently-timed background thread) hadn't finished yet.
-            # That gap let the dashboard show a freshly-updated size next to
-            # a stale, unrelated percent for as long as source_total lagged.
-            if size_bytes is not None and source_total:
-                set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(size_bytes))
-                baselines['dest_baseline'] = size_bytes
-                baselines['transferred_offset'] = baselines['last_transferred']
-                set_database_value('BACKUP_PROGRESS_PERCENT', str(min(100, round(size_bytes / source_total * 100))))
-            stop_size_refresh.wait(60)
-
-    threading.Thread(target=_refresh_current_size_periodically, daemon=True).start()
-
+    # added on top too) and has no idea about deletions (--delete is on).
+    # No periodic `du`-based re-anchoring anymore: `du` runs unprivileged
+    # here, and turns out to be not just slow on a tree this size but
+    # actually wrong -- found live, permission-denied on every Docker-
+    # container-owned directory (WireGuard peer configs, MySQL/Postgres
+    # data dirs), silently undercounting by several GB. Correcting toward
+    # a periodically-wrong number isn't a real correction, and re-scanning
+    # every 60s competed with the live transfer for disk I/O regardless.
+    # The live number is now a running estimate that can drift somewhat on
+    # a very long run; the final CURRENT_BACKUP_SIZE (record_backup_
+    # statistics, below) is accurate regardless, sourced from rsync's own
+    # closing summary rather than `du` at all.
     rsync_result = {'success': None}
     last_percent = None
     last_eta = None
-    last_size_str = None
     for progress in rsync(new_snapshot_path, link_dest=previous_snapshot, result_holder=rsync_result):
         # Groups: bytes-transferred-so-far, rsync's own percent, ETA
         # (time *remaining* — verified empirically with a throttled
@@ -610,24 +620,14 @@ if __name__ == "__main__":
         dest_baseline = baselines['dest_baseline']
         source_total = baselines['source_total']
         if dest_baseline is not None and source_total:
+            # CURRENT_BACKUP_SIZE itself is no longer updated here (see the
+            # 'Calculating…' comment above) -- current_total is still
+            # needed for percent, which is a self-correcting ratio (both
+            # sides drift together) even though the absolute byte count
+            # underneath it isn't perfectly anchored for the rest of a
+            # long run.
             current_total = dest_baseline + (transferred_bytes - baselines['transferred_offset'])
             percent = min(100, round(current_total / source_total * 100))
-            # Was unconditional on every progress line -- with
-            # --info=progress2 emitting potentially 1000+ lines/sec on a
-            # fast transfer, that meant 1000+ SQLite connect+write+commit
-            # (fsync) cycles per second purely for Python-side bookkeeping,
-            # real backpressure on the pipe rsync writes progress to. Found
-            # live: the wrapper process using MORE CPU than rsync itself
-            # (18.6% vs a combined ~10% across rsync's own processes), and
-            # a run measurably slower than Timeshift's bare rsync doing a
-            # comparable job over the same disk. human_readable_size's
-            # rounding means the string is unchanged across most updates
-            # anyway, so this only writes when it's actually new information
-            # -- same pattern already used for percent/eta right below.
-            size_str = human_readable_size(current_total)
-            if size_str != last_size_str:
-                last_size_str = size_str
-                set_database_value('CURRENT_BACKUP_SIZE', size_str)
             percent_str = str(percent)
         else:
             # Baselines not ready yet (source_total's du scan alone took 45s
@@ -650,11 +650,6 @@ if __name__ == "__main__":
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
     set_database_value('BACKUP_ETA', '')
     set_database_value('BACKUP_START_TIME', '')
-    # record_backup_statistics() below does its own final accurate du scan,
-    # so this periodic one has nothing left to correct — stop it here
-    # rather than leaving it running (and holding the process open on its
-    # 30s wait) through the rest of this script's work.
-    stop_size_refresh.set()
 
     if rsync_result['success'] is False:
         # rsync itself failed — repointing full_backup or recording stats
