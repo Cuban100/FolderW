@@ -241,6 +241,15 @@ def cleanup_old_snapshots(max_snapshots):
     list_backups() sorts newest-first and this only ever prunes the tail.
     A falsy/zero/negative max_snapshots means "keep everything" (no
     cleanup).
+
+    original_backup's target is explicitly protected too, regardless of
+    where it falls in the newest-first order -- it's normally the
+    OLDEST snapshot (differential mode's fixed --link-dest anchor, set
+    once on the very first-ever backup and never repointed again), which
+    is exactly what "delete the oldest beyond the limit" would otherwise
+    prune first. Without this, differential mode would start failing
+    every run (the broken-symlink guard in rsync_differential.py refuses
+    to silently full-copy) as soon as retention caught up to it.
     """
     try:
         max_snapshots = int(max_snapshots)
@@ -249,9 +258,18 @@ def cleanup_old_snapshots(max_snapshots):
     if max_snapshots <= 0:
         return []
 
+    original_backup = load_other_variables('original_backup')
+    protected_path = os.path.realpath(original_backup) if os.path.exists(original_backup) else None
+
+    def _is_protected(snapshot):
+        if protected_path is None:
+            return False
+        path = get_backup_path(snapshot["id"])
+        return path is not None and os.path.realpath(path) == protected_path
+
     snapshots = list_backups()
     # list_backups() already sorts newest first
-    to_delete = snapshots[max_snapshots:]
+    to_delete = [s for s in snapshots[max_snapshots:] if not _is_protected(s)]
 
     deleted = []
     for snapshot in to_delete:

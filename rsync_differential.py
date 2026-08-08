@@ -38,10 +38,10 @@ from notifications import notify
 
 from rsync_incremental import (
     _check_sudo_rsync_available, _migrate_legacy_full_backup,
-    _unique_new_snapshot_path, _repoint_full_backup,
-    _repoint_original_backup_if_unset, ensure_backup_folder_icon,
-    rsync, parse_logfile, generate_incremental_folder,
-    record_backup_statistics,
+    _migrate_legacy_original_backup_name, _unique_new_snapshot_path,
+    _repoint_full_backup, _repoint_original_backup_if_unset,
+    ensure_backup_folder_icon, rsync, parse_logfile,
+    generate_incremental_folder, record_backup_statistics,
 )
 
 src_dir = load_env_value('SRC_DIR')
@@ -86,6 +86,7 @@ def _original_snapshot_path():
 if __name__ == "__main__":
     _check_sudo_rsync_available()
     _migrate_legacy_full_backup()
+    _migrate_legacy_original_backup_name()
 
     # Fixed for the whole run, unlike rsync_incremental.py's previous_
     # snapshot -- always the original full backup, never the most recent

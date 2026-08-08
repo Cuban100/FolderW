@@ -239,6 +239,24 @@ def _repoint_full_backup(target_path):
     logger.info(f"full_backup now points at: {target_path}")
 
 
+def _migrate_legacy_original_backup_name():
+    """One-time rename for installs where original_backup was already
+    created under its old, visible name ("Original Backup") before it
+    became a hidden dotfile-style entry (see original_backup's own
+    definition in db_operations.py). Renames the existing symlink rather
+    than letting _repoint_original_backup_if_unset() create a new one at
+    the hidden path -- that function only sets original_backup if it
+    doesn't already exist, so without this rename it would silently
+    treat the next successful backup as if it were the very first one,
+    replacing the TRUE original (differential mode's whole point) with
+    whatever happens to run next.
+    """
+    legacy_path = os.path.join(os.path.dirname(original_backup), 'Original Backup')
+    if os.path.lexists(legacy_path) and not os.path.lexists(original_backup):
+        os.rename(legacy_path, original_backup)
+        logger.info(f"Renamed legacy original_backup entry to hidden name: {original_backup}")
+
+
 def _repoint_original_backup_if_unset(target_path):
     """Sets original_backup to target_path only the first time it's ever
     called (no-op if it already exists) -- this is differential mode's
@@ -350,13 +368,15 @@ def ensure_backup_folder_icon():
     # e.g. "Caveman", holding both the symlink and Snapshots/) is never an
     # rsync destination itself, so it's still safe to brand normally.
     #
-    # folder-icon.png (not the raw logo.png) -- gio's metadata::custom-icon
-    # replaces the folder glyph entirely with whatever image is given, it
-    # doesn't composite it onto a folder shape automatically. folder-
-    # icon.png is a pre-rendered folder with the badge embedded in the
-    # center (the author's own asset, see git history), so it actually
-    # reads as a folder in a file manager instead of just a floating badge.
-    _set_folder_icon(full_backup, 'folder-icon.png', write_physical_files=False)
+    # FolderW.png for the Full Backup symlink itself (the author's own
+    # 3D folder-with-badge render, already styled as a folder); folder-
+    # icon.png (a flatter pre-rendered folder with the badge embedded,
+    # also the author's own asset) for its container folder. gio's
+    # metadata::custom-icon replaces the folder glyph entirely with
+    # whatever image is given -- it doesn't composite either onto a
+    # folder shape automatically, which is why both assets are already
+    # pre-rendered to look like one instead of a floating badge.
+    _set_folder_icon(full_backup, 'FolderW.png', write_physical_files=False)
     _set_folder_icon(os.path.dirname(full_backup), 'folder-icon.png')
 
 def rsync(destination, link_dest=None, result_holder=None):
@@ -559,6 +579,9 @@ if __name__ == "__main__":
     # installs from before the --link-dest redesign, where full_backup was
     # a real directory instead of a symlink to the newest snapshot.
     _migrate_legacy_full_backup()
+    # Same idea, for original_backup's old visible name -- see the
+    # function's own docstring.
+    _migrate_legacy_original_backup_name()
 
     # Captured now, before this run's rsync touches anything -- this is
     # always a *complete*, previously-successful snapshot (or None on the
