@@ -44,6 +44,22 @@ NOTE_FILE = '.folderw_note'
 # ensure_backup_folder_icon()), but harmless to exclude everywhere.
 _INTERNAL_FILES = (COMPLETION_MARKER, STATS_CACHE_FILE, NOTE_FILE, 'FolderW.png', '.directory')
 
+def _chmod_775(path):
+    # rsync's own --chmod=775 (see rsync_incremental.py) only ever applies
+    # to files it actually transfers -- these internal bookkeeping files
+    # are written directly by Python (open()/shutil.copy2()), which
+    # respects the process umask instead, landing at 664 by default.
+    # Confirmed live: a snapshot showing its real content at 775 but its
+    # own .folderw_complete/.folderw_stats/.folderw_note at 664 -- an
+    # inconsistency with "every file in the backup is 775", not just
+    # these markers specifically. Non-fatal: a permission oddity here
+    # isn't worth failing an otherwise-successful backup over.
+    try:
+        os.chmod(path, 0o775)
+    except OSError as e:
+        logger.warning(f"Could not chmod {path} to 775: {e}")
+
+
 _MONTH_NAMES = {
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
@@ -117,6 +133,7 @@ def set_snapshot_note(snapshot_path, note):
         return
     with open(note_path, 'w') as f:
         f.write(note)
+    _chmod_775(note_path)
 
 
 def _cached_summarize_snapshot(snapshot_path):
@@ -139,6 +156,7 @@ def _cached_summarize_snapshot(snapshot_path):
     try:
         with open(cache_path, 'w') as f:
             json.dump({'file_count': file_count, 'total_size': total_size}, f)
+        _chmod_775(cache_path)
     except OSError as e:
         logger.warning(f"Could not write stats cache for {snapshot_path}: {e}")
     return file_count, total_size
@@ -154,8 +172,10 @@ def mark_snapshot_complete(snapshot_path):
     os.walk) is absorbed here, once, into a backup run that's already
     taking minutes, rather than paid by whoever next loads the page.
     """
-    with open(os.path.join(snapshot_path, COMPLETION_MARKER), 'w') as f:
+    marker_path = os.path.join(snapshot_path, COMPLETION_MARKER)
+    with open(marker_path, 'w') as f:
         f.write(datetime.now().isoformat())
+    _chmod_775(marker_path)
     _cached_summarize_snapshot(snapshot_path)
 
 

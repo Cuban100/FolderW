@@ -6,7 +6,7 @@ import threading
 import pwd
 import grp
 from db_operations import get_last_session_number, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value, get_database_value
-from restore_operations import cleanup_old_snapshots, mark_snapshot_complete, COMPLETION_MARKER
+from restore_operations import cleanup_old_snapshots, mark_snapshot_complete, COMPLETION_MARKER, _chmod_775
 from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
 from notifications import notify
 from dotenv import load_dotenv
@@ -308,12 +308,14 @@ def _set_folder_icon(folder, icon_filename, write_physical_files=True):
         os.makedirs(folder, exist_ok=True)
         if os.path.exists(icon_source) and not os.path.exists(icon_dest):
             shutil.copy2(icon_source, icon_dest)
+            _chmod_775(icon_dest)
             logger.info(f"Added icon to folder: {icon_dest}")
 
         directory_file = os.path.join(folder, '.directory')
         if not os.path.exists(directory_file):
             with open(directory_file, 'w') as f:
                 f.write(f"[Desktop Entry]\nIcon={icon_dest}\n")
+            _chmod_775(directory_file)
             logger.info(f"Set folder icon via {directory_file}")
 
     try:
