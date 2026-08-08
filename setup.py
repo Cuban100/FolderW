@@ -2,7 +2,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from db_operations import create_all_tables, set_database_value
+from db_operations import create_all_tables, set_database_value, reset_backup_history
 from auth import hash_password
 import tkinter as tk
 from tkinter import filedialog, Label, PhotoImage, messagebox
@@ -64,6 +64,18 @@ INCREMENTAL_EXPLANATION = (
 def _show_backup_method_info(mode):
     text = DIFFERENTIAL_EXPLANATION if mode == 'differential' else INCREMENTAL_EXPLANATION
     messagebox.showinfo("Backup Method", text)
+
+def _is_valid_folder_name(name):
+    # Linux (the only supported platform) only actually forbids '/' and
+    # the null byte in a filename/directory name -- everything else
+    # (spaces, dots, unicode, etc.) is technically legal at the
+    # filesystem level. '.' and '..' are reserved (they mean "this
+    # directory" and "parent directory", not a real name). This doesn't
+    # try to guess at "looks wrong" patterns like a .db extension --
+    # that's not actually invalid for a directory name, just confusing
+    # if it ended up there by mistake (a different, already-covered
+    # concern: the Database field's own .db-required check).
+    return bool(name) and name not in ('.', '..') and '/' not in name and '\x00' not in name
 
 def toggle_backup_options():
     if monitor_var.get() == 1:
@@ -267,6 +279,11 @@ def save_paths():
     if not env_path:
         env_path = '.env'
 
+    # Captured before anything below overwrites .env, so identity change
+    # can be detected the same way server.py's web Settings page already
+    # does -- see the reset_backup_history() call further down.
+    old_identity = (os.getenv('SRC_DIR'), os.getenv('BASE_DIR'), os.getenv('FULL_NAME'))
+
     paths = {
         'SRC_DIR': src_dir_entry.get(),
         'BASE_DIR': base_dir_entry.get(),
@@ -298,6 +315,10 @@ def save_paths():
     # if ever.
     if not paths['DATABASE'].lower().endswith('.db'):
         result_label.config(text="Error: Database file name must end with .db", foreground='#FF0000')
+        return
+
+    if not _is_valid_folder_name(paths['FULL_NAME']):
+        result_label.config(text="Error: Full Backup Folder Name can't contain '/', be empty, or be '.' / '..'.", foreground='#FF0000')
         return
 
     # Snapshots to keep is optional — blank means "keep everything" — so it's
@@ -348,6 +369,20 @@ def save_paths():
     result_label.config(text="Configuration saved to .env", foreground='#39FF14')  # Set to neon green
 
     create_all_tables(paths['DATABASE'])
+
+    new_identity = (paths['SRC_DIR'], paths['BASE_DIR'], paths['FULL_NAME'])
+    if new_identity != old_identity:
+        # Pointed FolderW at a different backup (source, destination, or
+        # container folder) -- old session/change/statistics history
+        # belongs to the previous backup and would otherwise corrupt
+        # session numbering and historical stats for the new one. Also
+        # clears FULL_BACKUP_COMPLETED, so main_backup.py actually runs a
+        # fresh full backup for the new target instead of seeing the flag
+        # still set from the old one and skipping straight to monitoring.
+        # Web Settings (server.py's /submit/) already does this; this GUI
+        # never did until now.
+        reset_backup_history(paths['DATABASE'])
+
     # Config saved/changed here — clear any previously persisted check
     # results (including src/dest sizes from a prior check) so the
     # dashboard doesn't show stale Settings/Validation/Evaluation results

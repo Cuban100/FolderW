@@ -769,6 +769,15 @@ async def test_notification(notify_urls: str = Form("")):
     return JSONResponse({"success": False, "message": "Apprise reported failure — check the URL and service status."})
 
 
+def _is_valid_folder_name(name):
+    # Linux (the only supported platform) only actually forbids '/' and
+    # the null byte in a directory name -- everything else is technically
+    # legal at the filesystem level. '.' and '..' are reserved. Mirrors
+    # setup.py's own _is_valid_folder_name() (kept separate, not shared --
+    # different processes/files).
+    return bool(name) and name not in ('.', '..') and '/' not in name and '\x00' not in name
+
+
 @app.post("/submit/", response_class=HTMLResponse)
 async def submit_settings(
     request: Request,
@@ -796,13 +805,12 @@ async def submit_settings(
         load_env_value('FULL_NAME'),
     )
 
-    max_snapshots = max_snapshots.strip()
-    if max_snapshots and (not max_snapshots.isdigit() or int(max_snapshots) <= 0):
+    def _settings_error(error, max_snapshots_value):
         logfile = load_other_variables('logfile')
         return templates.TemplateResponse("settings.html", {
             "request": request,
             "logo": logo,
-            "error": "Snapshots to Keep must be a positive whole number, or left blank.",
+            "error": error,
             "log_dir": os.path.dirname(logfile),
             "src_dir": load_env_value('SRC_DIR'),
             "base_dir": load_env_value('BASE_DIR'),
@@ -810,11 +818,25 @@ async def submit_settings(
             "database": load_env_value('DATABASE'),
             "monitor_checked": monitor_enabled,
             "interval": load_env_value('BACKUP_INTERVAL'),
-            "max_snapshots": max_snapshots,
+            "max_snapshots": max_snapshots_value,
             "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
             "notify_urls": load_env_value('NOTIFY_URLS'),
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
         })
+
+    max_snapshots = max_snapshots.strip()
+    if max_snapshots and (not max_snapshots.isdigit() or int(max_snapshots) <= 0):
+        return _settings_error("Snapshots to Keep must be a positive whole number, or left blank.", max_snapshots)
+
+    # Database must end in .db -- create_all_tables() below happily
+    # creates a SQLite file under any name at all, so nothing else
+    # catches a typo'd extension (or none at all) until much later, if
+    # ever.
+    if database.strip() and not database.strip().lower().endswith('.db'):
+        return _settings_error("Database file name must end with .db", max_snapshots)
+
+    if full_name.strip() and not _is_valid_folder_name(full_name.strip()):
+        return _settings_error("Full Backup Folder Name can't contain '/', be empty, or be '.' / '..'.", max_snapshots)
 
     require_login_enabled = require_login is not None
     new_password = new_password.strip()
