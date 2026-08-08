@@ -429,8 +429,8 @@ if __name__ == "__main__":
     rsync_result = {'success': None}
     last_percent = None
     last_eta = None
+    last_size_str = None
     for progress in rsync(rsync_result):
-        logger.info(f"Progress: {progress}")
         # Groups: bytes-transferred-so-far, rsync's own percent, ETA
         # (time *remaining* — verified empirically with a throttled
         # transfer that it counts down to 0:00:00, not up).
@@ -445,7 +445,22 @@ if __name__ == "__main__":
         if dest_baseline is not None and source_total:
             current_total = dest_baseline + (transferred_bytes - baselines['transferred_offset'])
             percent = min(100, round(current_total / source_total * 100))
-            set_database_value('CURRENT_BACKUP_SIZE', human_readable_size(current_total))
+            # Was unconditional on every progress line -- with
+            # --info=progress2 emitting potentially 1000+ lines/sec on a
+            # fast transfer, that meant 1000+ SQLite connect+write+commit
+            # (fsync) cycles per second purely for Python-side bookkeeping,
+            # real backpressure on the pipe rsync writes progress to. Found
+            # live: the wrapper process using MORE CPU than rsync itself
+            # (18.6% vs a combined ~10% across rsync's own processes), and
+            # a run measurably slower than Timeshift's bare rsync doing a
+            # comparable job over the same disk. human_readable_size's
+            # rounding means the string is unchanged across most updates
+            # anyway, so this only writes when it's actually new information
+            # -- same pattern already used for percent/eta right below.
+            size_str = human_readable_size(current_total)
+            if size_str != last_size_str:
+                last_size_str = size_str
+                set_database_value('CURRENT_BACKUP_SIZE', size_str)
             percent_str = str(percent)
         else:
             # Baselines not ready yet (source_total's du scan alone took 45s
