@@ -664,7 +664,7 @@ if __name__ == "__main__":
     # just a relative path resolved under the app's own working directory)
     # thousands of times per run. Each write's journal file registered as
     # a "file changed" event to the watchdog, which rescheduled another
-    # backup 300s later -- a self-sustaining loop that kept firing new
+    # backup shortly after -- a self-sustaining loop that kept firing new
     # backups all night with zero real user activity. Capping DB writes to
     # once every 2s breaks that loop while keeping the dashboard responsive.
     DB_WRITE_MIN_INTERVAL = 2

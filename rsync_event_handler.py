@@ -14,7 +14,7 @@ import signal
 # How long to wait after the *last* detected change before actually running
 # a backup. Resets on every new event, so a burst of saves/writes collapses
 # into a single backup once things go quiet, instead of firing repeatedly.
-BACKUP_DELAY_SECONDS = 300
+BACKUP_DELAY_SECONDS = 120
 
 # Ceiling on how long a backup can be postponed by continuous activity.
 # The resetting debounce above has no upper bound on its own -- on a live
@@ -22,13 +22,13 @@ BACKUP_DELAY_SECONDS = 300
 # browser cookie/webstorage journals, app logs) is essentially always
 # being written, so a pure "wait for quiet" timer can end up never firing
 # at all. Found live: watched a real run go 45+ minutes without a single
-# incremental backup despite constant activity, because the 300s quiet
-# window was never actually reached. This forces one through regardless
-# of ongoing changes once too much time has passed since the first
-# unflushed one. Set equal to BACKUP_DELAY_SECONDS on purpose: a backup
-# always runs within 5 minutes of the first pending change, whether
-# things go quiet by then or not.
-MAX_BACKUP_DELAY_SECONDS = 300
+# incremental backup despite constant activity, because the quiet window
+# was never actually reached. This forces one through regardless of
+# ongoing changes once too much time has passed since the first unflushed
+# one. Set equal to BACKUP_DELAY_SECONDS on purpose: a backup always runs
+# within 2 minutes of the first pending change, whether things go quiet
+# by then or not.
+MAX_BACKUP_DELAY_SECONDS = 120
 
 rsync_txt = load_other_variables('rsync_txt')
 logfile = load_other_variables('logfile')
@@ -63,8 +63,8 @@ EXCLUDE_PATTERNS = _load_exclude_patterns()
 # trigger/reschedule a backup on their own. For files that are constantly
 # rewritten by a long-running host/container service regardless of real
 # user activity (confirmed, not guessed -- see the file's own header) --
-# without this, that alone is enough to keep the watchdog's 300s ceiling
-# firing around the clock.
+# without this, that alone is enough to keep the watchdog's ceiling
+# (MAX_BACKUP_DELAY_SECONDS, above) firing around the clock.
 TRIGGER_EXEMPT_PATTERNS = _load_patterns(
     os.path.join(os.path.dirname(load_other_variables('exclude_file')), 'watchdog_trigger_exempt.txt')
 )
