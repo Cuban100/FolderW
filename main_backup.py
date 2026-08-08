@@ -3,6 +3,7 @@ import sys
 from db_operations import load_env_value, load_other_variables, set_database_value, get_database_value
 from notifications import notify
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
+from backup_hooks import run_backup_script_with_hooks
 import subprocess
 import schedule
 import time
@@ -22,7 +23,7 @@ def run_regular_backup():
     script_name = _backup_script_name()
     logger.info(f"Running regular backup with {script_name}")
     try:
-        result = subprocess.run([sys.executable, os.path.join(BASE_DIR, script_name)], check=True)
+        result = run_backup_script_with_hooks([sys.executable, os.path.join(BASE_DIR, script_name)], check=True)
         logger.info(f"Backup result: {result}")
     except subprocess.CalledProcessError as e:
         # Centralized here rather than in rsync_incremental.py/rsync_

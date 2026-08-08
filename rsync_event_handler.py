@@ -4,6 +4,7 @@ import time
 import fnmatch
 import threading
 from db_operations import load_env_value, load_other_variables
+from backup_hooks import run_backup_script_with_hooks
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from loguru import logger
@@ -77,7 +78,7 @@ def run_backup_script():
         # honor the same BACKUP_METHOD setting.
         script_name = "rsync_incremental.py" if load_env_value('BACKUP_METHOD') == 'incremental' else "rsync_differential.py"
         script_path = os.path.join(os.path.dirname(__file__), script_name)
-        result = subprocess.run([python_path, script_path], check=True, capture_output=True, text=True)
+        result = run_backup_script_with_hooks([python_path, script_path], check=True, capture_output=True, text=True)
         logger.info(f"Backup script output: {result.stdout}")
     except subprocess.CalledProcessError as e:
         logger.error(f"Backup script failed with error: {e.stderr}")

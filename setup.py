@@ -372,6 +372,16 @@ def save_paths():
     set_key(env_path, 'NOTIFY_URLS', notify_urls)
     set_key(env_path, 'NOTIFY_SEND_ALWAYS', str(notify_send_always_var.get()))
 
+    pre_backup_script = pre_backup_script_entry.get().strip()
+    if "e.g." in pre_backup_script:  # untouched placeholder text
+        pre_backup_script = ""
+    set_key(env_path, 'PRE_BACKUP_SCRIPT', pre_backup_script)
+
+    post_backup_script = post_backup_script_entry.get().strip()
+    if "e.g." in post_backup_script:  # untouched placeholder text
+        post_backup_script = ""
+    set_key(env_path, 'POST_BACKUP_SCRIPT', post_backup_script)
+
     result_label.config(text="Configuration saved to .env", foreground='#39FF14')  # Set to neon green
 
     create_all_tables(paths['DATABASE'])
@@ -646,44 +656,69 @@ set_placeholder(max_snapshots_entry, "Leave blank to keep all snapshots", 'MAX_S
 max_snapshots_hint = tk.Label(root, text="Oldest incremental snapshots beyond this count are deleted automatically.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
 max_snapshots_hint.grid(row=len(labels) + 4, column=2, padx=10, pady=4, sticky='w')
 
+# Pre/post-backup hook scripts: both optional. Pre-script failing (non-
+# zero exit) aborts the backup entirely -- see backup_hooks.py. Post-
+# script always runs regardless of backup outcome (e.g. restarting a
+# service the pre-script stopped shouldn't depend on the backup itself
+# succeeding).
+pre_backup_script_label = tk.Label(root, text="Pre-Backup Script:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+pre_backup_script_label.grid(row=len(labels) + 5, column=0, padx=0, pady=4, sticky='e')
+
+pre_backup_script_entry = ttk.Entry(root, width=50)
+pre_backup_script_entry.grid(row=len(labels) + 5, column=1, padx=10, pady=4)
+set_placeholder(pre_backup_script_entry, "e.g. /home/user/scripts/dump-db.sh", 'PRE_BACKUP_SCRIPT')
+
+pre_backup_script_hint = tk.Label(root, text="Executable, run before every backup. Exits non-zero = backup skipped. Leave blank if not needed.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+pre_backup_script_hint.grid(row=len(labels) + 5, column=2, padx=10, pady=4, sticky='w')
+
+post_backup_script_label = tk.Label(root, text="Post-Backup Script:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+post_backup_script_label.grid(row=len(labels) + 6, column=0, padx=0, pady=4, sticky='e')
+
+post_backup_script_entry = ttk.Entry(root, width=50)
+post_backup_script_entry.grid(row=len(labels) + 6, column=1, padx=10, pady=4)
+set_placeholder(post_backup_script_entry, "e.g. /home/user/scripts/restart-service.sh", 'POST_BACKUP_SCRIPT')
+
+post_backup_script_hint = tk.Label(root, text="Executable, run after every backup (success or failure). Leave blank if not needed.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+post_backup_script_hint.grid(row=len(labels) + 6, column=2, padx=10, pady=4, sticky='w')
+
 # Dashboard password: optional, never prefilled (only the hash is ever
 # stored) — leave blank on a fresh install for no login, or on an existing
 # one to keep whatever password is already set.
 dashboard_password_label = tk.Label(root, text="Dashboard Password:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
-dashboard_password_label.grid(row=len(labels) + 5, column=0, padx=0, pady=4, sticky='e')
+dashboard_password_label.grid(row=len(labels) + 7, column=0, padx=0, pady=4, sticky='e')
 
 dashboard_password_entry = ttk.Entry(root, width=50, show='*')
-dashboard_password_entry.grid(row=len(labels) + 5, column=1, padx=10, pady=4)
+dashboard_password_entry.grid(row=len(labels) + 7, column=1, padx=10, pady=4)
 
 dashboard_password_hint = tk.Label(root, text="Leave blank for no login, or to keep the current password unchanged.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-dashboard_password_hint.grid(row=len(labels) + 5, column=2, padx=10, pady=4, sticky='w')
+dashboard_password_hint.grid(row=len(labels) + 7, column=2, padx=10, pady=4, sticky='w')
 
 # Notification URL(s): optional, comma-separated Apprise URLs
 notify_urls_label = tk.Label(root, text="Notification URL(s):", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
-notify_urls_label.grid(row=len(labels) + 6, column=0, padx=0, pady=4, sticky='e')
+notify_urls_label.grid(row=len(labels) + 8, column=0, padx=0, pady=4, sticky='e')
 
 notify_urls_entry = ttk.Entry(root, width=50)
-notify_urls_entry.grid(row=len(labels) + 6, column=1, padx=10, pady=4)
+notify_urls_entry.grid(row=len(labels) + 8, column=1, padx=10, pady=4)
 set_placeholder(notify_urls_entry, "e.g. pover://user@token, ntfy://topic", 'NOTIFY_URLS')
 
 notify_urls_hint = tk.Label(root, text="Comma-separated Apprise URLs, notified on backup failure/completion. Leave blank to disable.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-notify_urls_hint.grid(row=len(labels) + 6, column=2, padx=10, pady=4, sticky='w')
+notify_urls_hint.grid(row=len(labels) + 8, column=2, padx=10, pady=4, sticky='w')
 
 # Independent of the URL(s) above: a local desktop notification via
 # notify-send, usable on its own (no external service needed) or
 # alongside Apprise URLs.
 notify_send_always_var = tk.IntVar(value=0)
 notify_send_always_checkbox = tk.Checkbutton(root, text="Always send a desktop notification", variable=notify_send_always_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71')
-notify_send_always_checkbox.grid(row=len(labels) + 7, column=1, padx=10, pady=4, sticky='w')
+notify_send_always_checkbox.grid(row=len(labels) + 9, column=1, padx=10, pady=4, sticky='w')
 
 notify_send_always_hint = tk.Label(root, text="Uses notify-send to show a notification on this machine's own desktop.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
-notify_send_always_hint.grid(row=len(labels) + 7, column=2, padx=10, pady=4, sticky='w')
+notify_send_always_hint.grid(row=len(labels) + 9, column=2, padx=10, pady=4, sticky='w')
 
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 8, column=1, pady=4)
+save_button.grid(row=len(labels) + 10, column=1, pady=4)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 9, column=1, pady=4)
+result_label.grid(row=len(labels) + 11, column=1, pady=4)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')

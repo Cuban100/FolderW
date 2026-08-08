@@ -836,6 +836,8 @@ async def settings_page(request: Request):
         "notify_urls": load_env_value('NOTIFY_URLS'),
         "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
         "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+        "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
+        "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
     })
 
 
@@ -903,6 +905,8 @@ async def submit_settings(
     notify_urls: str = Form(""),
     notify_send_always: str = Form(None),
     backup_method: str = Form("differential"),
+    pre_backup_script: str = Form(""),
+    post_backup_script: str = Form(""),
 ):
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
@@ -941,6 +945,8 @@ async def submit_settings(
             "notify_urls": load_env_value('NOTIFY_URLS'),
             "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+            "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
+            "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
         })
 
     max_snapshots = max_snapshots.strip()
@@ -980,6 +986,8 @@ async def submit_settings(
         "NOTIFY_URLS": notify_urls.strip(),
         "NOTIFY_SEND_ALWAYS": "1" if notify_send_always is not None else "0",
         "BACKUP_METHOD": "incremental" if backup_method == "incremental" else "differential",
+        "PRE_BACKUP_SCRIPT": pre_backup_script.strip(),
+        "POST_BACKUP_SCRIPT": post_backup_script.strip(),
     }
 
     # BASE_DIR (module-level, this file's own directory) is FolderW's own
@@ -1019,6 +1027,8 @@ async def submit_settings(
             "notify_urls": load_env_value('NOTIFY_URLS'),
             "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+            "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
+            "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
         })
 
     save_env_values(new_values)
@@ -1063,6 +1073,8 @@ async def submit_settings(
         "notify_urls": new_values["NOTIFY_URLS"],
         "notify_send_always": new_values["NOTIFY_SEND_ALWAYS"] == "1",
         "backup_method": new_values["BACKUP_METHOD"],
+        "pre_backup_script": new_values["PRE_BACKUP_SCRIPT"],
+        "post_backup_script": new_values["POST_BACKUP_SCRIPT"],
     })
 
 
