@@ -164,6 +164,30 @@ def _new_snapshot_path(incremental_folder):
     return os.path.join(snapshots_root, incremental_folder)
 
 
+def _prune_empty_dirs(root):
+    """Remove directories left empty inside `root` -- differential mode
+    only (see rsync_differential.py). --compare-dest skips individual
+    unchanged files but still creates every directory that exists in the
+    source, even ones where nothing inside actually changed; confirmed
+    empirically that --prune-empty-dirs doesn't help here, since it only
+    prunes directories emptied by filter/exclude rules, not ones emptied
+    by --compare-dest's own per-file skipping. Walked bottom-up, re-
+    checking os.listdir() at prune time (not the os.walk dirnames/
+    filenames tuple, which reflects each directory's contents as scanned
+    before its children were removed) so a chain of now-empty nested
+    directories collapses in one pass. Never removes `root` itself, even
+    on a zero-change run -- it's about to receive the completion marker.
+    """
+    for dirpath, _dirnames, _filenames in os.walk(root, topdown=False):
+        if dirpath == root:
+            continue
+        try:
+            if not os.listdir(dirpath):
+                os.rmdir(dirpath)
+        except OSError as e:
+            logger.warning(f"Could not remove empty directory {dirpath}: {e}")
+
+
 def _unique_new_snapshot_path(incremental_folder):
     """Like _new_snapshot_path, but guarantees a path that doesn't already
     exist, appending -2/-3/... if needed. Two callers can legitimately

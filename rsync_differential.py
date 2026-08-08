@@ -37,7 +37,7 @@ from notifications import notify
 from rsync_incremental import (
     _check_sudo_rsync_available, _migrate_legacy_full_backup,
     _run_initial_full_backup_if_needed, _unique_new_snapshot_path,
-    ensure_backup_folder_icon, rsync, parse_logfile,
+    _prune_empty_dirs, ensure_backup_folder_icon, rsync, parse_logfile,
     generate_incremental_folder, record_backup_statistics,
 )
 
@@ -116,6 +116,7 @@ if __name__ == "__main__":
         logger.error("Differential backup failed — skipping snapshot bookkeeping.")
         sys.exit(1)
 
+    _prune_empty_dirs(new_snapshot_path)
     mark_snapshot_complete(new_snapshot_path)
     ensure_backup_folder_icon()
 
