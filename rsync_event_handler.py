@@ -72,7 +72,11 @@ TRIGGER_EXEMPT_PATTERNS = _load_patterns(
 def run_backup_script():
     try:
         python_path = sys.executable
-        script_path = os.path.join(os.path.dirname(__file__), 'rsync_incremental.py')
+        # See main_backup.py's _backup_script_name() for the same choice --
+        # kept in lockstep so event-driven and scheduled/manual runs always
+        # honor the same BACKUP_METHOD setting.
+        script_name = "rsync_differential.py" if load_env_value('BACKUP_METHOD') == 'differential' else "rsync_incremental.py"
+        script_path = os.path.join(os.path.dirname(__file__), script_name)
         result = subprocess.run([python_path, script_path], check=True, capture_output=True, text=True)
         logger.info(f"Backup script output: {result.stdout}")
     except subprocess.CalledProcessError as e:

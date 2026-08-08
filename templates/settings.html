@@ -139,6 +139,23 @@
                             </div>
                         </div>
                         
+                        <div>
+                            <label class="block text-[var(--text)] font-medium mb-2">Backup Method:</label>
+                            <div class="flex space-x-4">
+                                <label class="inline-flex items-center">
+                                    <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'differential' %}checked{% endif %}>
+                                    <span class="ml-2 text-[var(--text)]">Incremental</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'differential' %}checked{% endif %}>
+                                    <span class="ml-2 text-[var(--text)]">Differential</span>
+                                </label>
+                            </div>
+                            <div class="text-sm text-[var(--text-muted)] mt-1">
+                                Incremental: each snapshot only stores what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores everything changed since the original full backup &mdash; simpler mental model, but snapshots grow larger over time. Both produce complete, independently restorable snapshots.
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-3 gap-4 items-center">
                             <label for="max_snapshots" class="text-[var(--text)] font-medium">Snapshots to Keep:</label>
                             <input type="number" min="1" step="1" id="max_snapshots" name="max_snapshots" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ max_snapshots or '' }}" placeholder="Leave blank to keep all">

@@ -10,17 +10,27 @@ from loguru import logger
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+def _backup_script_name():
+    # 'differential' opts into rsync_differential.py (--link-dest against
+    # the original full backup, fixed forever); anything else, including
+    # unset (older installs predating this setting), keeps the default
+    # rsync_incremental.py behavior (--link-dest against the most recent
+    # snapshot) so existing installs' behavior doesn't silently change.
+    return "rsync_differential.py" if load_env_value('BACKUP_METHOD') == 'differential' else "rsync_incremental.py"
+
 def run_regular_backup():
-    logger.info("Running regular backup with rsync_incremental.py")
+    script_name = _backup_script_name()
+    logger.info(f"Running regular backup with {script_name}")
     try:
-        result = subprocess.run([sys.executable, os.path.join(BASE_DIR, "rsync_incremental.py")], check=True)
+        result = subprocess.run([sys.executable, os.path.join(BASE_DIR, script_name)], check=True)
         logger.info(f"Backup result: {result}")
     except subprocess.CalledProcessError as e:
-        # Centralized here rather than in rsync_incremental.py itself so
-        # every failure mode is covered with a single notification — not
-        # just rsync failing cleanly, but any unhandled crash in that
-        # script too, since both surface the same way: a non-zero exit.
-        logger.error(f"Error running rsync_incremental.py: {e}")
+        # Centralized here rather than in rsync_incremental.py/rsync_
+        # differential.py themselves so every failure mode is covered with
+        # a single notification — not just rsync failing cleanly, but any
+        # unhandled crash in that script too, since both surface the same
+        # way: a non-zero exit.
+        logger.error(f"Error running {script_name}: {e}")
         notify("FolderW: Backup Failed", f"A backup run failed (exit code {e.returncode}). Check the FolderW logs for details.")
 
 def start_event_backup():

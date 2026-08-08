@@ -743,6 +743,7 @@ async def settings_page(request: Request):
         "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
         "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
         "notify_urls": load_env_value('NOTIFY_URLS'),
+        "backup_method": load_env_value('BACKUP_METHOD') or 'incremental',
     })
 
 
@@ -781,6 +782,7 @@ async def submit_settings(
     new_password: str = Form(""),
     require_login: str = Form(None),
     notify_urls: str = Form(""),
+    backup_method: str = Form("incremental"),
 ):
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
@@ -811,6 +813,7 @@ async def submit_settings(
             "max_snapshots": max_snapshots,
             "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
             "notify_urls": load_env_value('NOTIFY_URLS'),
+            "backup_method": load_env_value('BACKUP_METHOD') or 'incremental',
         })
 
     require_login_enabled = require_login is not None
@@ -834,6 +837,7 @@ async def submit_settings(
         "MAX_SNAPSHOTS": max_snapshots,
         "ADMIN_PASSWORD_HASH": admin_password_hash,
         "NOTIFY_URLS": notify_urls.strip(),
+        "BACKUP_METHOD": "differential" if backup_method == "differential" else "incremental",
     }
     save_env_values(new_values)
 
@@ -865,6 +869,7 @@ async def submit_settings(
         "max_snapshots": new_values["MAX_SNAPSHOTS"],
         "login_enabled": bool(new_values["ADMIN_PASSWORD_HASH"]),
         "notify_urls": new_values["NOTIFY_URLS"],
+        "backup_method": new_values["BACKUP_METHOD"],
     })
 
 

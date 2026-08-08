@@ -19,6 +19,7 @@ base_dir = load_env_value('BASE_DIR')
 exclude_file = load_other_variables('exclude_file')
 src_dir = load_env_value('SRC_DIR')
 full_backup = load_other_variables('full_backup')
+original_backup = load_other_variables('original_backup')
 snapshots_root = load_other_variables('snapshots_root')
 rsync_txt = load_other_variables('rsync_txt')
 database = load_env_value('DATABASE')
@@ -202,6 +203,24 @@ def _repoint_full_backup(target_path):
     logger.info(f"full_backup now points at: {target_path}")
 
 
+def _repoint_original_backup_if_unset(target_path):
+    """Sets original_backup to target_path only the first time it's ever
+    called (no-op if it already exists) -- this is differential mode's
+    fixed --link-dest source, and it must never move again once set,
+    unlike full_backup which is repointed every run. Called from both
+    this script's and rsync_differential.py's success path (and from the
+    legacy migration below), so whichever mode a user runs first is the
+    one that establishes it -- a later switch to the other mode still has
+    a valid, correctly-anchored original to diff against.
+    """
+    if os.path.lexists(original_backup):
+        return
+    parent = os.path.dirname(original_backup)
+    os.makedirs(parent, exist_ok=True)
+    os.symlink(target_path, original_backup)
+    logger.info(f"original_backup set (first time only, never repointed again): {target_path}")
+
+
 def _migrate_legacy_full_backup():
     """One-time migration for installs from before the --link-dest redesign,
     where full_backup was a real, continuously-synced mirror directory
@@ -242,6 +261,7 @@ def _migrate_legacy_full_backup():
     os.rename(full_backup, new_path)
     mark_snapshot_complete(new_path)
     _repoint_full_backup(new_path)
+    _repoint_original_backup_if_unset(new_path)
     logger.success(f"Migrated legacy full_backup to snapshot: {new_path}")
 
 def _set_folder_icon(folder, icon_filename, write_physical_files=True):
@@ -685,6 +705,9 @@ if __name__ == "__main__":
     # relative to a snapshot that actually finished successfully.
     mark_snapshot_complete(new_snapshot_path)
     _repoint_full_backup(new_snapshot_path)
+    # No-ops after the very first-ever backup -- see the function's own
+    # docstring for why this needs to run regardless of backup mode.
+    _repoint_original_backup_if_unset(new_snapshot_path)
     # Only safe to call now that full_backup exists as a real symlink --
     # on the very first-ever backup, it doesn't exist until the repoint
     # above just happened.
