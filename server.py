@@ -10,7 +10,7 @@ import psutil
 import apprise
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup
-from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup
+from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
@@ -695,6 +695,17 @@ async def restore_browse(request: Request, backup_id: str, search: str = ""):
         "truncated": truncated,
         "search": search,
     })
+
+@app.post("/restore/note")
+async def restore_set_note(backup_id: str = Form(...), note: str = Form(""), page: int = Form(1)):
+    backup_path = get_backup_path(backup_id)
+    if backup_path is not None:
+        set_snapshot_note(backup_path, note)
+    # Redirect (not a template response) so refreshing the page afterward
+    # doesn't resubmit the note -- same reasoning as any POST-then-refresh
+    # form. Preserves whichever page of the (now paginated) list the note
+    # was edited from.
+    return RedirectResponse(url=f"/restore?page={page}", status_code=303)
 
 @app.post("/restore/execute", response_class=HTMLResponse)
 async def restore_execute(request: Request, backup_id: str = Form(...), selected_paths: list[str] = Form(default=[])):

@@ -56,12 +56,27 @@
                     <tbody class="divide-y divide-[var(--border)]">
                         {% for backup in backups %}
                         <tr>
-                            <td class="px-6 py-4 font-medium text-[var(--text)]">{{ backup.label }}</td>
-                            <td class="px-6 py-4 text-[var(--text-muted)]">{{ backup.date }}</td>
-                            <td class="px-6 py-4 text-[var(--text-muted)]">{{ backup.file_count }}</td>
-                            <td class="px-6 py-4 text-[var(--text-muted)]">{{ backup.size }}</td>
-                            <td class="px-6 py-4 text-[var(--text-muted)] font-mono text-xs max-w-xs truncate" title="{{ backup.path }}">{{ backup.path }}</td>
-                            <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
+                            <td class="px-6 py-4 font-medium text-[var(--text)] align-top">
+                                {{ backup.label }}
+                                {% if backup.note %}
+                                <div class="text-xs font-normal italic text-[var(--text-muted)] mt-1 max-w-xs">{{ backup.note }}</div>
+                                {% endif %}
+                                <details class="mt-1">
+                                    <summary class="text-xs font-normal text-blue-600 hover:underline cursor-pointer list-none">{{ 'Edit note' if backup.note else '+ Add note' }}</summary>
+                                    <form method="post" action="/restore/note" class="mt-2 flex flex-col gap-1 max-w-xs">
+                                        <input type="hidden" name="backup_id" value="{{ backup.id }}">
+                                        <input type="hidden" name="page" value="{{ page }}">
+                                        <textarea name="note" rows="2" placeholder="What was special about this snapshot?"
+                                                  class="bg-[var(--surface-alt)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text)] font-normal">{{ backup.note }}</textarea>
+                                        <button type="submit" class="self-start bg-blue-600 text-white text-xs py-1 px-2 rounded hover:bg-blue-700 transition">Save</button>
+                                    </form>
+                                </details>
+                            </td>
+                            <td class="px-6 py-4 text-[var(--text-muted)] align-top">{{ backup.date }}</td>
+                            <td class="px-6 py-4 text-[var(--text-muted)] align-top">{{ backup.file_count }}</td>
+                            <td class="px-6 py-4 text-[var(--text-muted)] align-top">{{ backup.size }}</td>
+                            <td class="px-6 py-4 text-[var(--text-muted)] font-mono text-xs max-w-xs truncate align-top" title="{{ backup.path }}">{{ backup.path }}</td>
+                            <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap align-top">
                                 <a href="/restore/browse/{{ backup.id }}" class="inline-block bg-gray-700 text-white text-sm py-1.5 px-3 rounded hover:bg-gray-800 transition">
                                     Browse / Search
                                 </a>

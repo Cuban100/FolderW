@@ -27,6 +27,20 @@ COMPLETION_MARKER = '.folderw_complete'
 # written here so every subsequent load is fast too.
 STATS_CACHE_FILE = '.folderw_stats'
 
+# A free-text note a user can attach to a snapshot after the fact (e.g.
+# "changed the whole FolderW setup right before this one") -- most useful
+# on manual snapshots, where "what was different about this one" isn't
+# otherwise recorded anywhere. Plain text, not JSON: simple to read/write/
+# edit, and there's nothing else to store alongside it.
+NOTE_FILE = '.folderw_note'
+
+# Internal bookkeeping files that sit at a snapshot's own root -- never
+# real backed-up data, so never counted, listed, searched, or copied into
+# Restored/ output. One shared tuple instead of repeating the three names
+# at every exclusion site, so adding a fourth later can't be missed at one
+# of them.
+_INTERNAL_FILES = (COMPLETION_MARKER, STATS_CACHE_FILE, NOTE_FILE)
+
 _MONTH_NAMES = {
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
@@ -67,7 +81,7 @@ def summarize_folder(path):
             # Internal bookkeeping, not real backed-up data -- shouldn't
             # count toward a snapshot's displayed file count/size, and
             # only ever sits at a snapshot's own root, never in a subdir.
-            if f in (COMPLETION_MARKER, STATS_CACHE_FILE) and dirpath == path:
+            if f in _INTERNAL_FILES and dirpath == path:
                 continue
             fp = os.path.join(dirpath, f)
             try:
@@ -76,6 +90,30 @@ def summarize_folder(path):
             except OSError:
                 pass
     return file_count, total_size
+
+
+def get_snapshot_note(snapshot_path):
+    try:
+        with open(os.path.join(snapshot_path, NOTE_FILE), 'r') as f:
+            return f.read().strip()
+    except OSError:
+        return ''
+
+
+def set_snapshot_note(snapshot_path, note):
+    note = (note or '').strip()
+    note_path = os.path.join(snapshot_path, NOTE_FILE)
+    if not note:
+        # Empty note means "remove it" -- no point keeping a blank file
+        # around, and this is also what lets a note actually be cleared
+        # rather than only ever replaced with different text.
+        try:
+            os.remove(note_path)
+        except FileNotFoundError:
+            pass
+        return
+    with open(note_path, 'w') as f:
+        f.write(note)
 
 
 def _cached_summarize_snapshot(snapshot_path):
@@ -173,10 +211,10 @@ def list_backups():
                     "size": human_readable_size(total_size),
                     "mtime": os.path.getmtime(snapshot_path),
                     # Real on-disk path -- shown on the Restore page so a
-                    # snapshot can be opened directly in the OS file
-                    # manager (no in-app browsing anymore, see
-                    # restore_backup()'s docstring).
+                    # snapshot can also be opened directly in the OS file
+                    # manager, not just browsed in-app.
                     "path": snapshot_path,
+                    "note": get_snapshot_note(snapshot_path),
                 })
 
     backups.sort(key=lambda b: b["mtime"], reverse=True)
@@ -275,7 +313,7 @@ def list_files_in_backup(backup_path, search=None, limit=2000):
     search_lower = search.lower() if search else None
     for dirpath, _, filenames in os.walk(backup_path):
         for f in sorted(filenames):
-            if f in (COMPLETION_MARKER, STATS_CACHE_FILE) and dirpath == backup_path:
+            if f in _INTERNAL_FILES and dirpath == backup_path:
                 continue
             fp = os.path.join(dirpath, f)
             rel = os.path.relpath(fp, backup_path)
@@ -317,7 +355,7 @@ def restore_backup(backup_id, selected_paths=None):
 
     if not selected_paths:
         for entry in os.listdir(backup_path):
-            if entry in (COMPLETION_MARKER, STATS_CACHE_FILE):
+            if entry in _INTERNAL_FILES:
                 continue
             src = os.path.join(backup_path, entry)
             dst = os.path.join(dest_root, entry)
