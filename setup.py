@@ -5,7 +5,7 @@ import tempfile
 from db_operations import create_all_tables, set_database_value
 from auth import hash_password
 import tkinter as tk
-from tkinter import filedialog, Label, PhotoImage
+from tkinter import filedialog, Label, PhotoImage, messagebox
 from tkinter import ttk, StringVar
 from ttkthemes import ThemedTk
 from PIL import Image, ImageTk
@@ -36,6 +36,36 @@ def upgrade_packages(requirements_file='requirements.txt'):
     for line in process.stdout:
         print(line, end="")
     process.wait()
+
+DIFFERENTIAL_EXPLANATION = (
+    "Differential Backup\n\n"
+    "Every snapshot compares against the ORIGINAL full backup, always -- "
+    "never against the previous snapshot. A file that changed once and "
+    "never again still gets rewritten into every future snapshot, since "
+    "it will always differ from that one fixed original.\n\n"
+    "Snapshots grow larger over time as this drift accumulates. Called "
+    "'differential' because it always measures against one fixed "
+    "reference point -- the traditional distinction from 'incremental' "
+    "is about restoring (differential needs only the full backup + one "
+    "snapshot; incremental needs the whole chain) but that doesn't apply "
+    "here, since every snapshot is hardlinked and already a complete, "
+    "independently restorable copy either way."
+)
+
+INCREMENTAL_EXPLANATION = (
+    "Incremental Backup (default)\n\n"
+    "Every snapshot compares against the PREVIOUS snapshot, not a fixed "
+    "original. A file that changed once and never again gets written "
+    "just that one time -- every snapshot after that hardlinks it again "
+    "for free.\n\n"
+    "Snapshots stay small and roughly constant in size no matter how "
+    "long the system has been running. This is how Time Machine and "
+    "Timeshift work, and is the recommended default."
+)
+
+def _show_backup_method_info(mode):
+    text = DIFFERENTIAL_EXPLANATION if mode == 'differential' else INCREMENTAL_EXPLANATION
+    messagebox.showinfo("Backup Method", text)
 
 def toggle_backup_options():
     if monitor_var.get() == 1:
@@ -475,14 +505,26 @@ autostart_label.grid(row=len(labels) + 2, column=0, padx=0, pady=10, sticky='e')
 # snapshot, stays small indefinitely) vs differential (--link-dest always
 # against the original full backup, simpler mental model but snapshots
 # grow larger over time). See rsync_incremental.py/rsync_differential.py.
+# Radiobuttons sharing one StringVar, not two independent checkboxes --
+# selecting one always deselects the other, matching "either/or, never
+# both" rather than something a Checkbutton pair would need extra code
+# to enforce.
 backup_method_var = StringVar(value='incremental')
 backup_method_label = tk.Label(root, text="Backup Method:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
-backup_method_dropdown = ttk.Combobox(root, textvariable=backup_method_var, values=["incremental", "differential"], state="readonly")
-backup_method_hint = tk.Label(root, text="Incremental stays small over time; differential is simpler but grows.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+backup_method_frame = tk.Frame(root, bg='#1a1a1a')
+
+differential_radio = tk.Radiobutton(backup_method_frame, text="Differential Backup", variable=backup_method_var, value='differential', background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71', activebackground='#1a1a1a', activeforeground='#ffffff')
+differential_radio.pack(side=tk.LEFT)
+differential_info = ttk.Button(backup_method_frame, text="?", width=2, command=lambda: _show_backup_method_info('differential'))
+differential_info.pack(side=tk.LEFT, padx=(0, 20))
+
+incremental_radio = tk.Radiobutton(backup_method_frame, text="Incremental Backup", variable=backup_method_var, value='incremental', background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71', activebackground='#1a1a1a', activeforeground='#ffffff')
+incremental_radio.pack(side=tk.LEFT)
+incremental_info = ttk.Button(backup_method_frame, text="?", width=2, command=lambda: _show_backup_method_info('incremental'))
+incremental_info.pack(side=tk.LEFT)
 
 backup_method_label.grid(row=len(labels) + 3, column=0, padx=10, pady=10, sticky='e')
-backup_method_dropdown.grid(row=len(labels) + 3, column=1, padx=10, pady=10)
-backup_method_hint.grid(row=len(labels) + 3, column=2, padx=10, pady=10, sticky='w')
+backup_method_frame.grid(row=len(labels) + 3, column=1, columnspan=2, padx=10, pady=10, sticky='w')
 
 # Snapshot retention: optional, blank means keep every snapshot forever
 max_snapshots_label = tk.Label(root, text="Snapshots to Keep:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
