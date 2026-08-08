@@ -457,6 +457,7 @@ async def run_all_steps(request: Request):
             "setting": settings,
             "missing_settings": missing_vars,
             "settings_sent": settings_sent,
+            "settings_check_passed": settings_sent,
             **get_backup_stats_context(database),
         })
 
@@ -469,6 +470,7 @@ async def run_all_steps(request: Request):
             "settings": settings,
             "missing_settings": missing_vars,
             "settings_sent": settings_sent,
+            "settings_check_passed": settings_sent,
             "validation_status": validation_status,
             "validation_message": validation_message,
             **get_backup_stats_context(database),
@@ -489,6 +491,7 @@ async def run_all_steps(request: Request):
             "logo": logo,
             "missing_settings": missing_vars,
             "settings_sent": settings_sent,
+            "settings_check_passed": settings_sent,
             "validation_status": validation_status,
             "validation_message": validation_message,
             "evaluation_status": can_backup,
@@ -534,6 +537,7 @@ async def run_all_steps(request: Request):
         "logo": logo,
         "success_message": success_message,
         "settings_sent": settings_sent,
+        "settings_check_passed": settings_sent,
         "validation_status": validation_status,
         "validation_message": validation_message,
         "evaluation_status": can_backup,
@@ -611,6 +615,12 @@ async def root(request: Request):
     # and a persisted flag defaults to false on a brand-new database with
     # nothing ever checked yet — showing "Missing settings" on a fresh
     # install's first load even with a fully filled-in .env. Always fresh.
+    #
+    # settings_check_passed (below) is a separate thing: the dot next to
+    # "Settings" tracks whether that check has actually run as part of a
+    # Start/Stop cycle (same persisted flag as validation/evaluation, reset
+    # together on Stop) — not whether the .env happens to be valid right
+    # now, which is what settings_sent/missing_settings answer instead.
     settings_sent, _settings, missing_vars = check_env_variables()
     persisted = load_persisted_checks()
     return templates.TemplateResponse("index.html",
@@ -623,6 +633,7 @@ async def root(request: Request):
         "monitor": monitor,
         "interval": backup_interval,
         "settings_sent": settings_sent,
+        "settings_check_passed": persisted["settings_sent"],
         "missing_settings": missing_vars,
         "validation_status": persisted["validation_status"],
         "evaluation_status": persisted["evaluation_status"],

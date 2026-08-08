@@ -527,7 +527,7 @@
                 {% if not settings_sent %}
                 <p class="show">Missing settings (see above) — fill them in on the <a href="/settings">Settings page</a>, then click Start Full Backup.</p>
                 {% endif %}
-                <p class="show"><span class="status-dot {{ 'green' if settings_sent else '' }}" id="dot-settings"></span><span class="highlight">Settings:</span> All items from the initial .env file setup are thoroughly checked.
+                <p class="show"><span class="status-dot {{ 'green' if settings_check_passed else '' }}" id="dot-settings"></span><span class="highlight">Settings:</span> All items from the initial .env file setup are thoroughly checked.
                 The primary goal is to ensure that the Setup step has stored the values accurately.</p>
                 <p class="show"><span class="status-dot {{ 'green' if validation_status else '' }}" id="dot-validation"></span><span class="highlight">Validation:</span> Involves checking the source and destination paths specified in your settings.
                 This step ensures that the paths exist and are accessible, confirming that the source directory contains the data to be backed up, and the destination directory is ready to receive the backup. By verifying these paths, we prevent potential issues during the backup process, such as missing files or inaccessible directories.</p>
