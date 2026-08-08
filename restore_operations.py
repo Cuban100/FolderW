@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import shutil
 from datetime import datetime
 from db_operations import load_env_value, load_other_variables
@@ -13,6 +14,18 @@ from loguru import logger
 # complete, restorable snapshot is told apart from a partial/interrupted
 # one left behind by a crash, kill, or power loss mid-run.
 COMPLETION_MARKER = '.folderw_complete'
+
+# Cached (file_count, total_size) for a snapshot, as JSON. A snapshot is
+# now a complete point-in-time tree (hundreds of thousands of files, not
+# a small delta) -- recomputing this via a live os.walk on every /restore
+# page load measured 14+ seconds for just 3 snapshots and scales linearly
+# with both snapshot count and size (MAX_SNAPSHOTS can be dozens). Written
+# once by rsync_incremental.py right after a backup completes (see
+# summarize_folder() below, called from there too), so the common case is
+# an instant file read here. Snapshots that predate this cache (or a
+# migrated legacy one) self-heal on first view: computed live once, then
+# written here so every subsequent load is fast too.
+STATS_CACHE_FILE = '.folderw_stats'
 
 _MONTH_NAMES = {
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -38,7 +51,15 @@ def _is_time_folder(name):
     return bool(_TIME_FOLDER_RE.match(name))
 
 
-def _summarize_folder(path):
+def summarize_folder(path):
+    """Full recursive (file_count, total_size) for path -- expensive on a
+    tree this size (hundreds of thousands of files), so callers displaying
+    a snapshot's stats should go through _cached_summarize_snapshot()
+    instead where possible. Still used directly for one-off cases (a fresh
+    backup's own completion, restore_backup()'s post-copy summary of a
+    small Restored/ folder) where there's no repeated-page-load cost to
+    avoid.
+    """
     file_count = 0
     total_size = 0
     for dirpath, _, filenames in os.walk(path):
@@ -46,7 +67,7 @@ def _summarize_folder(path):
             # Internal bookkeeping, not real backed-up data -- shouldn't
             # count toward a snapshot's displayed file count/size, and
             # only ever sits at a snapshot's own root, never in a subdir.
-            if f == COMPLETION_MARKER and dirpath == path:
+            if f in (COMPLETION_MARKER, STATS_CACHE_FILE) and dirpath == path:
                 continue
             fp = os.path.join(dirpath, f)
             try:
@@ -55,6 +76,46 @@ def _summarize_folder(path):
             except OSError:
                 pass
     return file_count, total_size
+
+
+def _cached_summarize_snapshot(snapshot_path):
+    """(file_count, total_size) for a snapshot, via STATS_CACHE_FILE when
+    present -- an instant file read instead of a full tree walk, which is
+    what makes /restore's listing page fast regardless of how large or how
+    many snapshots exist. Self-healing: a snapshot missing the cache (one
+    that predates this feature, or a migrated legacy directory) is walked
+    live exactly once here, then the result is written for every
+    subsequent call to read instead.
+    """
+    cache_path = os.path.join(snapshot_path, STATS_CACHE_FILE)
+    try:
+        with open(cache_path, 'r') as f:
+            cached = json.load(f)
+        return cached['file_count'], cached['total_size']
+    except (OSError, ValueError, KeyError):
+        pass
+    file_count, total_size = summarize_folder(snapshot_path)
+    try:
+        with open(cache_path, 'w') as f:
+            json.dump({'file_count': file_count, 'total_size': total_size}, f)
+    except OSError as e:
+        logger.warning(f"Could not write stats cache for {snapshot_path}: {e}")
+    return file_count, total_size
+
+
+def mark_snapshot_complete(snapshot_path):
+    """Called by rsync_incremental.py right after a snapshot finishes
+    successfully (a fresh backup, or the legacy-directory migration).
+    Writes the completion marker (see COMPLETION_MARKER) and proactively
+    computes+caches this snapshot's stats (see STATS_CACHE_FILE) so the
+    /restore page never has to walk it live on a first view -- the cost
+    (a few seconds even on a ~400K-file tree, per summarize_folder's own
+    os.walk) is absorbed here, once, into a backup run that's already
+    taking minutes, rather than paid by whoever next loads the page.
+    """
+    with open(os.path.join(snapshot_path, COMPLETION_MARKER), 'w') as f:
+        f.write(datetime.now().isoformat())
+    _cached_summarize_snapshot(snapshot_path)
 
 
 def list_backups():
@@ -104,13 +165,18 @@ def list_backups():
                     # restorable backup, so it doesn't count toward
                     # retention (cleanup_old_snapshots) or show up here.
                     continue
-                file_count, total_size = _summarize_folder(snapshot_path)
+                file_count, total_size = _cached_summarize_snapshot(snapshot_path)
                 backups.append({
                     "id": f"{month}/{day}/{time_folder}",
                     "label": f"{month} {day}, {time_folder}",
                     "file_count": file_count,
                     "size": human_readable_size(total_size),
                     "mtime": os.path.getmtime(snapshot_path),
+                    # Real on-disk path -- shown on the Restore page so a
+                    # snapshot can be opened directly in the OS file
+                    # manager (no in-app browsing anymore, see
+                    # restore_backup()'s docstring).
+                    "path": snapshot_path,
                 })
 
     backups.sort(key=lambda b: b["mtime"], reverse=True)
@@ -191,35 +257,15 @@ def get_backup_path(backup_id):
     return path_real
 
 
-def list_files_in_backup(backup_path, limit=2000):
-    """Recursively list files in a single backup/snapshot, capped at `limit`
-    so a huge full-mirror backup can't render an unbounded page."""
-    files = []
-    truncated = False
-    for dirpath, _, filenames in os.walk(backup_path):
-        for f in sorted(filenames):
-            if f == COMPLETION_MARKER and dirpath == backup_path:
-                continue
-            if len(files) >= limit:
-                truncated = True
-                break
-            fp = os.path.join(dirpath, f)
-            rel = os.path.relpath(fp, backup_path)
-            try:
-                size = os.path.getsize(fp)
-            except OSError:
-                size = 0
-            files.append({"path": rel, "size": human_readable_size(size)})
-        if truncated:
-            break
-    files.sort(key=lambda f: f["path"])
-    return files, truncated
-
-
-def restore_backup(backup_id, selected_paths=None):
-    """Copy an entire backup, or specific relative file paths within it,
-    into a new timestamped folder under BASE_DIR/Restored/. Never writes
-    into SRC_DIR, so a bad pick can't clobber current data.
+def restore_backup(backup_id):
+    """Copy an entire backup/snapshot -- an exact mirror of it, top-level
+    entry by top-level entry -- into a new timestamped folder under
+    BASE_DIR/Restored/. Never writes into SRC_DIR, so a bad pick can't
+    clobber current data. No in-app file browsing/selective restore: a
+    snapshot is now the user's whole source tree, not a small delta, so
+    picking individual files is what their own OS file manager is for --
+    it can already open the snapshot's real path on the destination drive
+    directly (see the path shown on the Restore page).
     """
     backup_path = get_backup_path(backup_id)
     if backup_path is None:
@@ -231,33 +277,16 @@ def restore_backup(backup_id, selected_paths=None):
     dest_root = os.path.join(base_dir, "Restored", f"{timestamp}_{label}")
     os.makedirs(dest_root, exist_ok=True)
 
-    backup_real = os.path.realpath(backup_path)
+    for entry in os.listdir(backup_path):
+        if entry in (COMPLETION_MARKER, STATS_CACHE_FILE):
+            continue
+        src = os.path.join(backup_path, entry)
+        dst = os.path.join(dest_root, entry)
+        if os.path.isdir(src):
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dst)
 
-    if not selected_paths:
-        for entry in os.listdir(backup_path):
-            if entry == COMPLETION_MARKER:
-                continue
-            src = os.path.join(backup_path, entry)
-            dst = os.path.join(dest_root, entry)
-            if os.path.isdir(src):
-                shutil.copytree(src, dst, dirs_exist_ok=True)
-            else:
-                shutil.copy2(src, dst)
-    else:
-        for rel_path in selected_paths:
-            src = os.path.realpath(os.path.join(backup_path, rel_path))
-            if src != backup_real and not src.startswith(backup_real + os.sep):
-                logger.warning(f"Rejected restore of path outside backup: {rel_path}")
-                continue
-            if not os.path.exists(src):
-                continue
-            dst = os.path.join(dest_root, rel_path)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            if os.path.isdir(src):
-                shutil.copytree(src, dst, dirs_exist_ok=True)
-            else:
-                shutil.copy2(src, dst)
-
-    file_count, _ = _summarize_folder(dest_root)
+    file_count, _ = summarize_folder(dest_root)
     logger.success(f"Restored {file_count} file(s) from {backup_id} to {dest_root}")
     return dest_root, file_count

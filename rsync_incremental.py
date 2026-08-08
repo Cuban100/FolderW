@@ -4,7 +4,7 @@ import sys
 import time
 import threading
 from db_operations import get_last_session_number, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value, get_database_value
-from restore_operations import cleanup_old_snapshots
+from restore_operations import cleanup_old_snapshots, mark_snapshot_complete
 from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
 from notifications import notify
 from dotenv import load_dotenv
@@ -80,9 +80,6 @@ def record_backup_statistics(changes, last_session_number, incremental_folder):
     current_size = get_folder_size_du(full_backup)
     if current_size:
         set_database_value('CURRENT_BACKUP_SIZE', current_size)
-
-COMPLETION_MARKER = '.folderw_complete'
-
 
 def _check_sudo_rsync_available():
     """Fail fast with a clear, specific message if passwordless sudo isn't
@@ -209,8 +206,7 @@ def _migrate_legacy_full_backup():
     new_path = _unique_new_snapshot_path(generate_incremental_folder())
     os.makedirs(os.path.dirname(new_path), exist_ok=True)
     os.rename(full_backup, new_path)
-    with open(os.path.join(new_path, COMPLETION_MARKER), 'w') as f:
-        f.write(datetime.now().isoformat())
+    mark_snapshot_complete(new_path)
     _repoint_full_backup(new_path)
     logger.success(f"Migrated legacy full_backup to snapshot: {new_path}")
 
@@ -669,12 +665,13 @@ if __name__ == "__main__":
         logger.error("Backup failed — skipping snapshot bookkeeping.")
         sys.exit(1)
 
-    # Mark the snapshot complete and atomically repoint full_backup to it
-    # BEFORE any further bookkeeping — so a later failure in stats/
-    # notification can't leave full_backup stale relative to a snapshot
-    # that actually finished successfully.
-    with open(os.path.join(new_snapshot_path, COMPLETION_MARKER), 'w') as f:
-        f.write(datetime.now().isoformat())
+    # Mark the snapshot complete (writes the completion marker and
+    # proactively caches its file_count/size for /restore -- see
+    # mark_snapshot_complete()'s docstring) and atomically repoint
+    # full_backup to it BEFORE any further bookkeeping — so a later
+    # failure in stats/notification can't leave full_backup stale
+    # relative to a snapshot that actually finished successfully.
+    mark_snapshot_complete(new_snapshot_path)
     _repoint_full_backup(new_snapshot_path)
     # Only safe to call now that full_backup exists as a real symlink --
     # on the very first-ever backup, it doesn't exist until the repoint
