@@ -607,6 +607,17 @@ if __name__ == "__main__":
     rsync_result = {'success': None}
     last_percent = None
     last_eta = None
+    # rsync's ETA counts down every second, so it changes on nearly every
+    # progress line -- without a time floor, this loop was writing to
+    # folderw.db (which lives inside the watched source tree, since it's
+    # just a relative path resolved under the app's own working directory)
+    # thousands of times per run. Each write's journal file registered as
+    # a "file changed" event to the watchdog, which rescheduled another
+    # backup 300s later -- a self-sustaining loop that kept firing new
+    # backups all night with zero real user activity. Capping DB writes to
+    # once every 2s breaks that loop while keeping the dashboard responsive.
+    DB_WRITE_MIN_INTERVAL = 2
+    last_db_write_time = 0.0
     for progress in rsync(new_snapshot_path, link_dest=previous_snapshot, result_holder=rsync_result):
         # Groups: bytes-transferred-so-far, rsync's own percent, ETA
         # (time *remaining* — verified empirically with a throttled
@@ -641,12 +652,15 @@ if __name__ == "__main__":
             # Leave it unset instead — the frontend already falls back to
             # an honest indeterminate animation when percent is blank.
             percent_str = None
-        if percent_str != last_percent:
-            last_percent = percent_str
-            set_database_value('BACKUP_PROGRESS_PERCENT', percent_str or '')
-        if eta != last_eta:
-            last_eta = eta
-            set_database_value('BACKUP_ETA', eta)
+        now_ts = time.time()
+        if (percent_str != last_percent or eta != last_eta) and now_ts - last_db_write_time >= DB_WRITE_MIN_INTERVAL:
+            last_db_write_time = now_ts
+            if percent_str != last_percent:
+                last_percent = percent_str
+                set_database_value('BACKUP_PROGRESS_PERCENT', percent_str or '')
+            if eta != last_eta:
+                last_eta = eta
+                set_database_value('BACKUP_ETA', eta)
     set_database_value('BACKUP_PROGRESS_PERCENT', '')
     set_database_value('BACKUP_ETA', '')
     set_database_value('BACKUP_START_TIME', '')

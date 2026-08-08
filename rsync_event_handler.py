@@ -150,6 +150,20 @@ class BackupHandler(FileSystemEventHandler):
                 return True
             if any(fnmatch.fnmatch(part, pattern) for part in parts):
                 return True
+            # Multi-segment patterns (e.g. "**/.local/share/docker") only
+            # ever matched here if rel_path ended exactly there -- a file
+            # nested any deeper (.local/share/docker/containers/<id>/...)
+            # slipped through every check above and kept resetting the
+            # debounce timer. rsync itself excludes the whole subtree once
+            # a directory matches; mirror that by checking whether the
+            # pattern's components appear as a contiguous run anywhere in
+            # rel_path's components, not just as a full-path suffix.
+            anchor = pattern[3:] if pattern.startswith('**/') else pattern
+            anchor_parts = anchor.split('/')
+            if len(anchor_parts) > 1:
+                for i in range(len(parts) - len(anchor_parts) + 1):
+                    if all(fnmatch.fnmatch(parts[i + j], anchor_parts[j]) for j in range(len(anchor_parts))):
+                        return True
         return False
 
 def notify_stop():

@@ -16,3 +16,4 @@ FolderW.png
 *.swp
 *.swx
 ~*
+*.db-journal
