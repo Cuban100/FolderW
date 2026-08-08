@@ -62,9 +62,18 @@ def _notify_desktop(title, body, level):
     # inherited X session, not an interactive terminal. --urgency is
     # notify-send's own flag, accepting exactly these three values.
     try:
-        subprocess.run(
+        result = subprocess.run(
             ['/usr/bin/notify-send', f'--urgency={level}', title, body],
             env=dict(os.environ, DISPLAY=":0"),
+            capture_output=True, text=True,
         )
+        # A non-zero exit (no notification daemon registered on the D-Bus
+        # session -- e.g. it hasn't been activated yet, or crashed) used
+        # to be silently swallowed: subprocess.run doesn't raise on a bad
+        # return code unless check=True, so this failed completely
+        # invisibly, with nothing in the logs to explain why a
+        # notification never appeared.
+        if result.returncode != 0:
+            logger.warning(f"notify-send exited {result.returncode}: {result.stderr.strip()}")
     except (FileNotFoundError, OSError) as e:
         logger.debug(f"Desktop notification unavailable, skipping: {e}")
