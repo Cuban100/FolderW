@@ -73,6 +73,20 @@ It pulls the latest code, updates dependencies, and — if the autostart systemd
 
 **Your `.env` file and database are never touched.** Both are already excluded from version control, so `git pull` doesn't even see them — nothing about the update process can overwrite your settings or backup history.
 
+## Uninstalling
+
+Run `uninstall.sh` from inside your installation folder to remove FolderW completely:
+
+```bash
+cd FolderW
+chmod +x uninstall.sh
+./uninstall.sh
+```
+
+It shows a warning and asks for confirmation before doing anything. Once confirmed, it stops and kills every FolderW process (the systemd services and any that ended up running outside of them), removes both systemd unit files, and then **permanently deletes the entire cloned repository folder — including your `.env` configuration and the `folderw.db` database.**
+
+**Your actual backed-up data is never touched.** Only the tool itself is removed — whatever's at `BASE_DIR` (the full backup and any incremental snapshots) is left exactly as it was.
+
 ## Key Components
 
 - **`install.sh`:** Bash script to create a virtual environment, install dependencies, and run the setup script.

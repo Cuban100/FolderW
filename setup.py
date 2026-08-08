@@ -97,6 +97,21 @@ def configure_systemd_autostart(enable):
             # (finish the current write, clean up its temp file) without
             # leaving a stop request hanging for so long it looks broken.
             "TimeoutStopSec=15\n"
+            # rsync now runs under sudo (see rsync_incremental.py) so it can
+            # read files owned by another UID -- but that means the actual
+            # rsync process is root-owned, and this is a --user service:
+            # this user's own systemd session has no permission to signal a
+            # root-owned process at all, cgroup membership notwithstanding.
+            # Found live: KillMode=control-group's own SIGKILL attempt on
+            # stop failed with "Operation not permitted", the service
+            # reported itself Stopped anyway, and the actual rsync process
+            # kept running regardless -- exactly what "I hit stop and it's
+            # still running" looks like. sudo (already NOPASSWD for rsync
+            # specifically) can signal it instead. The leading "-" tells
+            # systemd to ignore this command's exit code, so "nothing to
+            # kill" (the common case -- rsync usually already exited
+            # cleanly on its own SIGTERM) isn't logged as a failure.
+            f"ExecStopPost=-{shutil.which('sudo') or '/usr/bin/sudo'} -n pkill -9 -f 'rsync -avv --sparse --delete --info=progress2'\n"
         )
         try:
             os.makedirs(service_dir, exist_ok=True)
