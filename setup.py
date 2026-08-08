@@ -418,6 +418,18 @@ load_dotenv()
 # Create the Tkinter window with a dark theme
 root = ThemedTk(theme="black")
 root.title("Backup Configuration")
+try:
+    # PIL's loader (already a dependency, used below for the directory
+    # entries' Browse icons too), not tkinter's own PhotoImage -- Tk's
+    # built-in PNG support depends on the Tk version it was built
+    # against, PIL's doesn't. Kept referenced by a module-level variable
+    # (not just passed inline) so Python's GC doesn't collect it out from
+    # under the window -- a PhotoImage with no live Python reference
+    # silently blanks back to no icon.
+    _window_icon = ImageTk.PhotoImage(Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo.png')))
+    root.iconphoto(True, _window_icon)
+except (OSError, tk.TclError) as e:
+    print(f"Could not set window icon (non-fatal): {e}")
 
 # Function to center the window
 def center_window(window):
