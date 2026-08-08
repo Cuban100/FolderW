@@ -445,8 +445,8 @@ def center_window(window):
 labels = [
     ("Source Directory:", "SRC_DIR"),
     ("Base Backup Directory:", "BASE_DIR"),
-    ("Database:", "DATABASE"),
     ("Full Folder Name:", "FULL_NAME"),
+    ("Database:", "DATABASE"),
     ("Server Port:", "SERVER_PORT"),  # Add server port label
 ]
 entries = []
@@ -476,7 +476,7 @@ for i, (label, env_key) in enumerate(labels):
         button = ttk.Button(root, text="Browse...", command=lambda e=entry: browse_file(e))
         button.grid(row=i, column=2, padx=10, pady=10)
 
-src_dir_entry, base_dir_entry, database_entry, full_folder_name_entry, server_port_entry = entries  # Include server port entry
+src_dir_entry, base_dir_entry, full_folder_name_entry, database_entry, server_port_entry = entries  # Include server port entry
 
 # Logo banner, in the right column under the Browse buttons above (same
 # column those sit in). Kept as a module-level reference
