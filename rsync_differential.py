@@ -57,7 +57,27 @@ def _original_snapshot_path():
     """The fixed --link-dest source for every differential run: the very
     first snapshot ever completed, or None on the very first-ever backup
     (nothing to diff against yet -- that first run is a full transfer
-    regardless of mode, same as rsync_incremental.py's first run)."""
+    regardless of mode, same as rsync_incremental.py's first run).
+
+    Same broken-symlink guard as rsync_incremental.py's
+    _previous_snapshot_path() -- see its docstring. Without this, a
+    dangling original_backup (its target deleted out from under it)
+    would silently skip --link-dest and do a full, un-linked re-copy of
+    the entire source tree with no warning.
+    """
+    if os.path.islink(original_backup) and not os.path.exists(original_backup):
+        message = (
+            f"original_backup ({original_backup}) is a broken symlink -- "
+            f"its target ({os.path.realpath(original_backup)}) doesn't "
+            "exist. Refusing to silently treat this as a fresh install "
+            "and skip --link-dest, which would do a full, un-linked "
+            "re-copy of the entire source tree. Point the symlink at a "
+            "real, complete snapshot under snapshots_root, or remove it "
+            "entirely if starting fresh is really intended."
+        )
+        logger.error(message)
+        notify("FolderW: Backup Failed", message)
+        sys.exit(1)
     if os.path.exists(original_backup):
         return os.path.realpath(original_backup)
     return None

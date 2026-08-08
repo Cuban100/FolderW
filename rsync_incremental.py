@@ -178,7 +178,31 @@ def _previous_snapshot_path():
     the --link-dest source and as the size baseline for progress
     percentage — always a *complete*, successfully-finished snapshot,
     never a partial one, since full_backup is only ever repointed after a
-    run's completion marker is written (see the atomic repoint below)."""
+    run's completion marker is written (see the atomic repoint below).
+
+    Distinguishes "doesn't exist at all" (legitimate first-ever backup)
+    from "exists as a symlink but its target is gone" (something deleted
+    a snapshot out from under full_backup without repointing it -- e.g.
+    manual cleanup outside the app). The two used to be treated the same
+    (os.path.exists() returns False for both), which meant a broken
+    symlink silently skipped --link-dest and did a full, un-linked
+    re-copy of the entire source tree with no warning -- found live: a
+    multi-hour run with no completion marker, after full_backup was left
+    pointing at a snapshot that no longer existed. Fails loudly instead.
+    """
+    if os.path.islink(full_backup) and not os.path.exists(full_backup):
+        message = (
+            f"full_backup ({full_backup}) is a broken symlink -- its "
+            f"target ({os.path.realpath(full_backup)}) doesn't exist. "
+            "Refusing to silently treat this as a fresh install and skip "
+            "--link-dest, which would do a full, un-linked re-copy of the "
+            "entire source tree. Point the symlink at a real, complete "
+            "snapshot under snapshots_root, or remove it entirely if "
+            "starting fresh is really intended."
+        )
+        logger.error(message)
+        notify("FolderW: Backup Failed", message)
+        sys.exit(1)
     if os.path.exists(full_backup):
         return os.path.realpath(full_backup)
     return None
@@ -313,8 +337,16 @@ def ensure_backup_folder_icon():
     # files through it. Its FULL_NAME container folder (one level up --
     # e.g. "Caveman", holding both the symlink and Snapshots/) is never an
     # rsync destination itself, so it's still safe to brand normally.
-    _set_folder_icon(full_backup, 'FolderW.png', write_physical_files=False)
-    _set_folder_icon(os.path.dirname(full_backup), 'logo.png')
+    #
+    # folder_icon.png (not the raw logo.png/FolderW.png) -- gio's
+    # metadata::custom-icon replaces the folder glyph entirely with
+    # whatever image is given, it doesn't composite it onto a folder
+    # shape automatically. folder_icon.png is a pre-composited flat
+    # folder shape with the badge embedded in the center, generated once
+    # (see git history) from logo.png, so it actually reads as a folder
+    # in a file manager instead of just a floating circular badge.
+    _set_folder_icon(full_backup, 'folder_icon.png', write_physical_files=False)
+    _set_folder_icon(os.path.dirname(full_backup), 'folder_icon.png')
 
 def rsync(destination, link_dest=None, result_holder=None):
     # destination: the NEW dated snapshot path this run writes into (not
