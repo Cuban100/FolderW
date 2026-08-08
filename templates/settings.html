@@ -144,11 +144,11 @@
                             <label class="block text-[var(--text)] font-medium mb-2">Backup Method:</label>
                             <div class="flex space-x-4">
                                 <label class="inline-flex items-center">
-                                    <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'differential' %}checked{% endif %}>
+                                    <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
                                     <span class="ml-2 text-[var(--text)]">Incremental</span>
                                 </label>
                                 <label class="inline-flex items-center">
-                                    <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'differential' %}checked{% endif %}>
+                                    <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'incremental' %}checked{% endif %}>
                                     <span class="ml-2 text-[var(--text)]">Differential</span>
                                 </label>
                             </div>

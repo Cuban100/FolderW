@@ -38,7 +38,7 @@ def upgrade_packages(requirements_file='requirements.txt'):
     process.wait()
 
 DIFFERENTIAL_EXPLANATION = (
-    "Differential Backup\n\n"
+    "Differential Backup (default)\n\n"
     "Every snapshot compares against the ORIGINAL full backup, always -- "
     "never against the previous snapshot. A file that changed once and "
     "never again still gets rewritten into every future snapshot, since "
@@ -53,14 +53,14 @@ DIFFERENTIAL_EXPLANATION = (
 )
 
 INCREMENTAL_EXPLANATION = (
-    "Incremental Backup (default)\n\n"
+    "Incremental Backup\n\n"
     "Every snapshot compares against the PREVIOUS snapshot, not a fixed "
     "original. A file that changed once and never again gets written "
     "just that one time -- every snapshot after that hardlinks it again "
     "for free.\n\n"
     "Snapshots stay small and roughly constant in size no matter how "
     "long the system has been running. This is how Time Machine and "
-    "Timeshift work, and is the recommended default."
+    "Timeshift work."
 )
 
 def _show_backup_method_info(mode):
@@ -478,13 +478,14 @@ for i, (label, env_key) in enumerate(labels):
 
 src_dir_entry, base_dir_entry, database_entry, full_folder_name_entry, server_port_entry = entries  # Include server port entry
 
-# Logo banner, right under the Browse-button fields above. Kept as a
-# module-level reference (_logo_banner_image), same reasoning as
-# _window_icon further down -- a PhotoImage with no live Python reference
-# gets silently garbage-collected and the label just goes blank.
+# Logo banner, in the right column under the Browse buttons above (same
+# column those sit in). Kept as a module-level reference
+# (_logo_banner_image), same reasoning as _window_icon further down -- a
+# PhotoImage with no live Python reference gets silently garbage-collected
+# and the label just goes blank.
 _logo_banner_image = ImageTk.PhotoImage(Image.open(os.path.join(APP_DIR, 'logo.png')).resize((96, 96), Image.LANCZOS))
 logo_banner = tk.Label(root, image=_logo_banner_image, background='#1a1a1a')
-logo_banner.grid(row=len(labels), column=0, columnspan=3, pady=10)
+logo_banner.grid(row=len(labels), column=2, padx=10, pady=10)
 
 # Monitor checkbox setup
 monitor_var = tk.IntVar(value=1)  
@@ -529,7 +530,7 @@ autostart_label.grid(row=len(labels) + 3, column=0, padx=0, pady=10, sticky='e')
 # selecting one always deselects the other, matching "either/or, never
 # both" rather than something a Checkbutton pair would need extra code
 # to enforce.
-backup_method_var = StringVar(value='incremental')
+backup_method_var = StringVar(value='differential')
 backup_method_label = tk.Label(root, text="Backup Method:", foreground='#ffffff', bg='#1a1a1a', padx=10, pady=10)
 backup_method_frame = tk.Frame(root, bg='#1a1a1a')
 
@@ -599,7 +600,7 @@ autostart_var.set(int(autostart_value)) if autostart_value is not None else auto
 
 # Safely set the backup method variable
 backup_method_value = os.getenv('BACKUP_METHOD')
-backup_method_var.set(backup_method_value if backup_method_value in ('incremental', 'differential') else 'incremental')
+backup_method_var.set(backup_method_value if backup_method_value in ('incremental', 'differential') else 'differential')
 
 # Sync the interval widgets' visibility with the loaded monitor value
 toggle_backup_options()

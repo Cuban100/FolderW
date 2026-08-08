@@ -11,12 +11,12 @@ from loguru import logger
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _backup_script_name():
-    # 'differential' opts into rsync_differential.py (--link-dest against
-    # the original full backup, fixed forever); anything else, including
-    # unset (older installs predating this setting), keeps the default
-    # rsync_incremental.py behavior (--link-dest against the most recent
-    # snapshot) so existing installs' behavior doesn't silently change.
-    return "rsync_differential.py" if load_env_value('BACKUP_METHOD') == 'differential' else "rsync_incremental.py"
+    # 'incremental' opts into rsync_incremental.py (--link-dest against
+    # the most recent snapshot); anything else, including unset, defaults
+    # to rsync_differential.py (--link-dest against the original full
+    # backup, fixed forever) -- differential is the default backup
+    # method, matching the setup wizard's pre-selected radio button.
+    return "rsync_incremental.py" if load_env_value('BACKUP_METHOD') == 'incremental' else "rsync_differential.py"
 
 def run_regular_backup():
     script_name = _backup_script_name()
