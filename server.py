@@ -8,6 +8,7 @@ import threading
 import webbrowser
 import psutil
 import apprise
+from notifications import _notify_desktop
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note
@@ -743,30 +744,49 @@ async def settings_page(request: Request):
         "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
         "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
         "notify_urls": load_env_value('NOTIFY_URLS'),
+        "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
         "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
     })
 
 
 @app.post("/test-notification")
-async def test_notification(notify_urls: str = Form("")):
+async def test_notification(notify_urls: str = Form(""), notify_send_always: str = Form("0")):
     urls = [u.strip() for u in notify_urls.split(',') if u.strip()]
-    if not urls:
-        return JSONResponse({"success": False, "message": "No notification URL(s) provided."})
+    send_desktop = notify_send_always == '1'
 
-    apobj = apprise.Apprise()
-    valid_count = sum(1 for url in urls if apobj.add(url))
-    if valid_count == 0:
-        return JSONResponse({"success": False, "message": "No valid URL(s) — check the format."})
+    if not urls and not send_desktop:
+        return JSONResponse({"success": False, "message": "No notification URL(s) provided, and desktop notifications aren't enabled."})
 
-    try:
-        result = apobj.notify(title="FolderW Test Notification", body="If you're seeing this, your notification setup works.")
-    except Exception as e:
-        logger.error(f"Test notification failed: {e}")
-        return JSONResponse({"success": False, "message": f"Error: {e}"})
+    messages = []
+    any_success = False
 
-    if result:
-        return JSONResponse({"success": True, "message": "Sent! Check your device."})
-    return JSONResponse({"success": False, "message": "Apprise reported failure — check the URL and service status."})
+    if urls:
+        apobj = apprise.Apprise()
+        valid_count = sum(1 for url in urls if apobj.add(url))
+        if valid_count == 0:
+            messages.append("No valid URL(s) — check the format.")
+        else:
+            try:
+                result = apobj.notify(title="FolderW Test Notification", body="If you're seeing this, your notification setup works.")
+                if result:
+                    any_success = True
+                    messages.append("URL(s): sent, check your device.")
+                else:
+                    messages.append("URL(s): Apprise reported failure — check the URL and service status.")
+            except Exception as e:
+                logger.error(f"Test notification failed: {e}")
+                messages.append(f"URL(s): error ({e}).")
+
+    if send_desktop:
+        # notify-send doesn't report success/failure back to the caller
+        # the way Apprise does (it's fire-and-forget over D-Bus) -- if
+        # this doesn't raise, treat it as sent and let the user's own
+        # eyes confirm whether it actually showed up on screen.
+        _notify_desktop("FolderW Test Notification", "If you're seeing this, your notification setup works.", 'normal')
+        any_success = True
+        messages.append("Desktop: sent — check your screen.")
+
+    return JSONResponse({"success": any_success, "message": " ".join(messages)})
 
 
 def _is_valid_folder_name(name):
@@ -791,6 +811,7 @@ async def submit_settings(
     new_password: str = Form(""),
     require_login: str = Form(None),
     notify_urls: str = Form(""),
+    notify_send_always: str = Form(None),
     backup_method: str = Form("differential"),
 ):
     logger.info("Response received from Front End for /submit/")
@@ -821,6 +842,7 @@ async def submit_settings(
             "max_snapshots": max_snapshots_value,
             "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
             "notify_urls": load_env_value('NOTIFY_URLS'),
+            "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
         })
 
@@ -859,6 +881,7 @@ async def submit_settings(
         "MAX_SNAPSHOTS": max_snapshots,
         "ADMIN_PASSWORD_HASH": admin_password_hash,
         "NOTIFY_URLS": notify_urls.strip(),
+        "NOTIFY_SEND_ALWAYS": "1" if notify_send_always is not None else "0",
         "BACKUP_METHOD": "incremental" if backup_method == "incremental" else "differential",
     }
 
@@ -897,6 +920,7 @@ async def submit_settings(
             "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
             "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
             "notify_urls": load_env_value('NOTIFY_URLS'),
+            "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
         })
 
@@ -930,6 +954,7 @@ async def submit_settings(
         "max_snapshots": new_values["MAX_SNAPSHOTS"],
         "login_enabled": bool(new_values["ADMIN_PASSWORD_HASH"]),
         "notify_urls": new_values["NOTIFY_URLS"],
+        "notify_send_always": new_values["NOTIFY_SEND_ALWAYS"] == "1",
         "backup_method": new_values["BACKUP_METHOD"],
     })
 

@@ -365,6 +365,7 @@ def save_paths():
     if "e.g." in notify_urls:  # untouched placeholder text
         notify_urls = ""
     set_key(env_path, 'NOTIFY_URLS', notify_urls)
+    set_key(env_path, 'NOTIFY_SEND_ALWAYS', str(notify_send_always_var.get()))
 
     result_label.config(text="Configuration saved to .env", foreground='#39FF14')  # Set to neon green
 
@@ -438,7 +439,7 @@ def show_terminal():
     # above it (the logo banner, Backup Method itself). Gridding it right
     # after the last existing row means it always lands below the form's
     # actual current content, however tall that turns out to be.
-    log_text.grid(row=len(labels) + 9, column=0, columnspan=3, padx=10, pady=4)
+    log_text.grid(row=len(labels) + 10, column=0, columnspan=3, padx=10, pady=4)
     log_text.config(state=tk.NORMAL)
     # Previously a hardcoded 700x660 -- stale as soon as the form grew
     # wider/taller than that (same root cause as the overlap above), which
@@ -658,11 +659,21 @@ set_placeholder(notify_urls_entry, "e.g. pover://user@token, ntfy://topic", 'NOT
 notify_urls_hint = tk.Label(root, text="Comma-separated Apprise URLs, notified on backup failure/completion. Leave blank to disable.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
 notify_urls_hint.grid(row=len(labels) + 6, column=2, padx=10, pady=4, sticky='w')
 
+# Independent of the URL(s) above: a local desktop notification via
+# notify-send, usable on its own (no external service needed) or
+# alongside Apprise URLs.
+notify_send_always_var = tk.IntVar(value=0)
+notify_send_always_checkbox = tk.Checkbutton(root, text="Always send a desktop notification", variable=notify_send_always_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71')
+notify_send_always_checkbox.grid(row=len(labels) + 7, column=1, padx=10, pady=4, sticky='w')
+
+notify_send_always_hint = tk.Label(root, text="Uses notify-send to show a notification on this machine's own desktop.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+notify_send_always_hint.grid(row=len(labels) + 7, column=2, padx=10, pady=4, sticky='w')
+
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 7, column=1, pady=4)
+save_button.grid(row=len(labels) + 8, column=1, pady=4)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 8, column=1, pady=4)
+result_label.grid(row=len(labels) + 9, column=1, pady=4)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')
@@ -678,6 +689,10 @@ autostart_var.set(int(autostart_value)) if autostart_value is not None else auto
 # Safely set the backup method variable
 backup_method_value = os.getenv('BACKUP_METHOD')
 backup_method_var.set(backup_method_value if backup_method_value in ('incremental', 'differential') else 'differential')
+
+# Safely set the "always send a desktop notification" variable
+notify_send_always_value = os.getenv('NOTIFY_SEND_ALWAYS')
+notify_send_always_var.set(int(notify_send_always_value)) if notify_send_always_value is not None else notify_send_always_var.set(0)
 
 # Sync the interval widgets' visibility with the loaded monitor value
 toggle_backup_options()

@@ -31,7 +31,7 @@ def run_regular_backup():
         # unhandled crash in that script too, since both surface the same
         # way: a non-zero exit.
         logger.error(f"Error running {script_name}: {e}")
-        notify("FolderW: Backup Failed", f"A backup run failed (exit code {e.returncode}). Check the FolderW logs for details.")
+        notify("FolderW: Backup Failed", f"A backup run failed (exit code {e.returncode}). Check the FolderW logs for details.", level='critical')
 
 def start_event_backup():
     # rsync_event_handler.py blocks here for as long as it runs successfully

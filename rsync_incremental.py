@@ -156,7 +156,7 @@ def _check_sudo_rsync_available():
             "Permissions section to configure it manually."
         )
         logger.error(f"{message} (sudo -n rsync --version: {check.stderr.strip()})")
-        notify("FolderW: Backup Failed", message)
+        notify("FolderW: Backup Failed", message, level='critical')
         sys.exit(1)
 
 
@@ -639,7 +639,7 @@ def _run_initial_full_backup_if_needed():
     store_changes_in_db(changes)
     record_backup_statistics(changes, 1, "Full Backup", backup_type='full')
 
-    notify("FolderW: Full Backup Complete", f"The initial full backup to {full_backup} finished successfully.")
+    notify("FolderW: Full Backup Complete", f"The initial full backup to {full_backup} finished successfully.", level='normal')
     # Lets main_backup.py skip straight to monitoring/scheduling on a
     # future restart instead of re-running the initial full backup --
     # cleared by reset_backup_history() if SRC_DIR/BASE_DIR/FULL_NAME ever
