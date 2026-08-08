@@ -838,10 +838,10 @@
                         // startBackup()) at the moment the backup *started*
                         // — has_completed_backup was still false then, so
                         // the server never rendered the manual-snapshot
-                        // banner element at all (it's inside a server-side
-                        // {% if ready_for_manual_snapshot %}, not just
-                        // hidden with CSS), and nothing here ever swaps the
-                        // Stop Full Backup button back to Start. Found live:
+                        // banner element at all (it's behind a server-side
+                        // conditional, not just hidden with CSS), and
+                        // nothing here ever swaps the Stop Full Backup
+                        // button back to Start. Found live:
                         // the Stop button just sat there indefinitely after
                         // a backup actually finished. Reloading re-renders
                         // the whole page with fresh state instead of trying
