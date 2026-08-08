@@ -710,6 +710,18 @@ async def root(request: Request):
         "can_backup": persisted["can_backup"],
         "backup_in_progress": is_backup_running(),
         "has_completed_backup": has_completed_backup(database),
+        "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+        "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
+        "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
+        "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
+        # Whether an external notification service is configured, not
+        # the URL(s) themselves -- an Apprise URL routinely embeds an
+        # auth token (e.g. pover://user@token), which has no business
+        # being shown on a dashboard anyone glancing at the screen (or a
+        # screenshot) could read.
+        "has_notify_urls": bool(load_env_value('NOTIFY_URLS')),
+        "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
+        "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
         **get_backup_stats_context(database),
         })
 

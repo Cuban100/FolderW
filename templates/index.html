@@ -633,6 +633,34 @@
                     <span>{{ interval }}</span>
                 </div>
                 {% endif %}
+                <div class="env-item">
+                    <label>Backup Method:</label>
+                    <span class="right active">{{ backup_method | capitalize }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Snapshots to Keep:</label>
+                    <span class="right active">{{ max_snapshots if max_snapshots else 'Unlimited' }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Dashboard Login:</label>
+                    <span class="right {{ 'active' if login_enabled else '' }}">{{ 'Enabled' if login_enabled else 'Disabled' }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Desktop Notifications:</label>
+                    <span class="right {{ 'active' if notify_send_always else '' }}">{{ 'Enabled' if notify_send_always else 'Disabled' }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Notification URL(s):</label>
+                    <span class="right {{ 'active' if has_notify_urls else '' }}">{{ 'Configured' if has_notify_urls else 'Not configured' }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Pre-Backup Script:</label>
+                    <span class="right {{ 'active' if pre_backup_script else '' }}" title="{{ pre_backup_script }}">{{ pre_backup_script if pre_backup_script else 'Not configured' }}</span>
+                </div>
+                <div class="env-item">
+                    <label>Post-Backup Script:</label>
+                    <span class="right {{ 'active' if post_backup_script else '' }}" title="{{ post_backup_script }}">{{ post_backup_script if post_backup_script else 'Not configured' }}</span>
+                </div>
             </div>
         </div>
         {% if backup_status or backup_in_progress %}
