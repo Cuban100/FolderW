@@ -117,12 +117,14 @@ def get_folder_size_bytes_du(path, exclude_from=None, apparent_size=True):
     --sparse) actually occupies on disk.
     """
     # -D/--dereference-args: only affects `path` itself, not symlinks
-    # encountered while walking the tree -- needed because full_backup is
-    # now a symlink to the newest snapshot (see the --link-dest redesign in
-    # rsync_incremental.py). Plain `du` on a symlink argument reports the
-    # symlink's own few bytes, not the target's real size (confirmed
-    # empirically), which would silently break CURRENT_BACKUP_SIZE and the
-    # progress-percent baseline. Harmless no-op for a plain directory path.
+    # encountered while walking the tree -- needed for original_backup
+    # (still a symlink, see rsync_differential.py) and any caller passed
+    # a symlink path in general. Plain `du` on a symlink argument reports
+    # the symlink's own few bytes, not the target's real size (confirmed
+    # empirically), which would silently break CURRENT_BACKUP_SIZE and
+    # the progress-percent baseline. Harmless no-op for a plain directory
+    # path (full_backup itself is a real directory now, not a symlink --
+    # see the --link-dest redesign in rsync_incremental.py).
     command = ['du', '-s', '-D']
     if apparent_size:
         command.append('-b')

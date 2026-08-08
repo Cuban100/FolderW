@@ -11,6 +11,7 @@ overlay2/
 **/.npm/_cacache
 **/.config/Claude/vm_bundles
 folder-icon.png
+FolderW.png
 .directory
 *.tmp
 *.swp

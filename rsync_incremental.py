@@ -6,7 +6,7 @@ import threading
 import pwd
 import grp
 from db_operations import get_last_session_number, store_changes_in_db, load_other_variables, load_env_value, record_backup_run, set_database_value, get_database_value
-from restore_operations import cleanup_old_snapshots, mark_snapshot_complete
+from restore_operations import cleanup_old_snapshots, mark_snapshot_complete, COMPLETION_MARKER
 from statistics_operations import get_folder_size_du, get_folder_size_bytes_du, human_readable_size
 from notifications import notify
 from dotenv import load_dotenv
@@ -185,22 +185,25 @@ def _unique_new_snapshot_path(incremental_folder):
 
 
 def _previous_snapshot_path():
-    """The snapshot full_backup currently points at, or None if this is the
-    very first backup ever (full_backup doesn't exist yet). Used both as
-    the --link-dest source and as the size baseline for progress
-    percentage — always a *complete*, successfully-finished snapshot,
-    never a partial one, since full_backup is only ever repointed after a
-    run's completion marker is written (see the atomic repoint below).
+    """The reference to hardlink this run's --link-dest against, or None
+    if this is the very first backup ever (full_backup doesn't exist
+    yet). Used both as the --link-dest source and as the size baseline
+    for progress percentage.
 
-    Distinguishes "doesn't exist at all" (legitimate first-ever backup)
-    from "exists as a symlink but its target is gone" (something deleted
-    a snapshot out from under full_backup without repointing it -- e.g.
-    manual cleanup outside the app). The two used to be treated the same
-    (os.path.exists() returns False for both), which meant a broken
-    symlink silently skipped --link-dest and did a full, un-linked
-    re-copy of the entire source tree with no warning -- found live: a
-    multi-hour run with no completion marker, after full_backup was left
-    pointing at a snapshot that no longer existed. Fails loudly instead.
+    full_backup is now a real directory (see _repoint_full_backup), not
+    a symlink -- os.path.realpath() on a real directory is a no-op and
+    just returns its own path, so this still works correctly without
+    change. It's always a *complete*, successfully-finished mirror,
+    never a partial one, since full_backup is only ever rebuilt after a
+    run's completion marker is written.
+
+    The os.path.islink() branch below only matters for the one
+    transitional run on an install still carrying the old symlink design
+    (or if something manually recreates full_backup as a symlink) --
+    kept as a safety net: a broken symlink used to be silently treated
+    the same as "doesn't exist at all" (os.path.exists() returns False
+    for both), which meant --link-dest got silently skipped and did a
+    full, un-linked re-copy of the entire source tree with no warning.
     """
     if os.path.islink(full_backup) and not os.path.exists(full_backup):
         message = (
@@ -221,11 +224,27 @@ def _previous_snapshot_path():
 
 
 def _repoint_full_backup(target_path):
-    """Atomically make full_backup a symlink pointing at target_path.
-    Writes a temp symlink alongside it, then os.replace() over the real
-    path -- so a reader (dashboard du/isdir calls, etc.) never observes a
-    missing or broken full_backup mid-update. Removes any stale temp name
-    left behind by a prior crash between the write and the replace."""
+    """Rebuilds full_backup as a REAL directory mirroring target_path's
+    content via hardlinks -- not a symlink. A symlink's target is 100%
+    real data once you open it (confirmed live, inode-for-inode), but a
+    symlink is still what it says on the tin: some tools/scripts/network
+    shares don't follow it, and it visibly renders as a shortcut rather
+    than "the actual current full backup". Every file inside the rebuilt
+    full_backup is a hardlink to the same inode as target_path's copy, so
+    this stays cheap (pure filesystem metadata, no data re-copy, no
+    extra disk space) while full_backup itself is genuinely a directory.
+
+    Builds the new tree at a temp name first (shutil.copytree with
+    copy_function=os.link -- hardlinks instead of copying bytes), then
+    removes whatever full_backup currently is (a stale temp name from a
+    prior crash, the previous run's real directory, or -- migrating an
+    install from before this change -- the old symlink) and renames the
+    new tree into place. Unlike a symlink swap, a real directory can't be
+    replaced by a single atomic rename over existing content (POSIX
+    rename() requires the target directory to be empty), so there's a
+    brief window here where full_backup doesn't exist between removing
+    the old one and the rename -- unavoidable for a real-directory swap.
+    """
     parent = os.path.dirname(full_backup)
     os.makedirs(parent, exist_ok=True)
     tmp_path = full_backup + '.tmp-relink'
@@ -234,9 +253,14 @@ def _repoint_full_backup(target_path):
             shutil.rmtree(tmp_path)
         else:
             os.remove(tmp_path)
-    os.symlink(target_path, tmp_path)
+    shutil.copytree(target_path, tmp_path, copy_function=os.link, symlinks=True)
+    if os.path.lexists(full_backup):
+        if os.path.islink(full_backup) or not os.path.isdir(full_backup):
+            os.remove(full_backup)
+        else:
+            shutil.rmtree(full_backup)
     os.replace(tmp_path, full_backup)
-    logger.info(f"full_backup now points at: {target_path}")
+    logger.info(f"full_backup rebuilt as a real hardlinked directory, mirroring: {target_path}")
 
 
 def _migrate_legacy_original_backup_name():
@@ -278,17 +302,39 @@ def _repoint_original_backup_if_unset(target_path):
 def _migrate_legacy_full_backup():
     """One-time migration for installs from before the --link-dest redesign,
     where full_backup was a real, continuously-synced mirror directory
-    instead of a symlink to the newest snapshot. Folds that existing real
-    directory into the new scheme as a proper dated snapshot (a fast,
-    atomic same-filesystem rename -- not a copy, regardless of size) so
-    existing backup data isn't discarded and can still be used as a
-    --link-dest source for the very next run.
+    instead of a hardlinked mirror of the newest snapshot. Folds that
+    existing real directory into the new scheme as a proper dated
+    snapshot (a fast, atomic same-filesystem rename -- not a copy,
+    regardless of size) so existing backup data isn't discarded and can
+    still be used as a --link-dest source for the very next run.
 
-    Safe to call on every startup: no-ops immediately if full_backup is
-    already a symlink (already migrated) or doesn't exist (fresh install,
-    nothing to migrate).
+    Safe to call on every startup: no-ops immediately if full_backup
+    doesn't exist (fresh install, nothing to migrate), is still the
+    symlink from an even earlier version of this design (handled on its
+    own further down -- the repoint below rebuilds it fresh regardless),
+    or already carries COMPLETION_MARKER (already a hardlinked mirror
+    built by THIS mechanism -- see _repoint_full_backup -- not a genuine
+    unmigrated legacy directory). Checking for the marker rather than
+    just "is it a real directory" matters because a real directory is
+    now full_backup's normal, correct state (not a sign it predates the
+    redesign) -- found live: without this, every single run treated its
+    own already-correct full_backup as unmigrated legacy data and folded
+    it into Snapshots/ as a spurious extra "migrated" snapshot.
     """
     if os.path.islink(full_backup):
+        # Transitional install still on the symlink design -- its target
+        # is already a valid dated snapshot under snapshots_root (that
+        # mechanism only ever pointed there), and it's the oldest one
+        # this install knows about. Anchor original_backup to it now, in
+        # case it doesn't exist yet (an install that started using the
+        # symlink design before original_backup existed at all) --
+        # otherwise the first _repoint_original_backup_if_unset() call
+        # would happen for whatever snapshot THIS run produces instead,
+        # silently anchoring differential mode to the wrong, much later
+        # snapshot. No-op if original_backup is already set.
+        _repoint_original_backup_if_unset(os.path.realpath(full_backup))
+        return
+    if os.path.isdir(full_backup) and os.path.exists(os.path.join(full_backup, COMPLETION_MARKER)):
         return
     if not os.path.exists(full_backup):
         if get_database_value('FULL_BACKUP_COMPLETED', 'settings') == '1':
@@ -362,21 +408,24 @@ def _set_folder_icon(folder, icon_filename, write_physical_files=True):
         logger.warning(f"Could not set folder icon via gio (non-fatal): {e}")
 
 def ensure_backup_folder_icon():
-    # full_backup is a symlink to the newest snapshot -- tag the symlink
-    # itself via gio (see _set_folder_icon), never write physical icon
-    # files through it. Its FULL_NAME container folder (one level up --
-    # e.g. "Caveman", holding both the symlink and Snapshots/) is never an
-    # rsync destination itself, so it's still safe to brand normally.
+    # full_backup is now a real, independent directory (see
+    # _repoint_full_backup) -- rebuilt fresh via hardlinks after every
+    # run, never a live rsync destination itself, so it's safe to brand
+    # normally with physical files, same as its container folder. This
+    # also gets the KDE Dolphin .directory-file fallback that a symlink
+    # couldn't have, and is more reliable than gio-metadata-only tagging
+    # (confirmed live: the symlink-only tag wasn't rendering as a custom
+    # icon in the file manager actually used).
     #
-    # FolderW.png for the Full Backup symlink itself (the author's own
-    # 3D folder-with-badge render, already styled as a folder); folder-
-    # icon.png (a flatter pre-rendered folder with the badge embedded,
-    # also the author's own asset) for its container folder. gio's
-    # metadata::custom-icon replaces the folder glyph entirely with
-    # whatever image is given -- it doesn't composite either onto a
-    # folder shape automatically, which is why both assets are already
-    # pre-rendered to look like one instead of a floating badge.
-    _set_folder_icon(full_backup, 'FolderW.png', write_physical_files=False)
+    # FolderW.png for Full Backup itself (the author's own 3D folder-
+    # with-badge render, already styled as a folder); folder-icon.png (a
+    # flatter pre-rendered folder with the badge embedded, also the
+    # author's own asset) for its container folder. gio's metadata::
+    # custom-icon replaces the folder glyph entirely with whatever image
+    # is given -- it doesn't composite either onto a folder shape
+    # automatically, which is why both assets are already pre-rendered
+    # to look like one instead of a floating badge.
+    _set_folder_icon(full_backup, 'FolderW.png')
     _set_folder_icon(os.path.dirname(full_backup), 'folder-icon.png')
 
 def rsync(destination, link_dest=None, result_holder=None):
