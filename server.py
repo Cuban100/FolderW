@@ -503,6 +503,12 @@ async def run_all_steps(request: Request):
 
     success_message = "All settings, validations, and evaluations are correct. READY"
     set_database_value('CHECK_STEP', 'starting')
+    # A click here is a deliberate request for a real full backup right
+    # now -- clear this unconditionally so main_backup.py's restart-skip
+    # shortcut (see main_backup.py) never applies to this specific path,
+    # only to routine restarts (deploys, crash-restarts, reboots) where
+    # skipping a redundant re-sync is actually wanted.
+    set_database_value('FULL_BACKUP_COMPLETED', '0')
 
     try:
         if _backup_service_unit_exists():

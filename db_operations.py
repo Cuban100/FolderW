@@ -198,6 +198,11 @@ def reset_backup_history(database):
             cursor.execute(f"DELETE FROM {table}")
         conn.commit()
         conn.close()
+        # New identity means the initial full backup hasn't happened for
+        # it yet -- without this, main_backup.py would see the flag still
+        # set from the OLD source/destination and skip straight to
+        # monitoring instead of actually syncing the new one.
+        set_database_value('FULL_BACKUP_COMPLETED', '0')
         logger.info("Backup history reset (changes/statistics/performance_metrics/backup_runs cleared).")
     except sqlite3.Error as e:
         logger.error(f"Error resetting backup history: {e}")

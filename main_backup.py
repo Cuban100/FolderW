@@ -1,6 +1,6 @@
 import os
 import sys
-from db_operations import load_env_value, load_other_variables, set_database_value
+from db_operations import load_env_value, load_other_variables, set_database_value, get_database_value
 from notifications import notify
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
 import subprocess
@@ -90,7 +90,18 @@ if __name__ == "__main__":
         set_database_value('BACKUP_PREPARING', '')
         sys.exit(0)
 
-    run_regular_backup()
+    # Every restart of this service (a code deploy, a crash-restart, a
+    # reboot) used to unconditionally run a full backup before even
+    # considering monitoring -- fine the first time, wasteful on every
+    # restart after that, since rsync_incremental.py already set this flag
+    # once the initial full backup actually completed. The Start Full
+    # Backup button explicitly clears it (see server.py) before restarting
+    # this service specifically so a deliberate click always forces a real
+    # run regardless of this shortcut.
+    if get_database_value('FULL_BACKUP_COMPLETED', 'settings') == '1':
+        logger.info("Initial full backup already completed previously -- skipping straight to monitoring/scheduling instead of re-running it.")
+    else:
+        run_regular_backup()
 
     if monitor == '1':
         logger.info("Detected MONITOR_SOURCE_FOLDER as '1'. Starting event-driven backup.")

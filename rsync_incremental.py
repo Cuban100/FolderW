@@ -490,3 +490,9 @@ if __name__ == "__main__":
 
     if last_session_number <= 1:
         notify("FolderW: Full Backup Complete", f"The initial full backup to {full_backup} finished successfully.")
+        # Lets main_backup.py skip straight to monitoring/scheduling on a
+        # future restart instead of re-running the initial full backup --
+        # cleared by reset_backup_history() if SRC_DIR/BASE_DIR/FULL_NAME
+        # ever changes, and by the dashboard's Start Full Backup button
+        # (which should always force a real run regardless of this flag).
+        set_database_value('FULL_BACKUP_COMPLETED', '1')
