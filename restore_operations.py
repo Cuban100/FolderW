@@ -15,6 +15,31 @@ from loguru import logger
 # one left behind by a crash, kill, or power loss mid-run.
 COMPLETION_MARKER = '.folderw_complete'
 
+
+def _snapshot_created_at(snapshot_path):
+    """The real creation time of a snapshot, for sorting -- read from
+    COMPLETION_MARKER's own CONTENT (an ISO timestamp, written once by
+    mark_snapshot_complete() and never rewritten after), not the
+    directory's mtime. Confirmed live, the hard way: a directory's mtime
+    updates on ANY change to its contents -- not just at creation --
+    so anything that later writes into a snapshot folder (a retroactive
+    cleanup pass, the stats cache being computed on first page view, a
+    user note) silently reshuffles "newest first" ordering after the
+    fact. cleanup_old_snapshots() trusting that corrupted ordering is
+    exactly how a real, needed snapshot got deleted by retention while
+    an actually-older one survived. Falls back to mtime only if the
+    marker is missing/unparseable (shouldn't happen -- callers already
+    require its presence to list a snapshot at all).
+    """
+    marker_path = os.path.join(snapshot_path, COMPLETION_MARKER)
+    try:
+        with open(marker_path, 'r') as f:
+            return datetime.fromisoformat(f.read().strip()).timestamp()
+    except (OSError, ValueError) as e:
+        logger.warning(f"Could not read creation time from {marker_path}, falling back to mtime: {e}")
+        return os.path.getmtime(snapshot_path)
+
+
 # Cached (file_count, total_size) for a snapshot, as JSON. A snapshot is
 # now a complete point-in-time tree (hundreds of thousands of files, not
 # a small delta) -- recomputing this via a live os.walk on every /restore
@@ -203,7 +228,7 @@ def list_backups():
             "file_count": file_count,
             "files_changed": get_files_changed_by_label("Full Backup"),
             "size": human_readable_size(total_size),
-            "mtime": os.path.getmtime(full_backup),
+            "mtime": _snapshot_created_at(full_backup),
             "path": full_backup,
             "note": get_snapshot_note(full_backup),
         })
@@ -255,7 +280,7 @@ def list_backups():
                     # folder id (see record_backup_statistics()).
                     "files_changed": get_files_changed_by_label(snapshot_id),
                     "size": human_readable_size(total_size),
-                    "mtime": os.path.getmtime(snapshot_path),
+                    "mtime": _snapshot_created_at(snapshot_path),
                     # Real on-disk path -- shown on the Restore page so a
                     # snapshot can also be opened directly in the OS file
                     # manager, not just browsed in-app.
