@@ -26,6 +26,18 @@ import uvicorn
 # Initialize FastAPI app
 app = FastAPI()
 
+def _json_for_script(data):
+    """json.dumps(), safe to embed inside <script type="application/json">.
+    Plain json.dumps() doesn't escape '</' -- fine for data built only
+    from fixed enums/numbers, but the file tree/restore listing embeds
+    real file names and paths from SRC_DIR, which are genuinely
+    arbitrary strings. A file literally named to contain "</script>"
+    would otherwise close the tag early and let its own "content" be
+    parsed as HTML. '\\/' is valid JSON and decodes back to '/' via
+    JSON.parse(), so this changes nothing about the decoded value.
+    """
+    return json.dumps(data).replace('</', '<\\/')
+
 # Resolve relative to this file, not the process's working directory, so
 # templates/static still load correctly no matter where server.py is launched from
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -701,6 +713,33 @@ async def root(request: Request):
         **get_backup_stats_context(database),
         })
 
+def _build_file_tree(files):
+    """Nest a flat list of {'path': rel, 'size': ...} (see list_files_in_
+    backup()) into a tree of directories, for the Restore/Browse page's
+    collapsible file-tree view -- a deep snapshot's flat path list (e.g.
+    hundreds of files under a handful of top-level folders) is much
+    harder to scan than the same thing grouped by directory.
+
+    Children are a dict (not a list) keyed by name for O(1) insertion
+    while walking the flat list; the template/JS that consumes this
+    sorts and iterates them for display, same as a list would render.
+    """
+    root = {"name": "", "type": "dir", "children": {}}
+    for f in files:
+        parts = f["path"].split("/")
+        node = root
+        for i, part in enumerate(parts):
+            if i == len(parts) - 1:
+                node["children"][part] = {"name": part, "type": "file", "path": f["path"], "size": f["size"]}
+            else:
+                existing = node["children"].get(part)
+                if existing is None or existing["type"] != "dir":
+                    existing = {"name": part, "type": "dir", "children": {}}
+                    node["children"][part] = existing
+                node = existing
+    return root
+
+
 RESTORE_PAGE_SIZE = 20
 
 def _restore_page_context(page=1):
@@ -743,6 +782,7 @@ async def restore_browse(request: Request, backup_id: str, search: str = ""):
         "logo": logo,
         "backup_id": backup_id,
         "files": files,
+        "tree_json": _json_for_script(_build_file_tree(files)),
         "truncated": truncated,
         "search": search,
     })
@@ -1084,7 +1124,7 @@ async def statistics_page(request: Request):
         # at 200 runs) to embed as one JSON blob and filter/redraw
         # entirely client-side, rather than a server round-trip per
         # filter click.
-        "series_json": json.dumps(series),
+        "series_json": _json_for_script(series),
         "summary": summary,
     })
 

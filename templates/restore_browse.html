@@ -9,6 +9,34 @@
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/index.css">
     <script src="/static/sidebar.js"></script>
+    <style>
+        .tree-list {
+            list-style: none;
+            margin: 0;
+            padding-left: 22px;
+        }
+        #file-tree-root > .tree-list {
+            padding-left: 0;
+        }
+        .tree-list summary {
+            cursor: pointer;
+            padding: 4px 0;
+        }
+        .tree-list summary::-webkit-details-marker {
+            color: var(--text-muted);
+        }
+        .tree-list li {
+            padding: 2px 0;
+        }
+        .tree-file {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 0 4px 20px;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 0.85rem;
+        }
+    </style>
 </head>
 <body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
     {% include "_sidebar.html" %}
@@ -54,28 +82,7 @@
                     <button type="button" onclick="setAll(true)" class="text-sm text-blue-600 hover:underline">Select all</button>
                     <button type="button" onclick="setAll(false)" class="text-sm text-blue-600 hover:underline">Select none</button>
                 </div>
-                <div class="bg-[var(--surface)] rounded-lg shadow overflow-hidden mb-6">
-                    <table class="min-w-full divide-y divide-[var(--border)]">
-                        <thead class="bg-[var(--surface-alt)]">
-                            <tr>
-                                <th class="px-6 py-3 w-10"></th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">File</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Size</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[var(--border)]">
-                            {% for file in files %}
-                            <tr>
-                                <td class="px-6 py-3">
-                                    <input type="checkbox" class="file-checkbox" name="selected_paths" value="{{ file.path }}">
-                                </td>
-                                <td class="px-6 py-3 text-[var(--text)] font-mono text-sm">{{ file.path }}</td>
-                                <td class="px-6 py-3 text-[var(--text-muted)]">{{ file.size }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <div class="bg-[var(--surface)] rounded-lg shadow p-4 mb-6" id="file-tree-root"></div>
                 <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">
                     Restore Selected Files
                 </button>
@@ -83,9 +90,142 @@
             {% endif %}
         </div>
 
+    <script id="tree-data" type="application/json">{{ tree_json | safe }}</script>
     <script>
+        // ---- Collapsible file tree -------------------------------------
+        // Backend nests the flat file list into {name, type, children}
+        // (see _build_file_tree() in server.py); this renders it as
+        // native <details>/<summary> elements (collapse/expand and
+        // keyboard behavior come free from the browser, no custom state
+        // tracking needed) with a checkbox per directory that cascades to
+        // every file beneath it, and reflects a tri-state (checked / all-
+        // clear / indeterminate) based on its children.
+
+        function sortedEntries(node) {
+            return Object.values(node.children).sort((a, b) => {
+                if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+        }
+
+        function renderTree(node, container) {
+            const ul = document.createElement('ul');
+            ul.className = 'tree-list';
+            sortedEntries(node).forEach(entry => {
+                const li = document.createElement('li');
+                if (entry.type === 'dir') {
+                    const details = document.createElement('details');
+                    details.open = true;
+                    const summary = document.createElement('summary');
+
+                    const dirCb = document.createElement('input');
+                    dirCb.type = 'checkbox';
+                    dirCb.className = 'dir-checkbox';
+                    dirCb.setAttribute('aria-label', 'Select all in ' + entry.name);
+                    // stopPropagation, not preventDefault: lets the
+                    // checkbox's own click-to-toggle behavior happen
+                    // normally, while keeping the click from also
+                    // reaching <summary> and collapsing/expanding the
+                    // folder -- <details> only toggles open/closed for
+                    // clicks that bubble up to it.
+                    dirCb.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        setDescendants(details, dirCb.checked);
+                        refreshAncestors(li);
+                    });
+                    summary.appendChild(dirCb);
+
+                    const icon = document.createElement('span');
+                    icon.className = 'mdi mdi-folder-outline mx-1';
+                    summary.appendChild(icon);
+
+                    const label = document.createElement('span');
+                    label.textContent = entry.name;
+                    summary.appendChild(label);
+
+                    details.appendChild(summary);
+                    const childWrap = document.createElement('div');
+                    details.appendChild(childWrap);
+                    renderTree(entry, childWrap);
+                    li.appendChild(details);
+                } else {
+                    const row = document.createElement('div');
+                    row.className = 'tree-file';
+
+                    const fileCb = document.createElement('input');
+                    fileCb.type = 'checkbox';
+                    fileCb.name = 'selected_paths';
+                    fileCb.value = entry.path;
+                    fileCb.className = 'file-checkbox';
+                    fileCb.addEventListener('change', () => refreshAncestors(li));
+                    row.appendChild(fileCb);
+
+                    const icon = document.createElement('span');
+                    icon.className = 'mdi mdi-file-outline';
+                    row.appendChild(icon);
+
+                    const label = document.createElement('span');
+                    label.textContent = entry.name;
+                    label.className = 'text-[var(--text)]';
+                    row.appendChild(label);
+
+                    const size = document.createElement('span');
+                    size.textContent = entry.size;
+                    size.className = 'text-[var(--text-muted)] text-xs ml-auto';
+                    row.appendChild(size);
+
+                    li.appendChild(row);
+                }
+                ul.appendChild(li);
+            });
+            container.appendChild(ul);
+        }
+
+        function setDescendants(details, checked) {
+            details.querySelectorAll('.file-checkbox').forEach(cb => { cb.checked = checked; });
+            details.querySelectorAll('.dir-checkbox').forEach(cb => { cb.checked = checked; cb.indeterminate = false; });
+        }
+
+        function updateDirCheckboxState(details) {
+            const fileCbs = details.querySelectorAll('.file-checkbox');
+            const dirCb = details.querySelector(':scope > summary > .dir-checkbox');
+            if (!dirCb || fileCbs.length === 0) return;
+            const checkedCount = Array.from(fileCbs).filter(cb => cb.checked).length;
+            if (checkedCount === 0) {
+                dirCb.checked = false;
+                dirCb.indeterminate = false;
+            } else if (checkedCount === fileCbs.length) {
+                dirCb.checked = true;
+                dirCb.indeterminate = false;
+            } else {
+                dirCb.checked = false;
+                dirCb.indeterminate = true;
+            }
+        }
+
+        function refreshAncestors(li) {
+            let el = li.parentElement ? li.parentElement.closest('details') : null;
+            while (el) {
+                updateDirCheckboxState(el);
+                el = el.parentElement ? el.parentElement.closest('details') : null;
+            }
+        }
+
+        function refreshAllDirStates() {
+            document.querySelectorAll('#file-tree-root details').forEach(updateDirCheckboxState);
+        }
+
         function setAll(checked) {
             document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = checked);
+            document.querySelectorAll('.dir-checkbox').forEach(cb => { cb.checked = checked; cb.indeterminate = false; });
+        }
+
+        const treeDataEl = document.getElementById('tree-data');
+        const treeRoot = document.getElementById('file-tree-root');
+        if (treeDataEl && treeRoot) {
+            const tree = JSON.parse(treeDataEl.textContent);
+            renderTree(tree, treeRoot);
+            refreshAllDirStates();
         }
     </script>
 </body>
