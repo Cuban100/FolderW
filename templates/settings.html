@@ -375,6 +375,52 @@
                             </button>
                         </div>
                     </form>
+
+                    <div class="mt-6 rounded-lg border-2 border-[var(--border)] p-5 space-y-4">
+                        <div class="help-wrap">
+                            <h2 class="text-lg font-semibold text-[var(--text)]">Database Management</h2>
+                            <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-db-management')">?</button>
+                            <div id="help-db-management" class="help-popover hidden">"Previous" databases are old <span style="font-family: monospace;">.db</span> files left behind in the same folder after changing the Database File name above &mdash; deleting one here only removes that leftover file, it's never the one currently in use.</div>
+                        </div>
+                        <p class="text-sm text-[var(--text-muted)]">Current database: <span class="font-medium text-[var(--text)]">{{ active_database or "(none configured)" }}</span></p>
+
+                        {% if previous_databases %}
+                        <form method="post" action="/delete-old-database/" class="space-y-2">
+                            <label for="database_to_delete" class="text-[var(--text)] font-medium">Delete an old database file:</label>
+                            <div class="flex gap-2">
+                                <select name="database_to_delete" id="database_to_delete" class="flex-1 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]">
+                                    {% for filename in previous_databases %}
+                                    <option value="{{ filename }}">{{ filename }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">Delete</button>
+                            </div>
+                        </form>
+                        {% else %}
+                        <p class="text-sm text-[var(--text-muted)]">No previous database files to clean up right now &mdash; this only fills in after changing the Database File name above at least once.</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="mt-6 rounded-lg border-2 border-[var(--error-text)] p-5 space-y-4">
+                        <div class="help-wrap">
+                            <h2 class="text-lg font-semibold text-[var(--error-text)]">Start fresh with the same settings</h2>
+                            <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-db-reset')">?</button>
+                            <div id="help-db-reset" class="help-popover hidden">Wipes every table in the current database &mdash; all recorded sessions, changes, statistics, and backup run history. Your actual settings (Source Directory, Base Backup Directory, password, notifications, etc.) live in a separate file and are not touched. The next backup run will be a genuine fresh full backup, the same as changing Source Directory/Base Backup Directory/Full Backup Folder Name above does &mdash; except it re-syncs into the same destination instead of starting a new one.</div>
+                        </div>
+                        <form method="post" action="/reset-active-database/"
+                              onsubmit="return confirm('This permanently wipes all recorded history in {{ active_database }} and forces a fresh full backup on the next run. This cannot be undone. Continue?');"
+                              class="space-y-3">
+                            <label for="confirm_name" class="text-[var(--text)] font-medium block">
+                                Type the database file name ({{ active_database }}) to confirm:
+                            </label>
+                            <input type="text" id="confirm_name" name="confirm_name" autocomplete="off"
+                                   class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
+                                   placeholder="{{ active_database }}">
+                            <button type="submit" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">
+                                Reset Database &amp; Start Fresh
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </body>

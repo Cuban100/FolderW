@@ -1035,19 +1035,30 @@ def _write_file_exclusions(raw):
     return patterns
 
 
-@app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
+def _settings_page_context():
+    """Every value settings.html needs, read fresh from .env/other
+    persisted state. Shared by every render point (plain GET, both
+    /submit/ validation-error paths, save success, and the database-
+    management actions below, which used to render their own separate
+    manage-databases.html) so a field added here can't silently go
+    missing on one of them -- the exact bug this session already hit
+    twice, for index.html and for this same page.
+
+    Callers that need to echo back not-yet-saved, just-submitted form
+    values (the /submit/ validation-error paths) do
+    {**_settings_page_context(), "the_one_field": user_submitted_value}
+    afterward, overriding just what needs to reflect the in-flight
+    submission rather than what's currently on disk.
+    """
     logfile = load_other_variables('logfile')
-    monitor = load_env_value('MONITOR')
-    return templates.TemplateResponse("settings.html", {
-        "request": request,
-        "logo": logo,
+    active_database = load_env_value('DATABASE')
+    return {
         "log_dir": os.path.dirname(logfile),
         "src_dir": load_env_value('SRC_DIR'),
         "base_dir": load_env_value('BASE_DIR'),
         "full_name": load_env_value('FULL_NAME'),
-        "database": load_env_value('DATABASE'),
-        "monitor_checked": monitor == '1',
+        "database": active_database,
+        "monitor_checked": load_env_value('MONITOR') == '1',
         "interval": load_env_value('BACKUP_INTERVAL'),
         "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
         "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
@@ -1058,6 +1069,17 @@ async def settings_page(request: Request):
         "monitoring_delay_seconds": _current_monitoring_delay_seconds(),
         "monitoring_delay_min": MONITORING_DELAY_MIN,
         "monitoring_delay_max": MONITORING_DELAY_MAX,
+        "active_database": os.path.basename(active_database or ""),
+        "previous_databases": list_previous_databases(),
+    }
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "logo": logo,
+        **_settings_page_context(),
     })
 
 
@@ -1202,27 +1224,15 @@ async def submit_settings(
     )
 
     def _settings_error(error, max_snapshots_value):
-        logfile = load_other_variables('logfile')
         return templates.TemplateResponse("settings.html", {
             "request": request,
             "logo": logo,
             "error": error,
-            "log_dir": os.path.dirname(logfile),
-            "src_dir": load_env_value('SRC_DIR'),
-            "base_dir": load_env_value('BASE_DIR'),
-            "full_name": load_env_value('FULL_NAME'),
-            "database": load_env_value('DATABASE'),
+            **_settings_page_context(),
             "monitor_checked": monitor_enabled,
-            "interval": load_env_value('BACKUP_INTERVAL'),
             "max_snapshots": max_snapshots_value,
-            "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
-            "notify_urls": load_env_value('NOTIFY_URLS'),
-            "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
-            "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
             "file_exclusions": file_exclusions,
             "monitoring_delay_seconds": monitoring_delay_value,
-            "monitoring_delay_min": MONITORING_DELAY_MIN,
-            "monitoring_delay_max": MONITORING_DELAY_MAX,
         })
 
     max_snapshots = max_snapshots.strip()
@@ -1288,7 +1298,6 @@ async def submit_settings(
     if (container_dir == app_dir_real
             or app_dir_real.startswith(container_dir + os.sep)
             or container_dir.startswith(app_dir_real + os.sep)):
-        logfile = load_other_variables('logfile')
         return templates.TemplateResponse("settings.html", {
             "request": request,
             "logo": logo,
@@ -1297,22 +1306,10 @@ async def submit_settings(
                 f"can't overlap with FolderW's own install directory ({app_dir_real}) -- "
                 "choose a different Full Backup Folder Name or Base Backup Directory."
             ),
-            "log_dir": os.path.dirname(logfile),
-            "src_dir": load_env_value('SRC_DIR'),
-            "base_dir": load_env_value('BASE_DIR'),
-            "full_name": load_env_value('FULL_NAME'),
-            "database": load_env_value('DATABASE'),
+            **_settings_page_context(),
             "monitor_checked": monitor_enabled,
-            "interval": load_env_value('BACKUP_INTERVAL'),
-            "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
-            "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
-            "notify_urls": load_env_value('NOTIFY_URLS'),
-            "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
-            "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
             "file_exclusions": file_exclusions,
             "monitoring_delay_seconds": monitoring_delay_value,
-            "monitoring_delay_min": MONITORING_DELAY_MIN,
-            "monitoring_delay_max": MONITORING_DELAY_MAX,
         })
 
     save_env_values(new_values)
@@ -1341,27 +1338,11 @@ async def submit_settings(
             # and clicking the only button left forced a full-backup redo.
             clear_persisted_checks()
 
-    logfile = load_other_variables('logfile')
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "logo": logo,
         "success": "Settings saved successfully.",
-        "log_dir": os.path.dirname(logfile),
-        "src_dir": new_values["SRC_DIR"],
-        "base_dir": new_values["BASE_DIR"],
-        "full_name": new_values["FULL_NAME"],
-        "database": new_values["DATABASE"],
-        "monitor_checked": monitor_enabled,
-        "interval": new_values["BACKUP_INTERVAL"],
-        "max_snapshots": new_values["MAX_SNAPSHOTS"],
-        "login_enabled": bool(new_values["ADMIN_PASSWORD_HASH"]),
-        "notify_urls": new_values["NOTIFY_URLS"],
-        "notify_send_always": new_values["NOTIFY_SEND_ALWAYS"] == "1",
-        "backup_method": new_values["BACKUP_METHOD"],
-        "file_exclusions": ', '.join(saved_file_exclusions),
-        "monitoring_delay_seconds": monitoring_delay_value,
-        "monitoring_delay_min": MONITORING_DELAY_MIN,
-        "monitoring_delay_max": MONITORING_DELAY_MAX,
+        **_settings_page_context(),
     })
 
 
@@ -1451,16 +1432,6 @@ async def statistics_session_detail(session: int):
     return JSONResponse({"session": session, "changes": get_changes_by_session(session)})
 
 
-@app.get("/manage-databases", response_class=HTMLResponse)
-async def manage_databases(request: Request):
-    return templates.TemplateResponse("manage-databases.html", {
-        "request": request,
-        "logo": logo,
-        "active_database": os.path.basename(load_env_value('DATABASE') or ""),
-        "previous_databases": list_previous_databases()
-    })
-
-
 @app.post("/delete-old-database/", response_class=HTMLResponse)
 async def delete_old_database(request: Request, database_to_delete: str = Form(...)):
     active_database = os.path.abspath(load_env_value('DATABASE') or "")
@@ -1482,13 +1453,12 @@ async def delete_old_database(request: Request, database_to_delete: str = Form(.
             error = f"Failed to delete database: {e}"
             logger.error(error)
 
-    return templates.TemplateResponse("manage-databases.html", {
+    return templates.TemplateResponse("settings.html", {
         "request": request,
         "logo": logo,
-        "active_database": os.path.basename(load_env_value('DATABASE') or ""),
-        "previous_databases": list_previous_databases(),
         "error": error,
-        "success": success
+        "success": success,
+        **_settings_page_context(),
     })
 
 
@@ -1521,13 +1491,12 @@ async def reset_active_database(request: Request, confirm_name: str = Form(...))
         success = "Database reset. The next backup run will be a fresh full backup, using the same settings."
         logger.warning(f"Active database {active_database} reset for a fresh start by user request.")
 
-    return templates.TemplateResponse("manage-databases.html", {
+    return templates.TemplateResponse("settings.html", {
         "request": request,
         "logo": logo,
-        "active_database": active_basename,
-        "previous_databases": list_previous_databases(),
         "error": error,
-        "success": success
+        "success": success,
+        **_settings_page_context(),
     })
 
 
