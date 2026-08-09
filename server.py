@@ -11,6 +11,7 @@ import webbrowser
 import psutil
 import apprise
 from notifications import _notify_desktop
+from backup_hooks import run_hook_script
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot
@@ -866,8 +867,6 @@ async def settings_page(request: Request):
         "notify_urls": load_env_value('NOTIFY_URLS'),
         "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
         "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
-        "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
-        "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
     })
 
 
@@ -911,6 +910,46 @@ async def test_notification(notify_urls: str = Form(""), notify_send_always: str
     return JSONResponse({"success": any_success, "message": " ".join(messages)})
 
 
+@app.get("/backup-hooks", response_class=HTMLResponse)
+async def backup_hooks_page(request: Request):
+    return templates.TemplateResponse("backup_hooks.html", {
+        "request": request,
+        "logo": logo,
+        "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
+        "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
+    })
+
+
+@app.post("/backup-hooks/save", response_class=HTMLResponse)
+async def backup_hooks_save(request: Request, pre_backup_script: str = Form(""), post_backup_script: str = Form("")):
+    save_env_values({
+        "PRE_BACKUP_SCRIPT": pre_backup_script.strip(),
+        "POST_BACKUP_SCRIPT": post_backup_script.strip(),
+    })
+    return templates.TemplateResponse("backup_hooks.html", {
+        "request": request,
+        "logo": logo,
+        "success": "Backup hooks saved.",
+        "pre_backup_script": pre_backup_script.strip(),
+        "post_backup_script": post_backup_script.strip(),
+    })
+
+
+@app.post("/backup-hooks/test")
+async def backup_hooks_test(script_path: str = Form(...), which: str = Form(...)):
+    # Tests whatever's currently typed into the field client-side, not
+    # necessarily the saved value -- lets a script be verified before
+    # trusting it to run (and potentially abort a real backup) during
+    # an actual backup, matching Settings' "Send Test Notification"
+    # pattern of testing the form's live contents.
+    script_path = script_path.strip()
+    label = 'Pre-backup' if which == 'pre' else 'Post-backup'
+    if not script_path:
+        return JSONResponse({"success": False, "message": "No script path entered."})
+    success, message = run_hook_script(script_path, label)
+    return JSONResponse({"success": success, "message": message})
+
+
 def _is_valid_folder_name(name):
     # Linux (the only supported platform) only actually forbids '/' and
     # the null byte in a directory name -- everything else is technically
@@ -935,8 +974,6 @@ async def submit_settings(
     notify_urls: str = Form(""),
     notify_send_always: str = Form(None),
     backup_method: str = Form("differential"),
-    pre_backup_script: str = Form(""),
-    post_backup_script: str = Form(""),
 ):
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
@@ -975,8 +1012,6 @@ async def submit_settings(
             "notify_urls": load_env_value('NOTIFY_URLS'),
             "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
-            "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
-            "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
         })
 
     max_snapshots = max_snapshots.strip()
@@ -1016,8 +1051,13 @@ async def submit_settings(
         "NOTIFY_URLS": notify_urls.strip(),
         "NOTIFY_SEND_ALWAYS": "1" if notify_send_always is not None else "0",
         "BACKUP_METHOD": "incremental" if backup_method == "incremental" else "differential",
-        "PRE_BACKUP_SCRIPT": pre_backup_script.strip(),
-        "POST_BACKUP_SCRIPT": post_backup_script.strip(),
+        # PRE_BACKUP_SCRIPT/POST_BACKUP_SCRIPT deliberately NOT included
+        # here -- moved to their own page/save route (see /backup-hooks
+        # below). Writing them from this form too, even just re-saving
+        # load_env_value()'s own current value, would risk silently
+        # clearing whatever the dedicated page's own save last set if
+        # this form's fields (now gone from settings.html) ever came
+        # back empty/stale.
     }
 
     # BASE_DIR (module-level, this file's own directory) is FolderW's own
@@ -1057,8 +1097,6 @@ async def submit_settings(
             "notify_urls": load_env_value('NOTIFY_URLS'),
             "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
-            "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
-            "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
         })
 
     save_env_values(new_values)
@@ -1103,8 +1141,6 @@ async def submit_settings(
         "notify_urls": new_values["NOTIFY_URLS"],
         "notify_send_always": new_values["NOTIFY_SEND_ALWAYS"] == "1",
         "backup_method": new_values["BACKUP_METHOD"],
-        "pre_backup_script": new_values["PRE_BACKUP_SCRIPT"],
-        "post_backup_script": new_values["POST_BACKUP_SCRIPT"],
     })
 
 

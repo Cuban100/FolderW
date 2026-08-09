@@ -177,14 +177,11 @@
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="pre_backup_script" class="text-[var(--text)] font-medium">Pre-Backup Script:</label>
-                                <input type="text" id="pre_backup_script" name="pre_backup_script" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ pre_backup_script or '' }}" placeholder="Optional -- e.g. /home/user/scripts/dump-db.sh">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Executable (chmod +x) run before every backup. If it exits non-zero, the backup is skipped entirely -- useful for a database dump or stopping a service beforehand. Leave blank if you don't need one.</div>
-                            </div>
-                            <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="post_backup_script" class="text-[var(--text)] font-medium">Post-Backup Script:</label>
-                                <input type="text" id="post_backup_script" name="post_backup_script" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ post_backup_script or '' }}" placeholder="Optional -- e.g. /home/user/scripts/restart-service.sh">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Executable (chmod +x) run after every backup, whether it succeeded or not -- e.g. restarting a service the pre-backup script stopped. Leave blank if you don't need one.</div>
+                                <label class="text-[var(--text)] font-medium">Pre/Post-Backup Scripts:</label>
+                                <div class="col-span-2">
+                                    <a href="/backup-hooks" class="text-blue-600 hover:underline text-sm">Manage on the Backup Hooks page &rarr;</a>
+                                </div>
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Moved to their own page, with a way to test each script before trusting it to run during a real backup.</div>
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
