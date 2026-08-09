@@ -685,12 +685,12 @@ _logo_banner_image = ImageTk.PhotoImage(Image.open(os.path.join(APP_DIR, 'logo.p
 logo_banner = tk.Label(root, image=_logo_banner_image, background='#1a1a1a')
 logo_banner.grid(row=2, column=2, rowspan=3, padx=10, pady=4)
 
-# Monitor checkbox setup
-monitor_var = tk.IntVar(value=1)  
-monitor_checkbox = tk.Checkbutton(root, text="Monitor source folder for automated backups on changes", variable=monitor_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71', command=toggle_backup_options)
+# Watchdog checkbox setup
+monitor_var = tk.IntVar(value=1)
+monitor_checkbox = tk.Checkbutton(root, text="Watch source folder for automated backups on changes", variable=monitor_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71', command=toggle_backup_options)
 monitor_checkbox.grid(row=len(labels), column=1, padx=10, pady=4, sticky='w')  # Aligned with other fields
 
-# Short hint: monitoring and scheduled backups are mutually exclusive
+# Short hint: watchdog and scheduled backups are mutually exclusive
 monitor_hint = tk.Label(root, text="Backs up as soon as a file changes.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
 monitor_hint.grid(row=len(labels), column=2, padx=10, pady=4, sticky='w')
 

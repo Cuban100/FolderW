@@ -12,7 +12,7 @@ import subprocess
 import schedule
 import signal
 
-# User-configurable via Settings' "Monitoring Delay" slider
+# User-configurable via Settings' "Watchdog Delay" slider
 # (MONITORING_DELAY_SECONDS in .env; server.py clamps it to
 # MONITORING_DELAY_MIN/MAX on save). Falls back to the original
 # hardcoded default (120s) if unset or somehow invalid -- this module

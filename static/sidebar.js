@@ -37,10 +37,10 @@ document.addEventListener('click', (event) => {
 // Stops folderw-backup.service (or, without a systemd unit, kills the
 // backup/watchdog processes directly) -- never folderw.service, so the
 // dashboard itself stays reachable regardless. Shared by the sidebar's
-// Stop Monitoring / Stop Backup Service buttons and index.html's own
+// Stop Watchdog / Stop Backup Service buttons and index.html's own
 // "Stop Full Backup" button (shown while a backup is actively running).
-async function stopMonitoring(event) {
-    if (!confirm('Stop monitoring and any backup currently in progress?')) {
+async function stopWatchdog(event) {
+    if (!confirm('Stop the watchdog and any backup currently in progress?')) {
         return;
     }
     // systemctl stop blocks until the service (and rsync under it)
@@ -70,7 +70,7 @@ async function stopMonitoring(event) {
     window.location.href = '/';
 }
 
-// Counterpart to stopMonitoring() -- starts folderw-backup.service (only
+// Counterpart to stopWatchdog() -- starts folderw-backup.service (only
 // meaningful when a systemd unit exists; see /start-backup-service).
 async function startBackupService(event) {
     const btn = event && event.target;

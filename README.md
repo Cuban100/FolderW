@@ -1,6 +1,7 @@
 <p align="center"> <img src="https://github.com/Cuban100/FolderW/blob/main/logo.png" alt="FolderW Logo" width="200" height="200" style="vertical-align:middle; margin-right: 100px;"> </p>
 <h1 align="center">FolderW</h1>
 <p align="center">A Python incremental/differential backup tool for Linux — Tkinter setup GUI, a web dashboard, and event-driven (watchdog) or scheduled backups via <code>rsync</code>.</p>
+<p align="center"><em>The name: <strong>Folder</strong> + <strong>W</strong>atchdog — the "W" is for the watchdog that watches your source folder for changes.</em></p>
 
 > **Platform support:** FolderW currently works on **Linux only**. It relies on `rsync` and other Linux-specific tooling, and hasn't been tested on macOS or Windows.
 
@@ -29,6 +30,24 @@
 16. **Recovery History:** Dashboard page listing every restore ever run — timestamp, source snapshot, restore type, files, destination.
 17. **Find File:** Search for a file or folder by name across every backup and snapshot at once — see exactly which one(s) it's in, and restore just that item to a new Recovery Folder or straight back into your source directory.
 18. **Watchdog Delay:** Adjustable slider (Settings, event-driven mode only) for how long the watchdog waits after a change before backing up, and the ceiling on how long continuous activity can postpone one — reflected live on the dashboard.
+
+## FolderW vs. Timeshift
+
+FolderW's snapshot mechanism (full backup + `--link-dest` snapshots, unchanged files hardlinked instead of copied) is directly inspired by [Timeshift](https://github.com/linuxmint/timeshift). The difference is scope: Timeshift is built for whole-system rollback (`/`, typically excluding `/home`); FolderW is built to watch and back up an arbitrary folder, with a web dashboard on top. That leads to a few things Timeshift doesn't do:
+
+| | FolderW | Timeshift |
+|---|---|---|
+| Backup target | Any folder you choose | The system (root filesystem) |
+| Access | Web dashboard, reachable from any device on the network | Local GUI/CLI only |
+| Trigger | Event-driven watchdog (backs up shortly after a change) or scheduled | Scheduled or manual only |
+| Browse snapshots | Browse any snapshot's contents right in the dashboard, drill into folders | No built-in file browser |
+| Restore | Restore everything, or browse/search and hand-pick individual files | Whole-snapshot restore |
+| Find File | Search a file/folder by name across every snapshot at once | Not built in |
+| Hooks | Pre/post-backup scripts, testable from the dashboard | Not built in |
+| Notifications | Desktop + external (see [Login & Notifications](docs/login-and-notifications.md)) | Not built in |
+| History | Every backup and every restore ever run, logged and browsable | Not built in |
+
+Timeshift still wins for its actual use case — full OS state, boot-time restore, no setup beyond installing it. FolderW is for the case Timeshift isn't aimed at: keep watch over a specific folder and make it easy to see, search, and restore from anywhere.
 
 ## Quick Start
 

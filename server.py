@@ -77,7 +77,7 @@ def _sidebar_context(request):
     """Starlette context processor -- runs for EVERY TemplateResponse
     across the whole app (see context_processors= below), not just
     index.html's own routes. templates/_sidebar.html is included on
-    every page, but its Stop Monitoring / Backup Service controls only
+    every page, but its Stop Watchdog / Backup Service controls only
     ever rendered where a route happened to pass watchdog_active/
     backup_service_unit_exists/backup_service_active explicitly --
     which was only ever index.html's own render points. Confirmed live:
@@ -227,7 +227,7 @@ def _current_monitoring_delay_seconds():
 
 def _format_delay_seconds(seconds):
     """Human-readable form of a watchdog delay value, for the Settings
-    slider's live label and the dashboard's Monitoring Delay stat.
+    slider's live label and the dashboard's Watchdog Delay stat.
     """
     try:
         seconds = int(seconds)
@@ -526,7 +526,7 @@ async def stop_backup():
         try:
             subprocess.run(["systemctl", "--user", "stop", BACKUP_SERVICE_NAME], check=True)
             logger.info("Stopped folderw-backup.service on request.")
-            return JSONResponse({"message": "Backup and monitoring stopped."})
+            return JSONResponse({"message": "Backup and watchdog stopped."})
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to stop {BACKUP_SERVICE_NAME}: {e}")
             return JSONResponse({"message": f"Failed to stop: {e}"}, status_code=500)

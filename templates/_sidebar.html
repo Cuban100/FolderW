@@ -38,21 +38,21 @@
     <div class="sidebar-controls">
         {% if watchdog_active is defined and watchdog_active %}
         <div class="sidebar-control-row help-wrap">
-            <button type="button" class="sidebar-action-btn" onclick="stopMonitoring(event)">Stop Monitoring</button>
-            <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-stop-monitoring')">?</button>
-            <div id="help-stop-monitoring" class="help-popover hidden">Stops the watchdog that's currently watching your source folder for changes &mdash; any backup already in progress is stopped too. The dashboard itself keeps running; monitoring won't resume until you start it again (Start Backup Service below, or restart it another way).</div>
+            <button type="button" class="sidebar-action-btn" onclick="stopWatchdog(event)">Stop Watchdog</button>
+            <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-stop-watchdog')">?</button>
+            <div id="help-stop-watchdog" class="help-popover hidden">Stops the watchdog that's currently watching your source folder for changes &mdash; any backup already in progress is stopped too. The dashboard itself keeps running; the watchdog won't resume until you start it again (Start Backup Service below, or restart it another way).</div>
         </div>
         {% endif %}
 
         {% if backup_service_unit_exists is defined and backup_service_unit_exists %}
         <div class="sidebar-control-row help-wrap">
             {% if backup_service_active %}
-            <button type="button" class="sidebar-action-btn" onclick="stopMonitoring(event)">Stop Backup Service</button>
+            <button type="button" class="sidebar-action-btn" onclick="stopWatchdog(event)">Stop Backup Service</button>
             {% else %}
             <button type="button" class="sidebar-action-btn" onclick="startBackupService(event)">Start Backup Service</button>
             {% endif %}
             <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-backup-service')">?</button>
-            <div id="help-backup-service" class="help-popover hidden">Stops or starts backing up and monitoring entirely (<span style="font-family: monospace;">folderw-backup.service</span>) &mdash; the dashboard itself (this page you're looking at right now) keeps running either way, so you're never locked out.</div>
+            <div id="help-backup-service" class="help-popover hidden">Stops or starts backing up and the watchdog entirely (<span style="font-family: monospace;">folderw-backup.service</span>) &mdash; the dashboard itself (this page you're looking at right now) keeps running either way, so you're never locked out.</div>
         </div>
         {% endif %}
     </div>
