@@ -88,7 +88,7 @@
             sendDataToServer(data);
         }
 
-        function formatWatchdogDelay(seconds) {
+        function formatMonitoringDelay(seconds) {
             seconds = parseInt(seconds, 10);
             if (seconds < 60) return seconds + ' sec';
             const minutes = Math.floor(seconds / 60);
@@ -99,9 +99,9 @@
         document.addEventListener("DOMContentLoaded", function() {
             const monitorCheckbox = document.getElementById('monitor');
             const scheduleFields = document.getElementById('schedule-fields');
-            const watchdogDelayField = document.getElementById('watchdog-delay-field');
-            const watchdogDelayInput = document.getElementById('watchdog_delay_seconds');
-            const watchdogDelayLabel = document.getElementById('watchdog-delay-label');
+            const monitoringDelayField = document.getElementById('monitoring-delay-field');
+            const monitoringDelayInput = document.getElementById('monitoring_delay_seconds');
+            const monitoringDelayLabel = document.getElementById('monitoring-delay-label');
 
             function toggleScheduleFields() {
                 // Opposite of each other -- the watchdog delay only means
@@ -109,16 +109,16 @@
                 // radios only mean anything in scheduled mode.
                 if (monitorCheckbox.checked) {
                     scheduleFields.style.display = 'none';
-                    watchdogDelayField.style.display = 'block';
+                    monitoringDelayField.style.display = 'block';
                 } else {
                     scheduleFields.style.display = 'block';
-                    watchdogDelayField.style.display = 'none';
+                    monitoringDelayField.style.display = 'none';
                 }
             }
 
             // Initial check
             toggleScheduleFields();
-            watchdogDelayLabel.textContent = formatWatchdogDelay(watchdogDelayInput.value);
+            monitoringDelayLabel.textContent = formatMonitoringDelay(monitoringDelayInput.value);
 
             // Listen for changes
             monitorCheckbox.addEventListener('change', toggleScheduleFields);
@@ -255,17 +255,23 @@
                                 </div>
                             </div>
 
-                            <!-- Watchdog Delay -->
-                            <div id="watchdog-delay-field" style="display: {% if monitor_checked %}block{% else %}none{% endif %};">
+                            <!-- Monitoring Delay -->
+                            <div id="monitoring-delay-field" style="display: {% if monitor_checked %}block{% else %}none{% endif %};">
                                 <div class="help-wrap mb-2">
-                                    <label for="watchdog_delay_seconds" class="text-[var(--text)] font-medium">Watchdog Delay: <span id="watchdog-delay-label" class="font-mono"></span></label>
-                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-watchdog-delay')">?</button>
-                                    <div id="help-watchdog-delay" class="help-popover hidden">How long to wait after your last file change before actually running a backup &mdash; a burst of saves within this window all collapse into one backup. A backup is also guaranteed to run within this many seconds of the <em>first</em> unflushed change, even if you never stop saving/typing.</div>
+                                    <label for="monitoring_delay_seconds" class="text-[var(--text)] font-medium">Monitoring Delay: <span id="monitoring-delay-label" class="font-mono"></span></label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-monitoring-delay')">?</button>
+                                    <div id="help-monitoring-delay" class="help-popover hidden">
+                                        When Monitoring is on, FolderW doesn't back up the instant a file changes &mdash; it waits this long after your <em>last</em> change first, so a burst of saves (or a big edit session) turns into one backup instead of dozens.
+                                        <br><br>
+                                        If you keep making changes non-stop, a backup still runs automatically once this much time has passed since your <em>first</em> unsaved change &mdash; so you're never left unprotected for longer than this, even during a long editing session.
+                                        <br><br>
+                                        Example at 2 minutes: you save a file at 9:00, then again at 9:01 &mdash; the wait resets, so the backup is now due around 9:03. Keep saving every minute after that and it would never fire on its own, so instead a backup still runs at 9:02 &mdash; exactly 2 minutes after your very first save &mdash; and the whole cycle starts over from there.
+                                    </div>
                                 </div>
-                                <input type="range" id="watchdog_delay_seconds" name="watchdog_delay_seconds"
-                                       min="{{ watchdog_delay_min }}" max="{{ watchdog_delay_max }}" step="30"
-                                       value="{{ watchdog_delay_seconds }}" class="w-full"
-                                       oninput="document.getElementById('watchdog-delay-label').textContent = formatWatchdogDelay(this.value)">
+                                <input type="range" id="monitoring_delay_seconds" name="monitoring_delay_seconds"
+                                       min="{{ monitoring_delay_min }}" max="{{ monitoring_delay_max }}" step="30"
+                                       value="{{ monitoring_delay_seconds }}" class="w-full"
+                                       oninput="document.getElementById('monitoring-delay-label').textContent = formatMonitoringDelay(this.value)">
                             </div>
 
                             <!-- Schedule Fields -->

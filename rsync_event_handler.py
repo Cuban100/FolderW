@@ -12,26 +12,27 @@ import subprocess
 import schedule
 import signal
 
-# User-configurable via Settings' "Watchdog Delay" slider (WATCHDOG_
-# DELAY_SECONDS in .env; server.py clamps it to WATCHDOG_DELAY_MIN/MAX
-# on save). Falls back to the original hardcoded default (120s) if
-# unset or somehow invalid -- this module is a standalone script
-# (re-executed fresh per watchdog run, not just imported), so it can't
-# assume .env has always been through that validation.
-WATCHDOG_DELAY_MIN = 30
-WATCHDOG_DELAY_MAX = 1800
+# User-configurable via Settings' "Monitoring Delay" slider
+# (MONITORING_DELAY_SECONDS in .env; server.py clamps it to
+# MONITORING_DELAY_MIN/MAX on save). Falls back to the original
+# hardcoded default (120s) if unset or somehow invalid -- this module
+# is a standalone script (re-executed fresh per watchdog run, not just
+# imported), so it can't assume .env has always been through that
+# validation.
+MONITORING_DELAY_MIN = 30
+MONITORING_DELAY_MAX = 1800
 
-def _load_watchdog_delay_seconds():
+def _load_monitoring_delay_seconds():
     try:
-        value = int(load_env_value('WATCHDOG_DELAY_SECONDS'))
-        return max(WATCHDOG_DELAY_MIN, min(WATCHDOG_DELAY_MAX, value))
+        value = int(load_env_value('MONITORING_DELAY_SECONDS'))
+        return max(MONITORING_DELAY_MIN, min(MONITORING_DELAY_MAX, value))
     except (TypeError, ValueError):
         return 120
 
 # How long to wait after the *last* detected change before actually running
 # a backup. Resets on every new event, so a burst of saves/writes collapses
 # into a single backup once things go quiet, instead of firing repeatedly.
-BACKUP_DELAY_SECONDS = _load_watchdog_delay_seconds()
+BACKUP_DELAY_SECONDS = _load_monitoring_delay_seconds()
 
 # Ceiling on how long a backup can be postponed by continuous activity.
 # The resetting debounce above has no upper bound on its own -- on a live
