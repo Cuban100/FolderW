@@ -785,17 +785,6 @@
             // without re-running that side effect.
             window.location.href = '/';
         }
-        async function evaluate() {
-            const response = await fetch('/check-evaluation');
-            if (response.ok) {
-                const text = await response.text();
-                document.open();
-                document.write(text);
-                document.close();
-            } else {
-                console.error('Error fetching evaluation:', response.statusText);
-            }
-        }
 
         function formatDuration(totalSeconds) {
             const h = Math.floor(totalSeconds / 3600);

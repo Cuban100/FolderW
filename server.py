@@ -151,116 +151,6 @@ def clear_persisted_checks():
     set_database_value('LAST_SRC_SIZE', '')
     set_database_value('LAST_DEST_SPACE', '')
 
-@app.get("/check-evaluation", response_class=HTMLResponse)
-async def validate_conditions(request: Request):
-    logger.info("Response received from Front End for /check-evaluation")
-    src_dir = load_env_value('SRC_DIR')
-    base_dir = load_env_value('BASE_DIR')
-    full_name = load_env_value('FULL_NAME')
-    database = load_env_value('DATABASE')
-    monitor = load_env_value('MONITOR')
-    backup_interval = load_env_value('BACKUP_INTERVAL')
-    validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
-    settings_sent, settings, missing_vars = check_env_variables()
-    src_size, dest_space, can_backup, evaluation_message = evaluation_of_resources()
-
-    status.update({
-        "src_size": src_size,
-        "dest_space": dest_space,
-        "can_backup": can_backup
-    })
-    persist_check_results(
-        settings_sent=settings_sent,
-        validation_status=validation_status,
-        evaluation_status=can_backup,
-        LAST_SRC_SIZE=src_size,
-        LAST_DEST_SPACE=dest_space,
-    )
-
-    if can_backup:
-        success_message = "All settings, validations, and evaluations are correct. READY"
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "success_message": success_message,
-            "settings_sent": settings_sent,
-            "validation_status": validation_status,
-            "validation_message": validation_message,
-            "evaluation_status": can_backup,
-            "evaluation_message": evaluation_message,
-            "logo": logo,
-            "settings": settings,
-            "src_dir": src_dir,
-            "base_dir": base_dir,
-            "full_name": full_name,
-            "database": database,
-            "monitor": monitor,
-            "interval": backup_interval,
-            "src_size": src_size,  # Human-readable format
-            "dest_space": dest_space,  # Human-readable format
-            "can_backup": 'Yes' if can_backup else 'No',
-            "has_completed_backup": has_completed_backup(database),
-            **get_backup_stats_context(database),
-        })
-    else:
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "logo": logo,
-            "missing_settings": missing_vars,
-            "settings_sent": settings_sent,
-            "validation_status": validation_status,
-            "validation_message": validation_message,
-            "evaluation_status": can_backup,
-            "evaluation_message": evaluation_message,
-            "src_size": src_size,  # Human-readable format
-            "dest_space": dest_space,  # Human-readable format
-            "can_backup": 'No',
-            "has_completed_backup": has_completed_backup(database),
-            **get_backup_stats_context(database),
-        })
-
-
-
-@app.get("/check-settings", response_class=HTMLResponse)
-async def check_settings(request: Request):
-    logger.info("Response received from Front End for /check-settings")
-    src_dir = load_env_value('SRC_DIR')
-    base_dir = load_env_value('BASE_DIR')
-    full_name = load_env_value('FULL_NAME')
-    database = load_env_value('DATABASE')
-    monitor = load_env_value('MONITOR')
-    backup_interval = load_env_value('BACKUP_INTERVAL')
-    settings_sent, settings, missing_vars = check_env_variables()
-    logger.info(f"settings_send: {settings_sent}, missing_vars: {missing_vars}")
-    persist_check_results(settings_sent=settings_sent)
-    # If settings_sent is True, all variables are set correctly
-    if settings_sent == True:
-        success_message = "All settings are present."
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "logo": logo,
-            "settings": settings,
-            "success_message": success_message,
-            "settings_sent": settings_sent,
-            "src_dir": src_dir,
-            "base_dir": base_dir,
-            "full_name": full_name,
-            "database": database,
-            "monitor": monitor,
-            "interval": backup_interval,
-            "has_completed_backup": has_completed_backup(database),
-            **get_backup_stats_context(database),
-
-        })
-    else:
-        # If there are missing variables, show which ones are missing
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "logo": logo,
-            "missing_vars": missing_vars,
-            "settings_sent": settings_sent,
-            **get_backup_stats_context(database),
-        })
-
 BACKUP_SERVICE_NAME = "folderw-backup.service"
 
 
@@ -482,10 +372,6 @@ async def run_all_steps(request: Request, force_full: bool = False):
     logger.info(f"Response received from Front End for /run-all-steps (force_full={force_full})")
     src_dir = load_env_value('SRC_DIR')
     base_dir = load_env_value('BASE_DIR')
-    full_name = load_env_value('FULL_NAME')
-    database = load_env_value('DATABASE')
-    monitor = load_env_value('MONITOR')
-    backup_interval = load_env_value('BACKUP_INTERVAL')
     # CHECK_STEP: lets the frontend show which of settings/validation/
     # evaluation is currently being checked while this request is still in
     # flight (polled via /backup-status). Each check below is run via
@@ -509,7 +395,7 @@ async def run_all_steps(request: Request, force_full: bool = False):
             "missing_settings": missing_vars,
             "settings_sent": settings_sent,
             "settings_check_passed": settings_sent,
-            **get_backup_stats_context(database),
+            **_dashboard_settings_context(),
         })
 
     set_database_value('CHECK_STEP', 'validation')
@@ -524,7 +410,7 @@ async def run_all_steps(request: Request, force_full: bool = False):
             "settings_check_passed": settings_sent,
             "validation_status": validation_status,
             "validation_message": validation_message,
-            **get_backup_stats_context(database),
+            **_dashboard_settings_context(),
         })
 
     set_database_value('CHECK_STEP', 'evaluation')
@@ -549,7 +435,7 @@ async def run_all_steps(request: Request, force_full: bool = False):
             "evaluation_message": evaluation_message,
             "src_size": src_size,
             "dest_space": dest_space,
-            **get_backup_stats_context(database),
+            **_dashboard_settings_context(),
         })
 
     success_message = "All settings, validations, and evaluations are correct. READY"
@@ -611,72 +497,56 @@ async def run_all_steps(request: Request, force_full: bool = False):
         "validation_message": validation_message,
         "evaluation_status": can_backup,
         "evaluation_message": "",
-        "src_dir": src_dir,
-        "base_dir": base_dir,
-        "full_name": full_name,
-        "database": database,
-        "monitor": monitor,
-        "interval": backup_interval,
         "backup_status": backup_status,
         "src_size": src_size,
         "dest_space": dest_space,
         "can_backup": can_backup,
-        "has_completed_backup": has_completed_backup(database),
-        **get_backup_stats_context(database),
+        **_dashboard_settings_context(),
     })
-@app.get("/check-validation", response_class=HTMLResponse)
-async def validate_conditions(request: Request):
-    logger.info("Response received from Front End for /check-validation")
-    src_dir = load_env_value('SRC_DIR')
-    base_dir = load_env_value('BASE_DIR')
-    full_name = load_env_value('FULL_NAME')
+
+def _dashboard_settings_context():
+    """The "current settings, as configured" portion of index.html's
+    context -- values that only depend on the current .env, not on
+    anything specific to whichever route is rendering the page (a plain
+    dashboard load vs. one of /run-all-steps' several stages).
+
+    Shared so every render of index.html shows the same complete
+    picture. Found live, the hard way: /run-all-steps had its own
+    separate, never-updated copy of this dict (four render points, one
+    per stage) that silently fell behind every time a new field was
+    added to the dashboard's Settings panel -- Backup Method, Snapshots
+    to Keep, Login, notifications, the pre/post-backup hook scripts all
+    rendered blank specifically right after a Manual Snapshot/Start
+    Full Backup click replaced the page via document.write(), even
+    though a plain page reload showed them correctly.
+    """
     database = load_env_value('DATABASE')
-    monitor = load_env_value('MONITOR')
-    backup_interval = load_env_value('BACKUP_INTERVAL')
-    settings_sent, settings, missing_vars = check_env_variables()
+    return {
+        "src_dir": load_env_value('SRC_DIR'),
+        "base_dir": load_env_value('BASE_DIR'),
+        "full_name": load_env_value('FULL_NAME'),
+        "database": database,
+        "monitor": load_env_value('MONITOR'),
+        "interval": load_env_value('BACKUP_INTERVAL'),
+        "has_completed_backup": has_completed_backup(database),
+        "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+        "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
+        "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
+        "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
+        # Whether an external notification service is configured, not
+        # the URL(s) themselves -- an Apprise URL routinely embeds an
+        # auth token (e.g. pover://user@token), which has no business
+        # being shown on a dashboard anyone glancing at the screen (or a
+        # screenshot) could read.
+        "has_notify_urls": bool(load_env_value('NOTIFY_URLS')),
+        "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
+        "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
+        **get_backup_stats_context(database),
+    }
 
-    validation_status, validation_message = validate_all_conditions(src_dir, base_dir)
-    persist_check_results(settings_sent=settings_sent, validation_status=validation_status)
-
-    if validation_status:
-        success_message = "All settings and Validations are correct."
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "logo": logo,
-            "settings": settings,
-            "success_message": success_message,
-            "settings_sent": settings_sent,
-            "validation_status": validation_status,
-            "validation_message": validation_message,
-            "src_dir": src_dir,
-            "base_dir": base_dir,
-            "full_name": full_name,
-            "database": database,
-            "monitor": monitor,
-            "interval": backup_interval,
-            "has_completed_backup": has_completed_backup(database),
-            **get_backup_stats_context(database),
-        })
-    else:
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "logo": logo,
-            "settings": settings,
-            "missing_settings": missing_vars,
-            "settings_sent": settings_sent,
-            "validation_status": validation_status,
-            "validation_message": validation_message,
-            **get_backup_stats_context(database),
-        })
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    src_dir = load_env_value('SRC_DIR')
-    base_dir = load_env_value('BASE_DIR')
-    full_name = load_env_value('FULL_NAME')
-    database = load_env_value('DATABASE')
-    monitor = load_env_value('MONITOR')
-    backup_interval = load_env_value('BACKUP_INTERVAL')
     # Restore the last known Validation/Evaluation check results, so
     # returning to the dashboard doesn't require re-running them — those
     # involve real filesystem/disk-usage checks, worth caching. Settings is
@@ -695,12 +565,6 @@ async def root(request: Request):
     return templates.TemplateResponse("index.html",
         { "request": request,
         "logo": logo,
-        "src_dir": src_dir,
-        "base_dir": base_dir,
-        "full_name": full_name,
-        "database": database,
-        "monitor": monitor,
-        "interval": backup_interval,
         "settings_sent": settings_sent,
         "settings_check_passed": persisted["settings_sent"],
         "missing_settings": missing_vars,
@@ -710,20 +574,7 @@ async def root(request: Request):
         "dest_space": persisted["dest_space"],
         "can_backup": persisted["can_backup"],
         "backup_in_progress": is_backup_running(),
-        "has_completed_backup": has_completed_backup(database),
-        "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
-        "max_snapshots": load_env_value('MAX_SNAPSHOTS'),
-        "login_enabled": bool(load_env_value('ADMIN_PASSWORD_HASH')),
-        "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
-        # Whether an external notification service is configured, not
-        # the URL(s) themselves -- an Apprise URL routinely embeds an
-        # auth token (e.g. pover://user@token), which has no business
-        # being shown on a dashboard anyone glancing at the screen (or a
-        # screenshot) could read.
-        "has_notify_urls": bool(load_env_value('NOTIFY_URLS')),
-        "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
-        "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
-        **get_backup_stats_context(database),
+        **_dashboard_settings_context(),
         })
 
 def _build_file_tree(files):
