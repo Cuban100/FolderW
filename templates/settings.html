@@ -118,6 +118,15 @@
 
             // Initial check
             toggleScheduleFields();
+            // Force the slider to the value the server just rendered --
+            // browsers restore form control values from their own
+            // history/session state on load, which can silently override
+            // the fresh server-rendered value= attribute right after a
+            // Save Settings POST. Confirmed live: the setting saved
+            // correctly, but the slider itself snapped back to whatever
+            // it showed before saving. Setting .value explicitly here
+            // (after that restoration already happened) wins regardless.
+            monitoringDelayInput.value = {{ monitoring_delay_seconds }};
             monitoringDelayLabel.textContent = formatMonitoringDelay(monitoringDelayInput.value);
 
             // Listen for changes
@@ -166,7 +175,7 @@
                     </div>
                     {% endif %}
 
-                    <form method="post" action="/submit/" class="space-y-4">
+                    <form method="post" action="/submit/" class="space-y-4" autocomplete="off">
 
                         <div class="rounded-lg border-2 border-[var(--error-text)] p-5 space-y-4">
                             <div>
