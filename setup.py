@@ -141,9 +141,16 @@ def configure_systemd_autostart(enable, mount_point=None):
             "[Install]\n"
             "WantedBy=default.target\n"
         )
-        # Not enabled/started here — server.py starts (or restarts) it
-        # on-demand via systemctl when a backup is actually triggered, the
-        # same way it always launched main_backup.py directly before.
+        # Enabled/started on boot too, same as the dashboard above -- a
+        # reboot used to silently stop all automated backups (scheduled
+        # AND watchdog) until this was clicked/re-triggered by hand, which
+        # didn't match what "Autostart on Boot" actually promises. Found
+        # live: after a restart, folderw.service (dashboard) came back on
+        # its own, but folderw-backup.service stayed dead until manually
+        # started, with the watchdog widget quietly showing stale state.
+        # server.py can still start/stop/restart it on demand independent
+        # of this -- enabling it here just means systemd also brings it
+        # back up on boot/login, not that this is its only start path.
         backup_service_content = (
             "[Unit]\n"
             "Description=FolderW Backup Worker\n"
@@ -176,7 +183,9 @@ def configure_systemd_autostart(enable, mount_point=None):
             # systemd to ignore this command's exit code, so "nothing to
             # kill" (the common case -- rsync usually already exited
             # cleanly on its own SIGTERM) isn't logged as a failure.
-            f"ExecStopPost=-{shutil.which('sudo') or '/usr/bin/sudo'} -n pkill -9 -f 'rsync -avv --sparse --delete --info=progress2'\n"
+            f"ExecStopPost=-{shutil.which('sudo') or '/usr/bin/sudo'} -n pkill -9 -f 'rsync -avv --sparse --delete --info=progress2'\n\n"
+            "[Install]\n"
+            "WantedBy=default.target\n"
         )
         try:
             os.makedirs(service_dir, exist_ok=True)
@@ -186,7 +195,8 @@ def configure_systemd_autostart(enable, mount_point=None):
                 f.write(backup_service_content)
             subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
             subprocess.run(["systemctl", "--user", "enable", SERVICE_NAME], check=True)
-            print("Autostart enabled. FolderW will start automatically on login/boot.")
+            subprocess.run(["systemctl", "--user", "enable", BACKUP_SERVICE_NAME], check=True)
+            print("Autostart enabled. FolderW (dashboard + backup worker) will start automatically on login/boot.")
             linger = subprocess.run(
                 ["loginctl", "enable-linger", os.environ.get("USER", "")],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -203,6 +213,11 @@ def configure_systemd_autostart(enable, mount_point=None):
                 subprocess.run(["systemctl", "--user", "disable", SERVICE_NAME], check=True)
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
                 print(f"Could not disable systemd autostart: {e}")
+        if os.path.exists(backup_service_path):
+            try:
+                subprocess.run(["systemctl", "--user", "disable", BACKUP_SERVICE_NAME], check=True)
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                print(f"Could not disable backup worker autostart: {e}")
 
 RSYNC_SUDOERS_DROPIN = "/etc/sudoers.d/folderw-rsync"
 
