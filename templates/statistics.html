@@ -147,9 +147,15 @@
             <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
                 <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
                     <h2 class="text-lg font-semibold">Per-Backup Activity</h2>
-                    <div class="flex items-center gap-2" role="group" aria-label="Metric">
-                        <button class="filter-pill active" data-metric="files_changed">Files Changed</button>
-                        <button class="filter-pill" data-metric="size_processed">Data Added</button>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div class="flex items-center gap-2" role="group" aria-label="Metric">
+                            <button class="filter-pill active" data-metric="files_changed">Files Changed</button>
+                            <button class="filter-pill" data-metric="size_processed">Data Added</button>
+                        </div>
+                        <div class="flex items-center gap-2" role="group" aria-label="Scale">
+                            <button class="filter-pill" data-scale="linear" title="Bar height directly proportional to value -- a single much-larger run (e.g. the initial full backup) can make every smaller run's bar nearly invisible">Linear</button>
+                            <button class="filter-pill active" data-scale="log" title="Compresses the range so smaller runs stay visible alongside a much larger one, at the cost of bar height no longer being directly proportional to value -- hover a bar for its exact number">Log Scale</button>
+                        </div>
                     </div>
                 </div>
                 <p class="text-sm text-[var(--text-muted)] mb-3">One bar per backup run, colored by method. Click a bar for the file list.</p>
@@ -198,6 +204,13 @@
         const allRuns = JSON.parse(document.getElementById('stats-data').textContent);
         let typeFilter = 'all';
         let activityMetric = 'files_changed';
+        // Defaults to log: backup activity data routinely spans several
+        // orders of magnitude in one chart (the one-time initial full
+        // backup vs. every much-smaller incremental/differential run
+        // after it) -- on a linear scale that reliably reduces every
+        // smaller run's bar to a 1px sliver. See valueToBarHeight/
+        // drawAxes' scale param.
+        let activityScale = 'log';
 
         function filteredRuns() {
             return typeFilter === 'all' ? allRuns : allRuns.filter(r => r.backup_type === typeFilter);
@@ -260,7 +273,19 @@
             return step * magnitude;
         }
 
-        function drawAxes(svg, width, height, maxY, yFormatter) {
+        // log1p transform (log10(v+1), not log10(v)) so v=0 maps cleanly
+        // to 0 instead of -Infinity -- backup runs with 0 files changed
+        // are common (nothing changed that cycle) and need to render at
+        // the axis floor, not break the chart.
+        function valueToBarHeight(value, maxY, innerH, scale) {
+            if (scale === 'log') {
+                const logMax = Math.log10(maxY + 1);
+                return logMax > 0 ? innerH * Math.log10(value + 1) / logMax : 0;
+            }
+            return maxY > 0 ? innerH * value / maxY : 0;
+        }
+
+        function drawAxes(svg, width, height, maxY, yFormatter, scale) {
             const styles = getComputedStyle(document.querySelector('.viz-root'));
             const grid = styles.getPropertyValue('--chart-grid').trim();
             const axis = styles.getPropertyValue('--chart-axis').trim();
@@ -268,9 +293,18 @@
             const innerW = width - PAD.left - PAD.right;
             const innerH = height - PAD.top - PAD.bottom;
             const steps = 4;
+            const logMax = Math.log10(maxY + 1);
             for (let i = 0; i <= steps; i++) {
                 const y = PAD.top + innerH - (innerH * i / steps);
-                const value = maxY * i / steps;
+                // Gridlines/labels evenly spaced in LOG space (not value
+                // space) when scale is 'log', so the labeled numbers
+                // reflect where each gridline actually sits on the bars
+                // above -- e.g. 0 / 3 / 30 / 300 / 3,000 rather than
+                // evenly-spaced-in-value labels that would cluster
+                // meaninglessly close together near the top.
+                const value = scale === 'log'
+                    ? Math.pow(10, logMax * i / steps) - 1
+                    : maxY * i / steps;
                 svg.appendChild(svgEl('line', {
                     x1: PAD.left, x2: width - PAD.right, y1: y, y2: y,
                     stroke: grid, 'stroke-width': 1,
@@ -383,7 +417,7 @@
             const values = runs.map(r => activityMetric === 'files_changed' ? r.files_changed : r.size_processed);
             const maxY = niceMax(Math.max(...values, 1));
             const formatter = activityMetric === 'files_changed' ? (v => Math.round(v).toLocaleString()) : formatBytes;
-            const { innerW, innerH } = drawAxes(svg, width, height, maxY, formatter);
+            const { innerW, innerH } = drawAxes(svg, width, height, maxY, formatter, activityScale);
 
             const n = runs.length;
             const slot = innerW / n;
@@ -391,7 +425,7 @@
 
             runs.forEach((r, i) => {
                 const value = activityMetric === 'files_changed' ? r.files_changed : r.size_processed;
-                const barH = maxY > 0 ? (innerH * value / maxY) : 0;
+                const barH = valueToBarHeight(value, maxY, innerH, activityScale);
                 const x = PAD.left + slot * i + (slot - barWidth) / 2;
                 const y = PAD.top + innerH - barH;
                 const color = seriesColor(r.backup_type);
@@ -543,6 +577,15 @@
                 document.querySelectorAll('[data-metric]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 activityMetric = btn.dataset.metric;
+                renderActivityChart();
+            });
+        });
+
+        document.querySelectorAll('[data-scale]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-scale]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activityScale = btn.dataset.scale;
                 renderActivityChart();
             });
         });
