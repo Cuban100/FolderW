@@ -493,6 +493,19 @@
                 <button class="stop-monitoring-button" onclick="stopMonitoring(event)">Stop Monitoring</button>
             </div>
             {% endif %}
+            {% if backup_service_unit_exists %}
+            <div style="text-align: center; margin: 10px 0;">
+                <span class="status-dot {{ 'green' if backup_service_active else '' }}"></span>
+                <span class="highlight">Backup Service:</span> {{ 'Running' if backup_service_active else 'Stopped' }}
+                &nbsp;
+                {% if backup_service_active %}
+                <button class="stop-monitoring-button" onclick="stopMonitoring(event)">Stop Backup Service</button>
+                {% else %}
+                <button class="manual-snapshot-button" onclick="startBackupService(event)">Start Backup Service</button>
+                {% endif %}
+            </div>
+            <p style="text-align: center; color: var(--text-muted); font-size: 0.85em; margin-top: -6px;">Stops/starts backing up and monitoring entirely (folderw-backup.service) — the dashboard itself keeps running either way.</p>
+            {% endif %}
             {% if not ready_for_manual_snapshot %}
             <div class="progress-container">
 
@@ -783,6 +796,22 @@
             // immediately re-trigger a fresh backup, undoing the stop that
             // just succeeded. Navigating to / always lands on the dashboard
             // without re-running that side effect.
+            window.location.href = '/';
+        }
+
+        async function startBackupService(event) {
+            const btn = event && event.target;
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Starting…';
+                btn.style.cursor = 'wait';
+            }
+            try {
+                const response = await fetch('/start-backup-service', { method: 'POST' });
+                await response.json();
+            } catch (error) {
+                console.error('Error starting backup service:', error);
+            }
             window.location.href = '/';
         }
 

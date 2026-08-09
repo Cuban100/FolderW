@@ -169,6 +169,23 @@ def _backup_service_unit_exists():
         return False
 
 
+def _backup_service_is_active():
+    # Independent of is_watchdog_active() (which only ever detects
+    # rsync_event_handler.py, i.e. MONITOR=1's watch loop): with a
+    # scheduled interval (MONITOR=0) the service sits idle in
+    # schedule.run_pending() between runs, no watchdog process at all,
+    # so that check alone can't tell a dashboard control whether there's
+    # anything to stop. This asks systemd directly instead.
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "is-active", BACKUP_SERVICE_NAME],
+            capture_output=True, text=True, timeout=5,
+        )
+        return result.stdout.strip() == "active"
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False
+
+
 def is_watchdog_active():
     # Deliberately matches rsync_event_handler.py, not main_backup.py: the
     # supervisor runs the first full backup to completion before ever
@@ -367,6 +384,34 @@ async def stop_backup():
     logger.info(f"Stopped {killed} backup/watchdog process(es) directly.")
     return JSONResponse({"message": f"Stopped {killed} process(es)." if killed else "Nothing was running."})
 
+
+@app.post("/start-backup-service")
+async def start_backup_service():
+    # Deliberately just "start", never "restart" -- this is the general,
+    # always-available counterpart to the Stop button above, meant to
+    # resume a deliberately-stopped service, not to interrupt/replace a
+    # currently-running one the way /run-all-steps' restart does. A plain
+    # start is also a safe no-op if it's already running.
+    #
+    # No settings/validation/evaluation gate here (unlike /run-all-steps)
+    # -- main_backup.py re-checks all three itself the moment it starts
+    # (see backup_prerequisites_met()) and exits cleanly without running
+    # anything if they fail, so this can't bypass that safety net.
+    #
+    # Only meaningful with a real systemd unit -- without autostart
+    # configured, there's no persistent service to "start" independent of
+    # actually launching a backup (see /run-all-steps' Popen fallback).
+    if not _backup_service_unit_exists():
+        return JSONResponse({"message": "No backup service is configured (autostart was never enabled)."}, status_code=400)
+    try:
+        subprocess.run(["systemctl", "--user", "start", BACKUP_SERVICE_NAME], check=True)
+        logger.info("Started folderw-backup.service on request.")
+        return JSONResponse({"message": "Backup service started."})
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to start {BACKUP_SERVICE_NAME}: {e}")
+        return JSONResponse({"message": f"Failed to start: {e}"}, status_code=500)
+
+
 @app.get("/run-all-steps", response_class=HTMLResponse)
 async def run_all_steps(request: Request, force_full: bool = False):
     logger.info(f"Response received from Front End for /run-all-steps (force_full={force_full})")
@@ -541,6 +586,8 @@ def _dashboard_settings_context():
         "has_notify_urls": bool(load_env_value('NOTIFY_URLS')),
         "pre_backup_script": load_env_value('PRE_BACKUP_SCRIPT'),
         "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
+        "backup_service_unit_exists": _backup_service_unit_exists(),
+        "backup_service_active": _backup_service_is_active(),
         **get_backup_stats_context(database),
     }
 
