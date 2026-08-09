@@ -23,6 +23,19 @@ For any backup you can either:
 
 Restoring **never overwrites `SRC_DIR`**. Files are always copied into a new, timestamped folder at `BASE_DIR/Restored/<timestamp>_<backup>/` for you to review and move back into place yourself — a wrong pick can't clobber current data.
 
+### Full Restore vs. Only Snapshot
+
+A Differential snapshot (or a Merged one, see below) only ever contains a *delta* — not a complete, standalone copy of `SRC_DIR`. Restoring one by itself only gives you back what changed, not everything else. For any backup where that applies, Restore offers two options:
+
+- **Full Restore (default)** — copies the full backup first, then that snapshot's files on top, overwriting anything that changed. The result is a complete point-in-time copy.
+- **Only Snapshot** (the dropdown next to Full Restore) — copies just that snapshot's own delta, nothing from the full backup. Useful if you specifically want to see what changed in that one session, not a full tree.
+
+Incremental snapshots don't show this choice at all — each one is already a complete, independently restorable tree (see [Backup Method](#backup-method) below), so there's nothing to combine.
+
+### Compiling Snapshots
+
+**Compile Latest Snapshot** (button above the backup list) merges every existing snapshot (the full backup excluded) into one new "Merged" snapshot, oldest to newest, so later changes win over earlier ones for the same file. The result is the latest version of every file that's ever changed across all your snapshots — not a complete copy of `SRC_DIR`, just a consolidated view of the changes, so it behaves like any other delta-only backup: Restore still offers Full Restore vs. Only Snapshot for it.
+
 ## Snapshot Retention
 
 Set **"Snapshots to Keep"** (in the setup GUI or the web Settings page) to a number, and after every backup FolderW deletes the oldest snapshots beyond that count — keeping only the most recent N. Leave it blank to keep every snapshot forever (the default).

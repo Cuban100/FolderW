@@ -22,6 +22,10 @@
 
     <p align="center"> <img src="https://github.com/Cuban100/FolderW/blob/main/folder-icon.png" alt="FolderW branded backup folder icon" width="320"> </p>
 
+12. **Merged Snapshots:** "Compile Latest Snapshot" combines every existing snapshot's latest-per-path files into one new, independently restorable snapshot.
+13. **Backup Hooks:** Optional pre-backup and post-backup scripts, run around every backup — each with a "Test Script" button on its own dashboard page to verify it before trusting it to run for real.
+14. **File Exclusions:** Comma-separated patterns to skip during backup, set on the Settings page. Nothing is excluded unless you say so — no hidden defaults.
+
 ## Quick Start
 
 ```bash
@@ -38,8 +42,9 @@ That runs the Tkinter setup wizard to configure your source/destination and gene
 - **[Usage](docs/usage.md)** — key components, how the setup wizard and dashboard fit together
 - **[Operations](docs/operations.md)** — updating, uninstalling, autostart on boot (systemd)
 - **[Login & Notifications](docs/login-and-notifications.md)** — dashboard password, desktop + external notifications
-- **[Restore & Backup Method](docs/restore-and-backup-method.md)** — how restoring works, Incremental vs Differential, snapshot retention
-- **[What Gets Backed Up](docs/backup-scope.md)** — default exclusions, excluding your own files
+- **[Restore & Backup Method](docs/restore-and-backup-method.md)** — how restoring works, Incremental vs Differential, snapshot retention, merging snapshots
+- **[What Gets Backed Up](docs/backup-scope.md)** — excluding your own files, nothing excluded by default
+- **[Backup Hooks](docs/backup-hooks.md)** — running your own scripts before/after each backup
 - **[Permissions](docs/permissions.md)** — why `rsync` runs as root, and what ownership/mode backed-up files get
 
 ---
