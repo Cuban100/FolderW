@@ -545,7 +545,14 @@
                      {% else %}
                     <div></div>
                     {% endif %}
-                    {% if backup_status or backup_in_progress %}
+                    {# Deliberately NOT gated behind backup_status/backup_in_progress
+                       (both only known at the moment THIS page happened to be
+                       rendered) -- a watchdog-triggered backup starting later,
+                       while this same page is just sitting open in the browser,
+                       needs these elements to already exist so the live poll
+                       below can reveal them without a reload. Hidden by
+                       default; shown by startBackupStream()/checkBackupActivity(). #}
+                    <div id="backup-activity-section" style="display: {% if backup_status or backup_in_progress %}block{% else %}none{% endif %};">
                     <div class="message {{ 'error' if backup_status and backup_status.startswith('Failed') else 'success' }}" id="backup-status-message">
                         {{ backup_status or "Backup in progress…" }}
                     </div>
@@ -553,7 +560,7 @@
                         <div class="progress-bar"></div>
                     </div>
                     <div class="progress-bar-text" id="backup-progress-text">Backup running&hellip;</div>
-                    {% endif %}
+                    </div>
             {% set ready_for_manual_snapshot = settings_sent == True and validation_status == True and evaluation_status == True and has_completed_backup %}
             {% set backup_active = backup_status or backup_in_progress %}
             {% if ready_for_manual_snapshot %}
@@ -744,8 +751,10 @@
                 </div>
             </div>
         </div>
-        {% if backup_status or backup_in_progress %}
-        <div class="rsync-tail-container" id="rsync-tail-container">
+        {# Same reasoning as backup-activity-section above -- always present,
+           hidden by default, so a watchdog-triggered backup can reveal it
+           live without needing a page reload. #}
+        <div class="rsync-tail-container" id="rsync-tail-container" style="display: {% if backup_status or backup_in_progress %}block{% else %}none{% endif %};">
             <div class="rsync-tail-titlebar">
                 <span class="rsync-tail-dot" style="background:#ff5f56;"></span>
                 <span class="rsync-tail-dot" style="background:#ffbd2e;"></span>
@@ -754,7 +763,6 @@
             </div>
             <pre class="rsync-tail" id="rsync-tail"></pre>
         </div>
-        {% endif %}
 
     </div>
     </div>
@@ -875,7 +883,7 @@
         // The Backup Statistics numbers were otherwise only ever set at
         // page render time -- a scheduled or watchdog-triggered backup
         // running in the background (i.e. not the "Backup in progress"
-        // state pollBackupStatus() below already handles live) left an
+        // state startBackupStream() below already handles live) left an
         // already-open dashboard showing stale numbers indefinitely,
         // with zero visible sign anything had happened until a manual
         // reload. Polled on an interval regardless of whether a backup
@@ -1035,13 +1043,32 @@
             return `${s}s`;
         }
 
-        // If a backup was just started, poll for whether it's still running
-        // and show a progress bar accordingly. When rsync's --info=progress2
-        // percentage is available (see /backup-status), the bar fills to
-        // that exact percent; otherwise (e.g. during the icon-setup phase
-        // before rsync's first line arrives) it falls back to an
-        // indeterminate sliding animation.
-        (function pollBackupStatus() {
+        // Backup activity (progress bar, rsync-tail terminal) used to only
+        // ever exist in the DOM if this page happened to be rendered at the
+        // exact moment a backup was already running -- true for the Start
+        // Full Backup button (its document.write() flow forces a fresh
+        // render right as one starts), but never true for a watchdog-
+        // triggered backup starting later while this same page just sits
+        // open in the browser: nothing was watching for that, so the
+        // progress bar/terminal simply never appeared. Found live: the
+        // watchdog widget correctly showed "Starting backup...", but nothing
+        // else reacted. backup-activity-section/rsync-tail-container are now
+        // always in the DOM (hidden by default, see above) so this can
+        // reveal them at any time, not just at page-load.
+        let backupStreamActive = false;
+
+        function showBackupActivitySection() {
+            const section = document.getElementById('backup-activity-section');
+            const tailContainer = document.getElementById('rsync-tail-container');
+            if (section) section.style.display = 'block';
+            if (tailContainer) tailContainer.style.display = 'block';
+        }
+
+        // Opens the live SSE connection that drives the progress bar +
+        // rsync-tail terminal. Safe to call repeatedly -- a no-op once a
+        // stream is already open.
+        function startBackupStream() {
+            if (backupStreamActive) return;
             const statusMessage = document.getElementById('backup-status-message');
             const progressContainer = document.getElementById('backup-progress-container');
             const progressBar = progressContainer ? progressContainer.querySelector('.progress-bar') : null;
@@ -1050,10 +1077,10 @@
             const sourceSizeValue = document.getElementById('source-folder-size-value');
             const rsyncTail = document.getElementById('rsync-tail');
             const dotWatchdog = document.getElementById('dot-watchdog');
-            if (!statusMessage || statusMessage.textContent.trim().startsWith('Failed')) {
-                return;
-            }
+            if (!statusMessage || !progressContainer || !progressBar || !progressText) return;
 
+            backupStreamActive = true;
+            showBackupActivitySection();
             progressContainer.classList.add('active');
 
             // Server-Sent Events, not a poll: one held connection instead
@@ -1103,23 +1130,22 @@
                     }
                     if (!data.running) {
                         source.close();
+                        backupStreamActive = false;
                         progressContainer.classList.remove('active');
                         progressBar.classList.remove('determinate');
                         progressBar.style.width = '';
                         progressText.textContent = 'Backup complete.';
                         statusMessage.textContent = 'Backup complete.';
-                        // This page was rendered (via document.write, see
-                        // startBackup()) at the moment the backup *started*
-                        // — has_completed_backup was still false then, so
-                        // the server never rendered the manual-snapshot
-                        // banner element at all (it's behind a server-side
-                        // conditional, not just hidden with CSS), and
-                        // nothing here ever swaps the Stop Full Backup
-                        // button back to Start. Found live:
-                        // the Stop button just sat there indefinitely after
-                        // a backup actually finished. Reloading re-renders
-                        // the whole page with fresh state instead of trying
-                        // to patch every affected element by hand. Safe to
+                        // Covers both paths this can be reached from: the
+                        // Start Full Backup button (document.write() render
+                        // mid-backup, when has_completed_backup was still
+                        // false -- the manual-snapshot banner and Stop/Start
+                        // button never got server-rendered in the first
+                        // place) and a watchdog-triggered backup noticed
+                        // live on an already-open page (stale dashboard
+                        // stats/history otherwise). Reloading re-renders the
+                        // whole page with fresh state instead of trying to
+                        // patch every affected element by hand. Safe to
                         // reload here specifically because the address bar
                         // is always / at this point (never /run-all-steps),
                         // so it can't re-trigger a fresh backup the way
@@ -1142,7 +1168,28 @@
                 // recovering once the connection comes back.
                 console.error('Backup status stream error:', error);
             };
-        })();
+        }
+
+        // Cheap fetch() poll (not a held connection) so an already-open
+        // dashboard can notice a watchdog-triggered backup starting and
+        // switch over to the live SSE stream above -- same two-tier
+        // pattern as the watchdog widget's own polling (see
+        // refreshWatchdogStatus). Also covers the initial page load itself,
+        // including the Start Full Backup / already-in-progress case, so a
+        // separate immediate startBackupStream() call isn't needed there.
+        async function checkBackupActivity() {
+            if (backupStreamActive) return;
+            try {
+                const response = await fetch('/backup-status');
+                const data = await response.json();
+                if (data.running) {
+                    startBackupStream();
+                }
+            } catch (error) {
+                console.error('Error checking backup activity:', error);
+            }
+        }
+        checkBackupActivity();
 
         checkForUpdates();
 
@@ -1157,6 +1204,7 @@
         refreshWatchdogStatus();
         setInterval(updateWatchdogDisplay, 1000);
         setInterval(refreshWatchdogStatus, 3000);
+        setInterval(checkBackupActivity, 3000);
     </script>
 
 </body>
