@@ -15,6 +15,13 @@ from loguru import logger
 # one left behind by a crash, kill, or power loss mid-run.
 COMPLETION_MARKER = '.folderw_complete'
 
+# Marks a snapshot produced by compile_latest_snapshot() (merged from
+# every existing snapshot's latest-per-path files, Full Backup excluded)
+# rather than a real backup run -- list_backups() checks for this to
+# label it "Merged - <date>" instead of a plain date, so it's never
+# mistaken for a normal snapshot in the Restore listing.
+COMPILED_MARKER = '.folderw_compiled'
+
 
 def _snapshot_created_at(snapshot_path):
     """The real creation time of a snapshot, for sorting -- read from
@@ -67,7 +74,7 @@ NOTE_FILE = '.folderw_note'
 # full_backup specifically (its own branding, physically written there
 # now that it's a real directory -- see rsync_incremental.py's
 # ensure_backup_folder_icon()), but harmless to exclude everywhere.
-_INTERNAL_FILES = (COMPLETION_MARKER, STATS_CACHE_FILE, NOTE_FILE, 'FolderW.png', '.directory')
+_INTERNAL_FILES = (COMPLETION_MARKER, STATS_CACHE_FILE, NOTE_FILE, COMPILED_MARKER, 'FolderW.png', '.directory')
 
 def _chmod_775(path):
     # rsync's own --chmod=775 (see rsync_incremental.py) only ever applies
@@ -270,9 +277,15 @@ def list_backups():
                     continue
                 file_count, total_size = _cached_summarize_snapshot(snapshot_path)
                 snapshot_id = f"{month}/{day}/{time_folder}"
+                is_compiled = os.path.exists(os.path.join(snapshot_path, COMPILED_MARKER))
+                if is_compiled:
+                    created_dt = datetime.fromtimestamp(_snapshot_created_at(snapshot_path))
+                    label = f"Merged - {created_dt.month}/{created_dt.day}/{created_dt.year}"
+                else:
+                    label = f"{month} {day}, {time_folder}"
                 backups.append({
                     "id": snapshot_id,
-                    "label": f"{month} {day}, {time_folder}",
+                    "label": label,
                     "file_count": file_count,
                     # New/modified files in specifically this session, vs
                     # file_count above (every file in the complete point-
@@ -309,6 +322,79 @@ def total_destination_size_bytes():
     for its own listing to stay fast.
     """
     return sum(b["size_bytes"] for b in list_backups())
+
+
+def compile_latest_snapshot():
+    """Merge every existing snapshot (Incremental or Differential --
+    Full Backup deliberately excluded, per explicit request) into one
+    new snapshot containing the latest version of every file that has
+    appeared in ANY of them. Not a complete copy of SRC_DIR: a file
+    only ever shows up in a snapshot in the first place if it changed
+    at least once since the full backup, so this is a consolidated
+    view of "everything that's changed," not a full restore point --
+    unchanged-since-day-one files are only ever in Full Backup, which
+    this deliberately never reads.
+
+    Snapshots are already chronologically ordered by list_backups()
+    (sorted by _snapshot_created_at() -- the completion marker's own
+    recorded timestamp, not directory mtime, which can't be trusted as
+    a creation-order signal here, see that function's docstring for
+    why). Walking them oldest to newest and letting each snapshot's
+    copy of a given relative path simply overwrite whatever an earlier
+    snapshot wrote there is enough to guarantee the final result holds
+    each path's latest version -- no per-file timestamp comparison
+    needed, and no risk of the same mtime pitfall that broke retention
+    ordering earlier.
+
+    Hardlinked where possible (same filesystem, the common case, so
+    this is fast regardless of total data size), falling back to a
+    real copy only if that fails. Returns (new_snapshot_path,
+    file_count), or (None, 0) if there are no snapshots to compile yet.
+    """
+    snapshots = [b for b in list_backups() if b["id"] != "full"]
+    if not snapshots:
+        return None, 0
+    oldest_first = list(reversed(snapshots))  # list_backups() is newest-first
+
+    snapshots_root = load_other_variables('snapshots_root')
+    now = datetime.now()
+    folder_name = f"{now.strftime('%B')}/{now.strftime('%d')}/{now.strftime('%I').lstrip('0')}:{now.strftime('%M')}-{now.strftime('%p')}"
+    new_snapshot_path = os.path.join(snapshots_root, folder_name)
+    suffix = 1
+    while os.path.exists(new_snapshot_path):
+        suffix += 1
+        new_snapshot_path = os.path.join(snapshots_root, f"{folder_name}-{suffix}")
+    os.makedirs(new_snapshot_path, exist_ok=True)
+
+    for snap in oldest_first:
+        snap_path = snap["path"]
+        for dirpath, _, filenames in os.walk(snap_path):
+            for f in filenames:
+                if f in _INTERNAL_FILES and dirpath == snap_path:
+                    continue
+                src_fp = os.path.join(dirpath, f)
+                rel = os.path.relpath(src_fp, snap_path)
+                dest_fp = os.path.join(new_snapshot_path, rel)
+                os.makedirs(os.path.dirname(dest_fp), exist_ok=True)
+                if os.path.lexists(dest_fp):
+                    # A later (more recent) snapshot's version of this
+                    # same path -- replaces whatever an earlier one wrote.
+                    os.remove(dest_fp)
+                try:
+                    os.link(src_fp, dest_fp)
+                except OSError:
+                    shutil.copy2(src_fp, dest_fp)
+                    _chmod_775(dest_fp)
+
+    compiled_marker_path = os.path.join(new_snapshot_path, COMPILED_MARKER)
+    with open(compiled_marker_path, 'w') as f:
+        f.write(datetime.now().isoformat())
+    _chmod_775(compiled_marker_path)
+
+    set_snapshot_note(new_snapshot_path, f"Compiled from {len(snapshots)} snapshot(s) -- the latest version of every file that changed since the full backup.")
+    mark_snapshot_complete(new_snapshot_path)
+    file_count, _ = _cached_summarize_snapshot(new_snapshot_path)
+    return new_snapshot_path, file_count
 
 
 def cleanup_old_snapshots(max_snapshots):

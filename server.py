@@ -13,7 +13,7 @@ import apprise
 from notifications import _notify_desktop
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session
-from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER
+from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
@@ -827,6 +827,24 @@ async def restore_execute(request: Request, backup_id: str = Form(...), selected
             "error": str(e),
             **_restore_page_context(),
         })
+
+
+@app.post("/restore/compile", response_class=HTMLResponse)
+async def restore_compile(request: Request):
+    new_path, file_count = compile_latest_snapshot()
+    if new_path is None:
+        return templates.TemplateResponse("restore.html", {
+            "request": request,
+            "logo": logo,
+            "error": "No snapshots to compile yet -- this needs at least one Incremental or Differential snapshot beyond the full backup.",
+            **_restore_page_context(),
+        })
+    return templates.TemplateResponse("restore.html", {
+        "request": request,
+        "logo": logo,
+        "success": f"Compiled {file_count} file(s) into a new merged snapshot at {new_path}.",
+        **_restore_page_context(),
+    })
 
 
 @app.get("/settings", response_class=HTMLResponse)

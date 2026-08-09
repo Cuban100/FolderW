@@ -37,6 +37,22 @@
             </div>
             {% endif %}
 
+            <div class="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4 mb-6">
+                <div class="flex items-center justify-between gap-4 flex-wrap">
+                    <p class="text-sm text-[var(--text-muted)] max-w-2xl">
+                        <span class="font-medium text-[var(--text)]">Compile Latest Snapshot</span> merges every snapshot below
+                        (Full Backup excluded) into one new "Merged" snapshot containing the latest version of every file that's
+                        ever changed &mdash; not a complete copy of your source, just a consolidated view of the changes.
+                    </p>
+                    <form method="post" action="/restore/compile"
+                          onsubmit="return confirm('Merge every snapshot into one new snapshot with the latest version of each changed file?');">
+                        <button type="submit" class="bg-gray-700 text-white text-sm py-2 px-4 rounded hover:bg-gray-800 transition whitespace-nowrap">
+                            Compile Latest Snapshot
+                        </button>
+                    </form>
+                </div>
+            </div>
+
             {% if not backups %}
             <div class="bg-[var(--surface)] rounded-lg shadow p-6 text-[var(--text-muted)]">
                 No backups found yet. Run a backup first.
