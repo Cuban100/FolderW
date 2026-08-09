@@ -167,13 +167,23 @@ class BackupHandler(FileSystemEventHandler):
             self._schedule_backup()
 
     def on_created(self, event):
-        if not event.is_directory and not self.should_ignore(event.src_path):
-            logger.debug(f"File created: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
+        # Directories ARE let through here (unlike on_modified below): a
+        # newly created but still-empty folder has no file inside it yet
+        # to fire its own on_created event, so this is the only signal
+        # that folder exists at all. Found live: creating a new folder
+        # in SRC_DIR triggered nothing, because this used to skip
+        # directory events unconditionally.
+        if not self.should_ignore(event.src_path):
+            logger.debug(f"{'Directory' if event.is_directory else 'File'} created: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
             self._schedule_backup()
 
     def on_deleted(self, event):
-        if not event.is_directory and not self.should_ignore(event.src_path):
-            logger.debug(f"File deleted: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
+        # Same reasoning as on_created -- a whole folder being removed
+        # is a real change (Incremental mode's --delete needs a run to
+        # actually propagate it), and there's no separate per-file event
+        # for the files that were inside it if the folder itself is gone.
+        if not self.should_ignore(event.src_path):
+            logger.debug(f"{'Directory' if event.is_directory else 'File'} deleted: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
             self._schedule_backup()
 
     @staticmethod
