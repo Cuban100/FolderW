@@ -33,4 +33,33 @@
             {% endfor %}
         </ul>
     </nav>
+
+    {% if (watchdog_active is defined and watchdog_active) or (backup_service_unit_exists is defined and backup_service_unit_exists) %}
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-controls">
+        {% if watchdog_active is defined and watchdog_active %}
+        <div class="sidebar-control-row help-wrap">
+            <span class="status-dot green"></span>
+            <span class="sidebar-control-label">Monitoring active</span>
+            <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-stop-monitoring')">?</button>
+            <div id="help-stop-monitoring" class="help-popover hidden">Stops the watchdog that's currently watching your source folder for changes &mdash; any backup already in progress is stopped too. The dashboard itself keeps running; monitoring won't resume until you start it again (Start Backup Service below, or restart it another way).</div>
+        </div>
+        <button type="button" class="sidebar-stop-btn" onclick="stopMonitoring(event)">Stop Monitoring</button>
+        {% endif %}
+
+        {% if backup_service_unit_exists is defined and backup_service_unit_exists %}
+        <div class="sidebar-control-row help-wrap">
+            <span class="status-dot {{ 'green' if backup_service_active else '' }}"></span>
+            <span class="sidebar-control-label">Backup Service: {{ 'Running' if backup_service_active else 'Stopped' }}</span>
+            <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-backup-service')">?</button>
+            <div id="help-backup-service" class="help-popover hidden">Stops or starts backing up and monitoring entirely (<span style="font-family: monospace;">folderw-backup.service</span>) &mdash; the dashboard itself (this page you're looking at right now) keeps running either way, so you're never locked out.</div>
+        </div>
+        {% if backup_service_active %}
+        <button type="button" class="sidebar-stop-btn" onclick="stopMonitoring(event)">Stop Backup Service</button>
+        {% else %}
+        <button type="button" class="sidebar-start-btn" onclick="startBackupService(event)">Start Backup Service</button>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
 </div>

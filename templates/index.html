@@ -553,24 +553,7 @@
                 <button class="manual-snapshot-button" onclick="startBackup(false)">Create a Manual Snapshot</button>
             </div>
             {% endif %}
-            {% if watchdog_active %}
-            <div style="text-align: center;">
-                <button class="stop-monitoring-button" onclick="stopMonitoring(event)">Stop Monitoring</button>
-            </div>
-            {% endif %}
-            {% if backup_service_unit_exists %}
-            <div style="text-align: center; margin: 10px 0;">
-                <span class="status-dot {{ 'green' if backup_service_active else '' }}"></span>
-                <span class="highlight">Backup Service:</span> {{ 'Running' if backup_service_active else 'Stopped' }}
-                &nbsp;
-                {% if backup_service_active %}
-                <button class="stop-monitoring-button" onclick="stopMonitoring(event)">Stop Backup Service</button>
-                {% else %}
-                <button class="manual-snapshot-button" onclick="startBackupService(event)">Start Backup Service</button>
-                {% endif %}
-            </div>
-            <p style="text-align: center; color: var(--text-muted); font-size: 0.85em; margin-top: -6px;">Stops/starts backing up and monitoring entirely (folderw-backup.service) — the dashboard itself keeps running either way.</p>
-            {% endif %}
+            {# Stop Monitoring / Backup Service controls moved to the sidebar -- see templates/_sidebar.html #}
             {% if not ready_for_manual_snapshot %}
             <div class="progress-container">
 
@@ -673,6 +656,11 @@
                     <div class="stat-card">
                         <div class="stat-label">Monitoring Delay</div>
                         <div class="stat-value">{{ monitoring_delay_display }}</div>
+                    </div>
+                    {% elif interval %}
+                    <div class="stat-card">
+                        <div class="stat-label">Backup Interval</div>
+                        <div class="stat-value">{{ {'hourly': 'Hourly', 'half-day': 'Half-Day', 'daily': 'Daily', 'weekly': 'Weekly'}.get(interval, interval) }}</div>
                     </div>
                     {% endif %}
                 </div>
@@ -839,52 +827,10 @@
                 }
             }
         }
-        async function stopMonitoring(event) {
-            if (!confirm('Stop monitoring and any backup currently in progress?')) {
-                return;
-            }
-            // systemctl stop blocks until the service (and rsync under it)
-            // actually exits — if rsync doesn't respond to SIGTERM right
-            // away (mid-transfer, cleaning up a partial file), that wait
-            // can run to systemd's stop timeout. Give immediate feedback
-            // so the page doesn't look frozen/unresponsive in the meantime.
-            const btn = event && event.target;
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = 'Stopping… (this can take a moment)';
-                btn.style.cursor = 'wait';
-            }
-            try {
-                const response = await fetch('/stop-backup', { method: 'POST' });
-                await response.json();
-            } catch (error) {
-                console.error('Error stopping backup:', error);
-            }
-            // Not reload(): this button can be rendered on the /run-all-steps
-            // page (reached via startBackup()'s navigation), and that route
-            // has a side effect — every GET to it restarts the backup
-            // service if checks pass. Reloading that URL after a stop would
-            // immediately re-trigger a fresh backup, undoing the stop that
-            // just succeeded. Navigating to / always lands on the dashboard
-            // without re-running that side effect.
-            window.location.href = '/';
-        }
-
-        async function startBackupService(event) {
-            const btn = event && event.target;
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = 'Starting…';
-                btn.style.cursor = 'wait';
-            }
-            try {
-                const response = await fetch('/start-backup-service', { method: 'POST' });
-                await response.json();
-            } catch (error) {
-                console.error('Error starting backup service:', error);
-            }
-            window.location.href = '/';
-        }
+        // stopMonitoring()/startBackupService() now live in
+        // /static/sidebar.js (shared -- these controls moved to the
+        // sidebar, which is included on every page, not just this one).
+        // "Stop Full Backup" above still calls the shared stopMonitoring().
 
         // Runs once per page load -- refreshes the cached update-check
         // result (shown instantly from the last check on initial render)

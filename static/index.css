@@ -130,6 +130,125 @@ html.sidebar-collapsed .content {
     font-weight: bold;
     text-align: center;
 }
+
+/* Backup Service / Stop Monitoring controls, below a divider under the
+   nav links -- shared here (not per-page) since the sidebar itself is
+   included on every page via templates/_sidebar.html. */
+.sidebar-divider {
+    height: 1px;
+    background-color: #575757;
+    margin: 12px 4px 16px;
+}
+.sidebar-controls {
+    padding: 0 4px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sidebar-control-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.9em;
+}
+.sidebar-control-label {
+    flex: 1 1 auto;
+}
+.sidebar-stop-btn, .sidebar-start-btn {
+    width: 100%;
+    text-align: center;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+/* Red = "this is currently on, click to stop it"; green = "this is
+   currently off, click to start it" -- same red/green as the status
+   dot right next to each button, so the whole row reads as one state
+   at a glance instead of just being a generic action button. */
+.sidebar-stop-btn {
+    background: none;
+    border: 1px solid #e57373;
+    color: #e57373;
+}
+.sidebar-stop-btn:hover {
+    background-color: rgba(229, 115, 115, 0.15);
+}
+.sidebar-start-btn {
+    background: none;
+    border: 1px solid #27ae60;
+    color: #27ae60;
+}
+.sidebar-start-btn:hover {
+    background-color: rgba(39, 174, 96, 0.15);
+}
+
+/* Small colored status indicator -- also used by index.html's own
+   Settings/Validation/Evaluation/Monitoring dots (defined identically
+   there too; harmless duplication, not worth coupling that page's
+   markup to this shared file just to dedupe one rule). */
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+    background-color: #e53935;
+}
+.status-dot.green {
+    background-color: #27ae60;
+}
+
+/* [?] help popover -- click to reveal a short explanation, click
+   elsewhere to dismiss. Shared by Settings' form fields and the
+   sidebar controls below the nav links. */
+.help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    border: 1px solid #9a9a9a;
+    color: #9a9a9a;
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 700;
+    cursor: pointer;
+    background: none;
+    flex-shrink: 0;
+    padding: 0;
+}
+.help-icon:hover, .help-icon.active {
+    border-color: #2196f3;
+    color: #2196f3;
+}
+.help-popover {
+    position: absolute;
+    z-index: 30;
+    top: 100%;
+    left: 0;
+    margin-top: 6px;
+    background-color: #383838;
+    border: 1px solid #575757;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85em;
+    line-height: 1.4;
+    color: #cfcfcf;
+    width: max-content;
+    max-width: 280px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.help-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .content {
     margin-left: 250px;
     box-sizing: border-box;
