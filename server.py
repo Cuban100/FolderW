@@ -10,6 +10,7 @@ import threading
 import webbrowser
 import psutil
 import apprise
+from datetime import datetime
 from notifications import _notify_desktop
 from backup_hooks import run_hook_script
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
@@ -184,6 +185,57 @@ def _backup_service_is_active():
         return result.stdout.strip() == "active"
     except (subprocess.SubprocessError, FileNotFoundError):
         return False
+
+
+def _check_for_updates():
+    """git fetch + compare local HEAD against origin/main. Returns a dict
+    with commits_behind (int) and commit_summaries (newest first, capped
+    at 10), or None if the check couldn't be completed at all (offline,
+    not a git checkout, no 'origin' remote, git not installed) --
+    callers should treat None as "unknown, try again later", not as "no
+    update available", so a temporary network blip can't make the
+    dashboard falsely claim everything is up to date.
+    """
+    if not os.path.isdir(os.path.join(BASE_DIR, '.git')):
+        return None
+    try:
+        fetch = subprocess.run(
+            ["git", "fetch", "origin", "main"],
+            cwd=BASE_DIR, capture_output=True, text=True, timeout=20,
+        )
+        if fetch.returncode != 0:
+            logger.warning(f"Update check: git fetch failed: {fetch.stderr.strip()}")
+            return None
+        count = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD..origin/main"],
+            cwd=BASE_DIR, capture_output=True, text=True, timeout=10,
+        )
+        if count.returncode != 0:
+            logger.warning(f"Update check: git rev-list failed: {count.stderr.strip()}")
+            return None
+        commits_behind = int(count.stdout.strip())
+        commit_summaries = []
+        if commits_behind:
+            log_result = subprocess.run(
+                ["git", "log", "--oneline", "HEAD..origin/main", "-n", "10"],
+                cwd=BASE_DIR, capture_output=True, text=True, timeout=10,
+            )
+            if log_result.returncode == 0:
+                commit_summaries = [line for line in log_result.stdout.splitlines() if line.strip()]
+        return {"commits_behind": commits_behind, "commit_summaries": commit_summaries}
+    except (subprocess.SubprocessError, FileNotFoundError, ValueError) as e:
+        logger.warning(f"Update check failed: {e}")
+        return None
+
+
+def _cached_update_status():
+    commits_behind = get_database_value('UPDATE_COMMITS_BEHIND', 'settings')
+    summaries = get_database_value('UPDATE_COMMIT_SUMMARIES', 'settings')
+    return {
+        "update_commits_behind": int(commits_behind) if commits_behind else 0,
+        "update_commit_summaries": summaries.split('\n') if summaries else [],
+        "update_last_checked": get_database_value('UPDATE_LAST_CHECKED', 'settings') or None,
+    }
 
 
 def is_watchdog_active():
@@ -412,6 +464,62 @@ async def start_backup_service():
         return JSONResponse({"message": f"Failed to start: {e}"}, status_code=500)
 
 
+@app.get("/check-for-updates")
+async def check_for_updates():
+    # Blocking (network + subprocess) -- run off the event loop so this
+    # can't stall every other request while it waits on git.
+    result = await run_in_threadpool(_check_for_updates)
+    if result is None:
+        # Keep showing the last known-good state rather than flipping to
+        # "no updates" on a transient failure (offline, DNS hiccup) --
+        # that would be actively misleading, not just uninformative.
+        cached = _cached_update_status()
+        return JSONResponse({
+            "checked": False,
+            "commits_behind": cached["update_commits_behind"],
+            "commit_summaries": cached["update_commit_summaries"],
+        })
+    set_database_value('UPDATE_COMMITS_BEHIND', result['commits_behind'])
+    set_database_value('UPDATE_COMMIT_SUMMARIES', '\n'.join(result['commit_summaries']))
+    set_database_value('UPDATE_LAST_CHECKED', datetime.now().isoformat())
+    return JSONResponse({
+        "checked": True,
+        "commits_behind": result['commits_behind'],
+        "commit_summaries": result['commit_summaries'],
+    })
+
+
+@app.post("/run-update")
+async def run_update():
+    # update.sh restarts folderw.service itself once it's done (see
+    # update.sh) -- if that ran synchronously inside this request
+    # handler, the restart would kill the very process handling this
+    # request before a response could ever be sent, and the browser
+    # would just see a dropped connection with no explanation. Launching
+    # it detached (own session, output to a log file — same pattern as
+    # /run-all-steps' no-systemd fallback below) lets this handler return
+    # immediately; the frontend polls until the dashboard comes back up
+    # on the other side of the restart.
+    update_script = os.path.join(BASE_DIR, "update.sh")
+    if not os.path.isfile(update_script):
+        return JSONResponse({"message": "update.sh not found -- is this a git checkout?"}, status_code=400)
+    log_dir = os.path.join(BASE_DIR, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    update_log = open(os.path.join(log_dir, "update.log"), "a")
+    try:
+        subprocess.Popen(
+            ["bash", update_script],
+            cwd=BASE_DIR,
+            stdout=update_log, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except OSError as e:
+        logger.error(f"Failed to launch update.sh: {e}")
+        return JSONResponse({"message": f"Failed to start the update: {e}"}, status_code=500)
+    logger.info("Update started via dashboard.")
+    return JSONResponse({"message": "Update started -- the dashboard will reload automatically once it's back."})
+
+
 @app.get("/run-all-steps", response_class=HTMLResponse)
 async def run_all_steps(request: Request, force_full: bool = False):
     logger.info(f"Response received from Front End for /run-all-steps (force_full={force_full})")
@@ -588,6 +696,7 @@ def _dashboard_settings_context():
         "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
         "backup_service_unit_exists": _backup_service_unit_exists(),
         "backup_service_active": _backup_service_is_active(),
+        **_cached_update_status(),
         **get_backup_stats_context(database),
     }
 

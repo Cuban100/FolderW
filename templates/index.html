@@ -125,6 +125,47 @@
         .stop-monitoring-button:hover {
             background-color: var(--error-bg);
         }
+        .update-banner {
+            background-color: var(--surface-alt);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin: 0 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .update-banner .update-summary {
+            color: var(--text);
+        }
+        .update-banner .update-commits {
+            font-size: 0.85em;
+            color: var(--text-muted);
+            margin-top: 6px;
+            font-family: monospace;
+        }
+        .update-banner .update-commits div {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .update-now-button {
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 24px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            white-space: nowrap;
+        }
+        .update-now-button:hover {
+            background-color: #1976d2;
+        }
         .stats-section {
             width: 100%;
             margin-top: 10px;
@@ -457,11 +498,23 @@
     {% include "_sidebar.html" %}
 
     <div class="content">
-       
+
+        <div class="update-banner" id="update-banner" style="display: {{ 'flex' if update_commits_behind else 'none' }};">
+            <div>
+                <div class="update-summary"><span class="highlight" id="update-summary-text">{{ update_commits_behind }} update{{ 's' if update_commits_behind != 1 else '' }} available</span></div>
+                <div class="update-commits" id="update-commits-list">
+                    {% for line in update_commit_summaries[:5] %}
+                    <div>{{ line }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <button class="update-now-button" onclick="runUpdate(event)">Update Now</button>
+        </div>
+
         <div class="section">
             <div class="message">
                 <!-- Success/Error Message Section -->
-                <div> 
+                <div>
                     {% if missing_settings %} 
                     <div class="message error">
                          Missing settings: {{ missing_settings|join(', ') }} </div>
@@ -815,6 +868,73 @@
             window.location.href = '/';
         }
 
+        // Runs once per page load -- refreshes the cached update-check
+        // result (shown instantly from the last check on initial render)
+        // in the background, so the banner doesn't need a live git fetch
+        // to block the page from loading at all. Silently gives up on
+        // failure (offline, etc.) and just leaves whatever was already
+        // rendered server-side.
+        async function checkForUpdates() {
+            try {
+                const response = await fetch('/check-for-updates');
+                const data = await response.json();
+                const banner = document.getElementById('update-banner');
+                const summaryText = document.getElementById('update-summary-text');
+                const commitsList = document.getElementById('update-commits-list');
+                if (!banner || !summaryText || !commitsList) return;
+                if (data.commits_behind > 0) {
+                    banner.style.display = 'flex';
+                    summaryText.textContent = data.commits_behind + (data.commits_behind === 1 ? ' update available' : ' updates available');
+                    commitsList.innerHTML = '';
+                    (data.commit_summaries || []).slice(0, 5).forEach(line => {
+                        const div = document.createElement('div');
+                        div.textContent = line;
+                        commitsList.appendChild(div);
+                    });
+                } else {
+                    banner.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error checking for updates:', error);
+            }
+        }
+
+        async function runUpdate(event) {
+            if (!confirm('Pull the latest code and restart FolderW? This can take a minute, and the dashboard will be briefly unreachable while it restarts.')) {
+                return;
+            }
+            const btn = event && event.target;
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Updating…';
+                btn.style.cursor = 'wait';
+            }
+            try {
+                const response = await fetch('/run-update', { method: 'POST' });
+                const data = await response.json();
+                if (btn) btn.textContent = data.message || 'Updating…';
+            } catch (error) {
+                console.error('Error starting update:', error);
+                if (btn) btn.textContent = 'Updating… (dashboard may already be restarting)';
+            }
+            // update.sh restarts the dashboard itself partway through, so
+            // this connection (and any request during the brief restart
+            // window) will drop -- poll until a request actually succeeds
+            // again, then do a real reload to pick up the new page/assets.
+            const poll = setInterval(async () => {
+                try {
+                    const response = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+                    if (response.ok) {
+                        clearInterval(poll);
+                        window.location.reload();
+                    }
+                } catch (error) {
+                    // Expected while the old process is stopping and the
+                    // new one hasn't bound the port yet -- keep polling.
+                }
+            }, 2000);
+        }
+
         function formatDuration(totalSeconds) {
             const h = Math.floor(totalSeconds / 3600);
             const m = Math.floor((totalSeconds % 3600) / 60);
@@ -932,6 +1052,8 @@
                 console.error('Backup status stream error:', error);
             };
         })();
+
+        checkForUpdates();
     </script>
 
 </body>
