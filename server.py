@@ -383,6 +383,28 @@ def get_backup_stats_context(database):
         "cpu_busiest_core": f"{max(per_core):.1f}%" if per_core else None,
         "ram_used": f"{mem.used / (1024**3):.2f} GB",
         "ram_total": f"{mem.total / (1024**3):.2f} GB",
+        **_watchdog_timing_context(),
+    }
+
+
+def _watchdog_timing_context():
+    # Raw epoch-seconds (or None), written by rsync_event_handler.py's
+    # BackupHandler as changes come in -- that state otherwise only
+    # ever existed in that separate process's own memory. Left as
+    # numbers rather than formatted here: the dashboard's countdown
+    # needs to keep ticking client-side between polls, not just show a
+    # value frozen at whatever it was on the last page load/poll.
+    def _epoch_or_none(key):
+        value = get_database_value(key, 'settings')
+        try:
+            return float(value) if value else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "watchdog_last_event_time": _epoch_or_none('WATCHDOG_LAST_EVENT_TIME'),
+        "watchdog_last_event_path": get_database_value('WATCHDOG_LAST_EVENT_PATH', 'settings') or None,
+        "watchdog_next_backup_time": _epoch_or_none('WATCHDOG_NEXT_BACKUP_TIME'),
     }
 
 
@@ -1396,6 +1418,16 @@ async def backup_history(request: Request, page: int = 1):
         "page": page,
         "total_pages": total_pages,
     })
+
+
+@app.get("/watchdog-status")
+async def watchdog_status():
+    # Deliberately separate from /dashboard-stats below, polled much
+    # more often (every few seconds, for a near-instant "change
+    # detected" + live countdown) -- this is just 3 cheap DB reads,
+    # unlike /dashboard-stats' snapshot-listing walk, so it's fine to
+    # poll far more frequently without adding real load.
+    return JSONResponse(_watchdog_timing_context())
 
 
 @app.get("/dashboard-stats")

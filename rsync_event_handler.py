@@ -3,7 +3,7 @@ import sys
 import time
 import fnmatch
 import threading
-from db_operations import load_env_value, load_other_variables
+from db_operations import load_env_value, load_other_variables, set_database_value
 from backup_hooks import run_backup_script_with_hooks
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -129,12 +129,19 @@ class BackupHandler(FileSystemEventHandler):
         self.first_pending_change = None
         self.lock = threading.Lock()
 
-    def _schedule_backup(self):
+    def _schedule_backup(self, event_path=None):
         run_now = False
         with self.lock:
             now = time.time()
             if self.first_pending_change is None:
                 self.first_pending_change = now
+            # Persisted so the dashboard (a separate process) can show a
+            # live "last change detected" + "backup in Xs" countdown --
+            # this handler's own state otherwise only ever existed in
+            # this process's memory, invisible from outside it.
+            set_database_value('WATCHDOG_LAST_EVENT_TIME', str(now))
+            if event_path is not None:
+                set_database_value('WATCHDOG_LAST_EVENT_PATH', event_path)
             if now - self.first_pending_change >= self.max_delay_seconds:
                 # Continuous activity has kept resetting the quiet-period
                 # timer past the ceiling -- run now instead of waiting for
@@ -149,6 +156,7 @@ class BackupHandler(FileSystemEventHandler):
                 self.timer = threading.Timer(self.delay_seconds, self._run_backup)
                 self.timer.daemon = True
                 self.timer.start()
+                set_database_value('WATCHDOG_NEXT_BACKUP_TIME', str(now + self.delay_seconds))
         # Run outside the lock: this blocks for the whole backup (a real
         # rsync run), and holding the lock through that would stall every
         # other file-event thread trying to record a change in the meantime.
@@ -158,13 +166,14 @@ class BackupHandler(FileSystemEventHandler):
     def _run_backup(self):
         with self.lock:
             self.first_pending_change = None
+        set_database_value('WATCHDOG_NEXT_BACKUP_TIME', '')
         logger.info(f"Running backup after {self.delay_seconds}s of inactivity (or {self.max_delay_seconds}s ceiling reached)")
         run_backup_script()
 
     def on_modified(self, event):
         if not event.is_directory and not self.should_ignore(event.src_path):
             logger.debug(f"File modified: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
-            self._schedule_backup()
+            self._schedule_backup(event.src_path)
 
     def on_created(self, event):
         # Directories ARE let through here (unlike on_modified below): a
@@ -175,7 +184,7 @@ class BackupHandler(FileSystemEventHandler):
         # directory events unconditionally.
         if not self.should_ignore(event.src_path):
             logger.debug(f"{'Directory' if event.is_directory else 'File'} created: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
-            self._schedule_backup()
+            self._schedule_backup(event.src_path)
 
     def on_deleted(self, event):
         # Same reasoning as on_created -- a whole folder being removed
@@ -184,7 +193,7 @@ class BackupHandler(FileSystemEventHandler):
         # for the files that were inside it if the folder itself is gone.
         if not self.should_ignore(event.src_path):
             logger.debug(f"{'Directory' if event.is_directory else 'File'} deleted: {event.src_path}, backup rescheduled for {self.delay_seconds}s from now")
-            self._schedule_backup()
+            self._schedule_backup(event.src_path)
 
     @staticmethod
     def _matches_any(patterns, rel_path, parts, basename):
@@ -254,6 +263,11 @@ def handle_shutdown_signal(signum, frame):
 
 if __name__ == "__main__":
     logger.info(f"Watching directory: {src_dir}")
+    # No pending timer yet in this fresh process -- clear any stale
+    # value a previous run might have left (e.g. killed mid-countdown),
+    # so the dashboard doesn't show a countdown to a time that will
+    # never actually fire.
+    set_database_value('WATCHDOG_NEXT_BACKUP_TIME', '')
 
     signal.signal(signal.SIGTERM, handle_shutdown_signal)
     signal.signal(signal.SIGINT, handle_shutdown_signal)
