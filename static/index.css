@@ -203,7 +203,19 @@ html.sidebar-collapsed .content {
 
 /* [?] help popover -- click to reveal a short explanation, click
    elsewhere to dismiss. Shared by Settings' form fields and the
-   sidebar controls below the nav links. */
+   sidebar controls below the nav links.
+
+   .hidden defined explicitly here rather than relying on Tailwind's
+   own utility class of the same name -- Settings/Restore/etc. load
+   Tailwind's CDN script (which provides it), but index.html doesn't.
+   Confirmed live: on index.html specifically, the popovers had no
+   "hidden" rule to apply at all, so every explanation rendered
+   permanently expanded inline instead of staying collapsed behind the
+   [?] button. Harmless to also have this on pages that DO load
+   Tailwind -- identical rule, not a conflict. */
+.hidden {
+    display: none;
+}
 .help-icon {
     display: inline-flex;
     align-items: center;
