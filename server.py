@@ -44,6 +44,18 @@ def _json_for_script(data):
 # templates/static still load correctly no matter where server.py is launched from
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Ensures every table (including ones added by an update after this
+# install's database was first created) actually exists on every
+# startup -- CREATE TABLE IF NOT EXISTS is always safe/idempotent, so
+# this can't disturb existing data. Without this, a newly added table
+# only ever reached an existing install the next time Settings happened
+# to be re-saved (the only other call site) -- not guaranteed to ever
+# happen again after initial setup. Found live: restore_runs existed in
+# code but not in this install's actual database until this was added.
+_database = load_env_value('DATABASE')
+if _database:
+    create_all_tables(_database)
+
 # Initialize Jinja2 templates
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 logo = '/static/logo.png'
