@@ -20,6 +20,7 @@ import shutil
 logfile = load_other_variables('logfile')
 base_dir = load_env_value('BASE_DIR')
 exclude_file = load_other_variables('exclude_file')
+custom_exclude_file = load_other_variables('custom_exclude_file')
 src_dir = load_env_value('SRC_DIR')
 full_backup = load_other_variables('full_backup')
 snapshots_root = load_other_variables('snapshots_root')
@@ -499,7 +500,7 @@ def rsync(destination, link_dest=None, compare_dest=None, result_holder=None):
     # place -- an unchanged directory is never created at all.
     files_from_path = None
     if compare_dest:
-        dry_run_command = ["sudo", "-n", "rsync", "-n", "-r", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}', f'--compare-dest={compare_dest}', src_dir_contents, destination]
+        dry_run_command = ["sudo", "-n", "rsync", "-n", "-r", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}', f'--exclude-from={custom_exclude_file}', f'--compare-dest={compare_dest}', src_dir_contents, destination]
         logger.warning(f"Executing differential dry-run comparison {dry_run_command}")
         try:
             dry_run = subprocess.run(dry_run_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -539,7 +540,7 @@ def rsync(destination, link_dest=None, compare_dest=None, result_holder=None):
     # source's own mode. Both apply after -a's normal owner/group/perms
     # handling, overriding just those, not the rest of -a (mtimes,
     # symlinks, recursion, etc.).
-    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--info=progress2", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}', f'--chown={OWNER_USER}:{OWNER_GROUP}', '--chmod=775']
+    rsync_command = ["sudo", "-n", "rsync", "-avv", "--sparse", "--info=progress2", "--out-format=CHANGED:%n", f'--exclude-from={exclude_file}', f'--exclude-from={custom_exclude_file}', f'--chown={OWNER_USER}:{OWNER_GROUP}', '--chmod=775']
     if link_dest:
         rsync_command += ['--delete', '--delete-excluded', f'--link-dest={link_dest}']
     elif files_from_path:
@@ -681,7 +682,7 @@ def _run_initial_full_backup_if_needed():
     baselines = {'source_total': None, 'last_transferred': 0}
 
     def _compute_source_total():
-        baselines['source_total'] = get_folder_size_bytes_du(src_dir, exclude_from=exclude_file)
+        baselines['source_total'] = get_folder_size_bytes_du(src_dir, exclude_from=[exclude_file, custom_exclude_file])
         logger.info(f"Source total size: {baselines['source_total']}")
         if baselines['source_total'] is not None:
             set_database_value('LAST_SRC_SIZE', human_readable_size(baselines['source_total']))
@@ -845,7 +846,7 @@ if __name__ == "__main__":
         # it, anything excluded (e.g. Docker Desktop's sparse, ~1TB-apparent
         # VM disk) inflates this denominator far past what will ever really
         # be transferred, understating percent for the whole run.
-        baselines['source_total'] = get_folder_size_bytes_du(src_dir, exclude_from=exclude_file)
+        baselines['source_total'] = get_folder_size_bytes_du(src_dir, exclude_from=[exclude_file, custom_exclude_file])
         logger.info(f"Source total size: {baselines['source_total']}")
         if baselines['source_total'] is not None:
             # Keeps the dashboard's "Source Folder Size" stat in sync with

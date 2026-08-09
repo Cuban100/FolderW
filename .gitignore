@@ -6,6 +6,7 @@ logs/rsync.log
 logs/rsync.txt
 logs/server.log
 logs/main_backup.log
+logs/custom_exclude.txt
 pyvenv.cfg
 venv/
 .venv/

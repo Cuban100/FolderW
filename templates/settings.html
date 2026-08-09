@@ -126,6 +126,11 @@
                                     Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together. Switching between the two starts a new full backup, so snapshots never end up mixing both shapes in the same Snapshots folder.
                                 </div>
                             </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <label for="file_exclusions" class="text-[var(--text)] font-medium">File Exclusions:</label>
+                                <input type="text" id="file_exclusions" name="file_exclusions" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ file_exclusions or '' }}" placeholder="Leave blank to exclude nothing extra">
+                                <div class="text-sm text-[var(--text-muted)] mt-1">Comma-separated file/folder names or patterns to skip during backup (e.g. <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">node_modules, *.tmp, cache</code>). Uses the same glob syntax as rsync's own exclude file. Leave blank to exclude nothing beyond FolderW's own built-in exclusions.</div>
+                            </div>
                         </div>
 
                         <div class="rounded-lg border-2 border-[var(--border)] p-5 space-y-6">

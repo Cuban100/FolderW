@@ -699,6 +699,25 @@ async def restore_compile(request: Request):
     })
 
 
+def _read_file_exclusions():
+    # logs/custom_exclude.txt is the source of truth (one pattern per
+    # line, same convention as the developer-curated logs/rsync_exclude.txt
+    # it sits alongside) -- re-joined with ", " here only for display in
+    # the Settings form field.
+    path = load_other_variables('custom_exclude_file')
+    with open(path, 'r') as f:
+        return ', '.join(line.strip() for line in f if line.strip())
+
+
+def _write_file_exclusions(raw):
+    patterns = [p.strip() for p in raw.split(',') if p.strip()]
+    path = load_other_variables('custom_exclude_file')
+    with open(path, 'w') as f:
+        for pattern in patterns:
+            f.write(pattern + '\n')
+    return patterns
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     logfile = load_other_variables('logfile')
@@ -718,6 +737,7 @@ async def settings_page(request: Request):
         "notify_urls": load_env_value('NOTIFY_URLS'),
         "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
         "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+        "file_exclusions": _read_file_exclusions(),
     })
 
 
@@ -825,6 +845,7 @@ async def submit_settings(
     notify_urls: str = Form(""),
     notify_send_always: str = Form(None),
     backup_method: str = Form("differential"),
+    file_exclusions: str = Form(""),
 ):
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
@@ -838,11 +859,16 @@ async def submit_settings(
     # leave a mix of both snapshot shapes under the same Snapshots
     # folder, which cleanup_old_snapshots()/list_backups() don't
     # distinguish between.
+    # file_exclusions (what actually gets copied) is included here for the
+    # same reason as BACKUP_METHOD: changing it means the "backup" a
+    # snapshot represents is no longer the same set of files, so old
+    # history/validation results shouldn't carry over silently.
     old_identity = (
         load_env_value('SRC_DIR'),
         load_env_value('BASE_DIR'),
         load_env_value('FULL_NAME'),
         load_env_value('BACKUP_METHOD'),
+        _read_file_exclusions(),
     )
 
     def _settings_error(error, max_snapshots_value):
@@ -863,6 +889,7 @@ async def submit_settings(
             "notify_urls": load_env_value('NOTIFY_URLS'),
             "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+            "file_exclusions": file_exclusions,
         })
 
     max_snapshots = max_snapshots.strip()
@@ -948,14 +975,16 @@ async def submit_settings(
             "notify_urls": load_env_value('NOTIFY_URLS'),
             "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+            "file_exclusions": file_exclusions,
         })
 
     save_env_values(new_values)
+    saved_file_exclusions = _write_file_exclusions(file_exclusions)
 
     if new_values["DATABASE"]:
         create_all_tables(new_values["DATABASE"])
 
-        new_identity = (new_values["SRC_DIR"], new_values["BASE_DIR"], new_values["FULL_NAME"], new_values["BACKUP_METHOD"])
+        new_identity = (new_values["SRC_DIR"], new_values["BASE_DIR"], new_values["FULL_NAME"], new_values["BACKUP_METHOD"], ', '.join(saved_file_exclusions))
         if new_identity != old_identity:
             # Pointed FolderW at a different backup (source, destination, or
             # container folder) — old session/change/statistics history
@@ -992,6 +1021,7 @@ async def submit_settings(
         "notify_urls": new_values["NOTIFY_URLS"],
         "notify_send_always": new_values["NOTIFY_SEND_ALWAYS"] == "1",
         "backup_method": new_values["BACKUP_METHOD"],
+        "file_exclusions": ', '.join(saved_file_exclusions),
     })
 
 

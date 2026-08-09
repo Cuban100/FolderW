@@ -55,7 +55,7 @@ def _load_exclude_patterns():
     # the watchdog that triggers it — otherwise every write inside an
     # excluded directory (e.g. a busy browser cache) would still reset the
     # debounce timer for no reason, delaying real backups indefinitely.
-    return _load_patterns(load_other_variables('exclude_file'))
+    return _load_patterns(load_other_variables('exclude_file')) + _load_patterns(load_other_variables('custom_exclude_file'))
 
 EXCLUDE_PATTERNS = _load_exclude_patterns()
 

@@ -54,6 +54,7 @@ full_backup = load_other_variables('full_backup')
 snapshots_root = load_other_variables('snapshots_root')
 rsync_txt = load_other_variables('rsync_txt')
 exclude_file = load_other_variables('exclude_file')
+custom_exclude_file = load_other_variables('custom_exclude_file')
 database = load_env_value('DATABASE')
 
 
@@ -84,7 +85,7 @@ if __name__ == "__main__":
     baselines = {'source_total': None, 'last_transferred': 0}
 
     def _compute_source_total():
-        baselines['source_total'] = get_folder_size_bytes_du(src_dir, exclude_from=exclude_file)
+        baselines['source_total'] = get_folder_size_bytes_du(src_dir, exclude_from=[exclude_file, custom_exclude_file])
         logger.info(f"Source total size: {baselines['source_total']}")
         if baselines['source_total'] is not None:
             set_database_value('LAST_SRC_SIZE', human_readable_size(baselines['source_total']))
