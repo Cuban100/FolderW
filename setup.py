@@ -89,10 +89,33 @@ SERVICE_NAME = "folderw.service"
 BACKUP_SERVICE_NAME = "folderw-backup.service"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def configure_systemd_autostart(enable):
+def configure_systemd_autostart(enable, mount_point=None):
     service_dir = os.path.join(os.path.expanduser("~"), ".config", "systemd", "user")
     service_path = os.path.join(service_dir, SERVICE_NAME)
     backup_service_path = os.path.join(service_dir, BACKUP_SERVICE_NAME)
+
+    # Runs before ExecStart on every start (not just at boot -- cheap,
+    # idempotent, and correct regardless of whether this particular
+    # start actually needed it). Confirmed live, more than once: a
+    # mount holding BASE_DIR (typically an external/USB-labeled drive)
+    # can come up noexec at boot despite fstab saying exec -- something
+    # in this machine's desktop mount stack doesn't reliably honor it,
+    # even after also adding a udisks2 mount_options.conf override.
+    # noexec breaks a Python venv's compiled .so files outright
+    # (ImportError: failed to map segment from shared object),
+    # crash-looping this very service. Rather than keep chasing the
+    # exact upstream cause, defend against the symptom that actually
+    # matters: this service simply cannot start correctly on a noexec
+    # BASE_DIR, so make sure it isn't, every time, before trying.
+    # Leading "-": don't fail the whole unit start if this specific
+    # command fails for some unrelated reason (mount_exec_sudo wasn't
+    # configured, the drive isn't mounted yet despite nofail, etc.) --
+    # same convention already used for ExecStopPost below.
+    exec_start_pre = ""
+    if mount_point:
+        sudo_path = shutil.which("sudo") or "/usr/bin/sudo"
+        mount_path = shutil.which("mount") or "/usr/bin/mount"
+        exec_start_pre = f"ExecStartPre=-{sudo_path} -n {mount_path} -o remount,exec {mount_point}\n"
 
     if enable:
         print(f"Configuring systemd to start FolderW at boot ({service_path})")
@@ -111,6 +134,7 @@ def configure_systemd_autostart(enable):
             "[Service]\n"
             "Type=simple\n"
             f"WorkingDirectory={APP_DIR}\n"
+            f"{exec_start_pre}"
             f"ExecStart={sys.executable} {os.path.join(APP_DIR, 'server.py')}\n"
             "Restart=on-failure\n"
             "RestartSec=5\n\n"
@@ -127,6 +151,7 @@ def configure_systemd_autostart(enable):
             "[Service]\n"
             "Type=simple\n"
             f"WorkingDirectory={APP_DIR}\n"
+            f"{exec_start_pre}"
             f"ExecStart={sys.executable} {os.path.join(APP_DIR, 'main_backup.py')}\n"
             "Restart=on-failure\n"
             "RestartSec=10\n"
@@ -263,6 +288,80 @@ def configure_rsync_sudo():
     except FileNotFoundError as e:
         print(f"sudo/visudo not found ({e}) -- skipping rsync sudo setup. Backups will still "
               f"work, just skipping any file they don't have permission to read. {manual_hint}")
+
+MOUNT_SUDOERS_DROPIN = "/etc/sudoers.d/folderw-mount-exec"
+
+def configure_mount_exec_sudo(base_dir):
+    """Grants NOPASSWD sudo for remounting BASE_DIR's filesystem exec,
+    and returns the resolved mount point for configure_systemd_
+    autostart()'s ExecStartPre -- or None if BASE_DIR is on the root
+    filesystem (always exec already; no separate mount to defend, and
+    remounting / is a much bigger blast radius for no benefit) or if
+    the mount point couldn't be determined at all.
+
+    See configure_systemd_autostart()'s own comment for why this
+    exists: confirmed live, more than once, that a drive's fstab entry
+    saying exec isn't reliably honored by the actual mount active at
+    boot on every machine.
+    """
+    mount_check = subprocess.run(
+        ["findmnt", "-n", "-o", "TARGET", "--target", base_dir],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    if mount_check.returncode != 0 or not mount_check.stdout.strip():
+        return None
+    mount_point = mount_check.stdout.strip()
+    if mount_point == "/":
+        return None
+
+    mount_path = shutil.which("mount") or "/usr/bin/mount"
+    username = os.environ.get("SUDO_USER") or os.environ.get("USER") or os.environ.get("LOGNAME")
+    remount_args = ["-o", "remount,exec", mount_point]
+    manual_hint = (f"To let FolderW self-heal a noexec {mount_point} at boot, add manually: "
+                    f"echo '<username> ALL=(root) NOPASSWD: {mount_path} -o remount,exec {mount_point}' "
+                    f"| sudo tee {MOUNT_SUDOERS_DROPIN} && sudo chmod 0440 {MOUNT_SUDOERS_DROPIN}")
+    if not username:
+        print(f"Could not determine the current username -- skipping mount-exec sudo setup. {manual_hint}")
+        return mount_point
+
+    try:
+        # Exact args, not just the bare binary (unlike configure_rsync_
+        # sudo()'s check): the rule being granted below is scoped to
+        # this exact command line, not the binary in general, so
+        # checking with the same exact args is what correctly detects
+        # whether it's already covered.
+        check = subprocess.run(["sudo", "-n", "-l", mount_path, *remount_args], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if check.returncode == 0:
+            print(f"Remounting {mount_point} exec can already run passwordlessly under sudo -- nothing to configure.")
+            return mount_point
+
+        print(f"Configuring passwordless sudo to remount {mount_point} exec at startup (works around "
+              f"this machine's mount not always honoring fstab's exec option) -- you may be prompted for your password.")
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile("w", delete=False, suffix=".folderw-sudoers") as tmp:
+                tmp.write(f"{username} ALL=(root) NOPASSWD: {mount_path} -o remount,exec {mount_point}\n")
+                tmp_path = tmp.name
+
+            validate = subprocess.run(["visudo", "-c", "-f", tmp_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if validate.returncode != 0:
+                print(f"Generated sudoers rule failed validation, skipping: {validate.stderr}")
+                return mount_point
+
+            install = subprocess.run(
+                ["sudo", "install", "-m", "0440", "-o", "root", "-g", "root", tmp_path, MOUNT_SUDOERS_DROPIN],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            if install.returncode != 0:
+                print(f"Could not configure mount-exec sudo: {install.stderr.strip()}. {manual_hint}")
+                return mount_point
+            print(f"Configured passwordless sudo to remount {mount_point} exec.")
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    except FileNotFoundError as e:
+        print(f"sudo/visudo not found ({e}) -- skipping mount-exec sudo setup. {manual_hint}")
+    return mount_point
 
 def browse_directory(entry):
     directory = filedialog.askdirectory()
@@ -419,7 +518,8 @@ def save_paths():
 
     upgrade_packages()
 
-    configure_systemd_autostart(autostart_var.get() == 1)
+    mount_point = configure_mount_exec_sudo(paths['BASE_DIR'])
+    configure_systemd_autostart(autostart_var.get() == 1, mount_point)
     configure_rsync_sudo()
 
     # start_new_session detaches server.py from this terminal's session, so
