@@ -2,7 +2,9 @@
 
 ## Updating
 
-Already have FolderW installed and just want the latest version? Run `update.sh` from inside your existing installation folder:
+The dashboard checks `origin/main` for new commits automatically (cached, refreshed once per page load — never blocks the page waiting on a live git call) and shows a banner with what's new when your install is behind. Click **Update Now** to pull, update dependencies, and restart, all from the browser — no terminal needed. The dashboard will be briefly unreachable while it restarts itself; the page polls automatically and reloads once it's back.
+
+Prefer the terminal, or don't have an internet-facing dashboard? Run `update.sh` from inside your existing installation folder:
 
 ```bash
 cd FolderW

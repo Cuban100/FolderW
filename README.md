@@ -25,6 +25,7 @@
 12. **Merged Snapshots:** "Compile Latest Snapshot" combines every existing snapshot's latest-per-path files into one new, independently restorable snapshot.
 13. **Backup Hooks:** Optional pre-backup and post-backup scripts, run around every backup — each with a "Test Script" button on its own dashboard page to verify it before trusting it to run for real.
 14. **File Exclusions:** Comma-separated patterns to skip during backup, set on the Settings page. Nothing is excluded unless you say so — no hidden defaults.
+15. **One-Click Update:** The dashboard detects when there are new commits upstream and shows what changed — click Update Now to pull, update dependencies, and restart, no terminal needed. See [Operations](docs/operations.md#updating).
 
 ## Quick Start
 
