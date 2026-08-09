@@ -151,37 +151,20 @@ html.sidebar-collapsed .content {
     gap: 4px;
     font-size: 0.9em;
 }
-.sidebar-control-label {
+.sidebar-action-btn {
     flex: 1 1 auto;
-}
-.sidebar-stop-btn, .sidebar-start-btn {
-    width: 100%;
     text-align: center;
     padding: 7px 12px;
     border-radius: 8px;
     font-size: 0.85em;
     cursor: pointer;
+    background-color: #27ae60;
+    border: none;
+    color: white;
     transition: background-color 0.3s;
 }
-/* Red = "this is currently on, click to stop it"; green = "this is
-   currently off, click to start it" -- same red/green as the status
-   dot right next to each button, so the whole row reads as one state
-   at a glance instead of just being a generic action button. */
-.sidebar-stop-btn {
-    background: none;
-    border: 1px solid #e57373;
-    color: #e57373;
-}
-.sidebar-stop-btn:hover {
-    background-color: rgba(229, 115, 115, 0.15);
-}
-.sidebar-start-btn {
-    background: none;
-    border: 1px solid #27ae60;
-    color: #27ae60;
-}
-.sidebar-start-btn:hover {
-    background-color: rgba(39, 174, 96, 0.15);
+.sidebar-action-btn:hover {
+    background-color: #1e8449;
 }
 
 /* Small colored status indicator -- also used by index.html's own

@@ -56,6 +56,23 @@ _database = load_env_value('DATABASE')
 if _database:
     create_all_tables(_database)
 
+# Cache-busting query param for /static/index.css and /static/sidebar.js
+# -- both are shared across every page and have been edited repeatedly
+# this session, and the <link>/<script> tags referencing them have no
+# versioning at all, so a browser that already cached the old file
+# keeps serving it indefinitely (no revalidation trigger) even after a
+# deploy. Confirmed live: the same sidebar controls rendered fully
+# styled on one page and completely unstyled on another, because
+# different tabs/pages had cached different versions of index.css.
+# max() of both files' mtimes so it bumps whenever either one changes,
+# computed once at process start (an actual code change always
+# restarts this process anyway -- see deploy workflow/update.sh).
+STATIC_VERSION = int(max(
+    os.path.getmtime(os.path.join(BASE_DIR, "static", "index.css")),
+    os.path.getmtime(os.path.join(BASE_DIR, "static", "sidebar.js")),
+))
+
+
 def _sidebar_context(request):
     """Starlette context processor -- runs for EVERY TemplateResponse
     across the whole app (see context_processors= below), not just
@@ -79,6 +96,7 @@ def _sidebar_context(request):
         "watchdog_active": is_watchdog_active(),
         "backup_service_unit_exists": _backup_service_unit_exists(),
         "backup_service_active": _backup_service_is_active(),
+        "static_version": STATIC_VERSION,
     }
 
 
