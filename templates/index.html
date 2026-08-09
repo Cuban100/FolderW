@@ -634,23 +634,23 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Destination Total</div>
-                        <div class="stat-value">{{ dest_total if dest_total else 'Not Available' }}</div>
+                        <div class="stat-value" id="dest-total-value">{{ dest_total if dest_total else 'Not Available' }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Destination Used</div>
-                        <div class="stat-value">{{ dest_used if dest_used else 'Not Available' }}</div>
+                        <div class="stat-value" id="dest-used-value">{{ dest_used if dest_used else 'Not Available' }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Last Backup Session</div>
-                        <div class="stat-value">#{{ last_session if last_session is defined else 0 }}</div>
+                        <div class="stat-value" id="last-session-value">#{{ last_session if last_session is defined else 0 }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Files Changed (Last Session)</div>
-                        <div class="stat-value">{{ last_session_files if last_session_files is defined else 0 }}</div>
+                        <div class="stat-value" id="last-session-files-value">{{ last_session_files if last_session_files is defined else 0 }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Snapshots on Disk</div>
-                        <div class="stat-value">{{ snapshot_count if snapshot_count is defined else 0 }}</div>
+                        <div class="stat-value" id="snapshot-count-value">{{ snapshot_count if snapshot_count is defined else 0 }}</div>
                     </div>
                     {% if monitor == '1' %}
                     <div class="stat-card">
@@ -858,6 +858,35 @@
             }
         }
 
+        // The Backup Statistics numbers were otherwise only ever set at
+        // page render time -- a scheduled or watchdog-triggered backup
+        // running in the background (i.e. not the "Backup in progress"
+        // state pollBackupStatus() below already handles live) left an
+        // already-open dashboard showing stale numbers indefinitely,
+        // with zero visible sign anything had happened until a manual
+        // reload. Polled on an interval regardless of whether a backup
+        // looks active, so it stays current either way.
+        function setStatIfPresent(id, value, fallback) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = (value === null || value === undefined || value === '') ? fallback : value;
+        }
+
+        async function refreshDashboardStats() {
+            try {
+                const response = await fetch('/dashboard-stats');
+                const data = await response.json();
+                setStatIfPresent('source-folder-size-value', data.src_size, 'Not Available');
+                setStatIfPresent('current-backup-size-value', data.current_backup_size, 'Not Available');
+                setStatIfPresent('dest-total-value', data.dest_total, 'Not Available');
+                setStatIfPresent('dest-used-value', data.dest_used, 'Not Available');
+                setStatIfPresent('last-session-value', '#' + data.last_session, '#0');
+                setStatIfPresent('last-session-files-value', data.last_session_files, '0');
+                setStatIfPresent('snapshot-count-value', data.snapshot_count, '0');
+            } catch (error) {
+                console.error('Error refreshing dashboard stats:', error);
+            }
+        }
+
         async function runUpdate(event) {
             if (!confirm('Pull the latest code and restart FolderW? This can take a minute, and the dashboard will be briefly unreachable while it restarts.')) {
                 return;
@@ -1020,6 +1049,11 @@
         })();
 
         checkForUpdates();
+
+        // 30s: frequent enough that a background backup's effect on the
+        // numbers shows up promptly, cheap enough not to matter (a few
+        // DB reads, no disk scans) -- see /dashboard-stats.
+        setInterval(refreshDashboardStats, 30000);
     </script>
 
 </body>

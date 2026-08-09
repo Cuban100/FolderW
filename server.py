@@ -1398,6 +1398,32 @@ async def backup_history(request: Request, page: int = 1):
     })
 
 
+@app.get("/dashboard-stats")
+async def dashboard_stats():
+    # Lightweight JSON refresh for the dashboard's Backup Statistics
+    # grid -- those values are otherwise only ever computed at page
+    # render time, so a backup that runs in the background (scheduled,
+    # or watchdog-triggered) left the numbers on an already-open
+    # dashboard silently stale until a manual reload. Polled
+    # periodically from index.html; deliberately excludes the CPU/RAM
+    # System cards and the sidebar's watchdog/service status, which
+    # have their own reasons not to need this (System is polled by the
+    # existing SSE stream while a backup is active; the sidebar's
+    # status is cheap enough to just come from the context processor on
+    # every navigation).
+    database = load_env_value('DATABASE')
+    stats = get_backup_stats_context(database)
+    return JSONResponse({
+        "src_size": get_database_value('LAST_SRC_SIZE', 'settings') or None,
+        "current_backup_size": stats["current_backup_size"],
+        "dest_total": stats["dest_total"],
+        "dest_used": stats["dest_used"],
+        "last_session": stats["last_session"],
+        "last_session_files": stats["last_session_files"],
+        "snapshot_count": stats["snapshot_count"],
+    })
+
+
 @app.get("/recovery-history", response_class=HTMLResponse)
 async def recovery_history(request: Request, page: int = 1):
     total = count_restore_runs()
