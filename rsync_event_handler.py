@@ -30,24 +30,22 @@ def _load_monitoring_delay_seconds():
         return 120
 
 # How long to wait after the *last* detected change before actually running
-# a backup. Resets on every new event, so a burst of saves/writes collapses
-# into a single backup once things go quiet, instead of firing repeatedly.
-BACKUP_DELAY_SECONDS = _load_monitoring_delay_seconds()
-
-# Ceiling on how long a backup can be postponed by continuous activity.
-# The resetting debounce above has no upper bound on its own -- on a live
-# desktop, *something* inside the source tree (Docker container logs,
-# browser cookie/webstorage journals, app logs) is essentially always
-# being written, so a pure "wait for quiet" timer can end up never firing
-# at all. Found live: watched a real run go 45+ minutes without a single
-# incremental backup despite constant activity, because the quiet window
-# was never actually reached. This forces one through regardless of
-# ongoing changes once too much time has passed since the first unflushed
-# one. Deliberately kept equal to BACKUP_DELAY_SECONDS (the same
-# configured value, not a separate setting): a backup always runs
-# within that many seconds of the first pending change, whether things
-# go quiet by then or not.
-MAX_BACKUP_DELAY_SECONDS = BACKUP_DELAY_SECONDS
+# a backup, and also the ceiling on how long a backup can be postponed by
+# continuous activity (the resetting debounce above has no upper bound on
+# its own -- on a live desktop, *something* inside the source tree (Docker
+# container logs, browser cookie/webstorage journals, app logs) is
+# essentially always being written, so a pure "wait for quiet" timer can
+# end up never firing at all -- found live: watched a real run go 45+
+# minutes without a single incremental backup despite constant activity).
+# Deliberately the same configured value for both, not two separate
+# settings: a backup always runs within this many seconds of the first
+# pending change, whether things go quiet by then or not.
+#
+# Read live via BackupHandler.delay_seconds/max_delay_seconds (properties,
+# below) rather than cached once at import time -- this process runs for
+# as long as the watchdog is active (hours/days), and a value frozen at
+# startup meant the Settings page's Watchdog Delay slider silently had no
+# effect on an already-running watchdog until the service was restarted.
 
 rsync_txt = load_other_variables('rsync_txt')
 logfile = load_other_variables('logfile')
@@ -89,7 +87,7 @@ EXCLUDE_PATTERNS = _load_exclude_patterns()
 # rewritten by a long-running host/container service regardless of real
 # user activity (confirmed, not guessed -- see the file's own header) --
 # without this, that alone is enough to keep the watchdog's ceiling
-# (MAX_BACKUP_DELAY_SECONDS, above) firing around the clock.
+# (BackupHandler.max_delay_seconds, above) firing around the clock.
 TRIGGER_EXEMPT_PATTERNS = _load_patterns(load_other_variables('trigger_exempt_file'))
 
 def run_backup_script():
@@ -122,15 +120,28 @@ def run_weekly_backup():
     run_backup_script()
 
 class BackupHandler(FileSystemEventHandler):
-    def __init__(self, delay_seconds=BACKUP_DELAY_SECONDS, max_delay_seconds=MAX_BACKUP_DELAY_SECONDS):
-        self.delay_seconds = delay_seconds
-        self.max_delay_seconds = max_delay_seconds
+    def __init__(self):
         self.timer = None
         self.first_pending_change = None
         self.lock = threading.Lock()
 
+    @property
+    def delay_seconds(self):
+        # Re-read live (see module comment above) so a Watchdog Delay
+        # change on the Settings page takes effect on the very next
+        # event, without needing to restart the watchdog process.
+        return _load_monitoring_delay_seconds()
+
+    @property
+    def max_delay_seconds(self):
+        return self.delay_seconds
+
     def _schedule_backup(self, event_path=None):
         run_now = False
+        # Read once per call, not once per use below -- delay_seconds is a
+        # live property (re-parses .env), and this can fire dozens of
+        # times a second during a burst of events.
+        delay_seconds = self.delay_seconds
         with self.lock:
             now = time.time()
             if self.first_pending_change is None:
@@ -142,7 +153,7 @@ class BackupHandler(FileSystemEventHandler):
             set_database_value('WATCHDOG_LAST_EVENT_TIME', str(now))
             if event_path is not None:
                 set_database_value('WATCHDOG_LAST_EVENT_PATH', event_path)
-            if now - self.first_pending_change >= self.max_delay_seconds:
+            if now - self.first_pending_change >= delay_seconds:
                 # Continuous activity has kept resetting the quiet-period
                 # timer past the ceiling -- run now instead of waiting for
                 # a lull that may never come.
@@ -153,10 +164,10 @@ class BackupHandler(FileSystemEventHandler):
             else:
                 if self.timer is not None:
                     self.timer.cancel()
-                self.timer = threading.Timer(self.delay_seconds, self._run_backup)
+                self.timer = threading.Timer(delay_seconds, self._run_backup)
                 self.timer.daemon = True
                 self.timer.start()
-                set_database_value('WATCHDOG_NEXT_BACKUP_TIME', str(now + self.delay_seconds))
+                set_database_value('WATCHDOG_NEXT_BACKUP_TIME', str(now + delay_seconds))
         # Run outside the lock: this blocks for the whole backup (a real
         # rsync run), and holding the lock through that would stall every
         # other file-event thread trying to record a change in the meantime.
