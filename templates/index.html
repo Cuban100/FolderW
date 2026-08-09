@@ -944,7 +944,7 @@
             try {
                 const response = await fetch('/watchdog-status');
                 const data = await response.json();
-                if (data.last_event_time && data.last_event_time !== watchdogLastEventTime) {
+                if (data.watchdog_last_event_time && data.watchdog_last_event_time !== watchdogLastEventTime) {
                     // New event since the last check -- brief pulse so
                     // "instant detection" is actually visible, not just
                     // inferred from the countdown appearing.
@@ -952,8 +952,8 @@
                     void dot.offsetWidth; // restart the CSS animation
                     dot.classList.add('pulse');
                 }
-                watchdogLastEventTime = data.last_event_time;
-                watchdogNextBackupTime = data.next_backup_time;
+                watchdogLastEventTime = data.watchdog_last_event_time;
+                watchdogNextBackupTime = data.watchdog_next_backup_time;
                 updateWatchdogDisplay();
             } catch (error) {
                 console.error('Error refreshing watchdog status:', error);
