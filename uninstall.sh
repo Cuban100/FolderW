@@ -42,6 +42,7 @@ log "Stopping systemd services..."
 systemctl --user stop "$BACKUP_SERVICE_NAME" 2>/dev/null
 systemctl --user stop "$SERVICE_NAME" 2>/dev/null
 systemctl --user disable "$SERVICE_NAME" 2>/dev/null
+systemctl --user disable "$BACKUP_SERVICE_NAME" 2>/dev/null
 
 log "Killing any lingering FolderW processes (systemd-tracked or orphaned)..."
 # Orphaned processes (started outside systemd — it happens) never respond

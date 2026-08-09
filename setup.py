@@ -239,7 +239,19 @@ def configure_rsync_sudo():
     working around permission walls on machines that happen to already
     have broad passwordless sudo configured for unrelated reasons.
     """
-    rsync_path = shutil.which("rsync") or "/usr/bin/rsync"
+    rsync_path = shutil.which("rsync")
+    if not rsync_path:
+        # install.sh checks for/installs rsync before this ever runs, but
+        # setup.py can also be run standalone (venv already created by
+        # hand, re-running just the wizard, etc.) -- without this, the
+        # fallback below used to silently write a sudoers rule for a
+        # binary that might not exist, with no indication rsync itself
+        # was the actual problem. Every real backup would still fail
+        # later regardless of what this function does, so surface it now.
+        print("WARNING: rsync was not found on this system -- FolderW's backups will not work "
+              "until it's installed (e.g. 'sudo apt install rsync', or the equivalent for your "
+              "distro). Skipping rsync sudo setup for now; re-run setup.py after installing it.")
+        return
     username = os.environ.get("SUDO_USER") or os.environ.get("USER") or os.environ.get("LOGNAME")
     manual_hint = (f"To let backups read files owned by another user, add manually: "
                     f"echo '<username> ALL=(root) NOPASSWD: {rsync_path}' | sudo tee {RSYNC_SUDOERS_DROPIN} "

@@ -3,7 +3,7 @@
 <p align="center">A Python incremental/differential backup tool for Linux — Tkinter setup GUI, a web dashboard, and event-driven (watchdog) or scheduled backups via <code>rsync</code>.</p>
 <p align="center"><em>The name: <strong>Folder</strong> + <strong>W</strong>atchdog — the "W" is for the watchdog that watches your source folder for changes.</em></p>
 
-> **Platform support:** FolderW currently works on **Linux only**. It relies on `rsync` and other Linux-specific tooling, and hasn't been tested on macOS or Windows.
+> **Platform support:** FolderW currently works on **Linux only**. It relies on `rsync` and other Linux-specific tooling, and hasn't been tested on macOS or Windows. `install.sh` checks for `rsync` and `tkinter` and installs them automatically if missing (apt/dnf/yum/pacman/zypper/apk supported) — no manual prerequisite install needed.
 
 > **Source scope:** For now, `SRC_DIR` must be a local path — either on the machine's internal drive or an external/USB drive, as long as it's already mounted before FolderW starts. Network shares and remote/cloud sources aren't currently supported.
 
