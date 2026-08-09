@@ -177,70 +177,6 @@
 
                     <form method="post" action="/submit/" class="space-y-4" autocomplete="off">
 
-                        <div class="rounded-lg border-2 border-[var(--error-text)] p-5 space-y-4">
-                            <div>
-                                <h2 class="text-lg font-semibold text-[var(--error-text)]">Changing these starts a new full backup</h2>
-                                <p class="text-sm text-[var(--text-muted)] mt-1">These identify which backup this is. Changing any of them means FolderW is now pointed at a different backup, so the old one's history is cleared and a fresh full backup runs from scratch.</p>
-                            </div>
-                            <div class="grid grid-cols-3 gap-4 items-center">
-                                <div class="help-wrap">
-                                    <label for="src_dir" class="text-[var(--text)] font-medium">Source Directory:</label>
-                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-src_dir')">?</button>
-                                    <div id="help-src_dir" class="help-popover hidden">Specify the path of the folder or device you want to back up. Example: /home/user/Documents</div>
-                                </div>
-                                <input type="text" id="src_dir" name="src_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ src_dir or '' }}">
-                            </div>
-                            <div class="grid grid-cols-3 gap-4 items-center">
-                                <div class="help-wrap">
-                                    <label for="base_dir" class="text-[var(--text)] font-medium">Base Backup Directory:</label>
-                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-base_dir')">?</button>
-                                    <div id="help-base_dir" class="help-popover hidden">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
-                                </div>
-                                <input type="text" id="base_dir" name="base_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ base_dir or '' }}">
-                            </div>
-                            <div class="grid grid-cols-3 gap-4 items-center">
-                                <div class="help-wrap">
-                                    <label for="full_name" class="text-[var(--text)] font-medium">Full Backup Folder Name:</label>
-                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-full_name')">?</button>
-                                    <div id="help-full_name" class="help-popover hidden">Name of the folder created inside the Base Backup Directory to hold "Full Backup" and "Snapshots". Example: Documents</div>
-                                </div>
-                                <input type="text" id="full_name" name="full_name" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ full_name or '' }}">
-                            </div>
-                            <div class="grid grid-cols-3 gap-4 items-center">
-                                <div class="help-wrap">
-                                    <label for="database" class="text-[var(--text)] font-medium">Database File:</label>
-                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-database')">?</button>
-                                    <div id="help-database" class="help-popover hidden">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
-                                </div>
-                                <input type="text" id="database" name="database" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ database or '' }}">
-                            </div>
-                            <div>
-                                <div class="help-wrap mb-2">
-                                    <label class="block text-[var(--text)] font-medium">Backup Method:</label>
-                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-backup_method')">?</button>
-                                    <div id="help-backup_method" class="help-popover hidden">Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together. Switching between the two starts a new full backup, so snapshots never end up mixing both shapes in the same Snapshots folder.</div>
-                                </div>
-                                <div class="flex space-x-4">
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Incremental</span>
-                                    </label>
-                                    <label class="inline-flex items-center">
-                                        <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'incremental' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Differential</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-3 gap-4 items-center">
-                                <div class="help-wrap">
-                                    <label for="file_exclusions" class="text-[var(--text)] font-medium">File Exclusions:</label>
-                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-file_exclusions')">?</button>
-                                    <div id="help-file_exclusions" class="help-popover hidden">Comma-separated file/folder names or patterns to skip during backup (e.g. <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">node_modules, *.tmp, cache</code>). Uses the same glob syntax as rsync's own exclude file. Leave blank to exclude nothing beyond FolderW's own built-in exclusions.</div>
-                                </div>
-                                <input type="text" id="file_exclusions" name="file_exclusions" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ file_exclusions or '' }}" placeholder="Leave blank to exclude nothing extra">
-                            </div>
-                        </div>
-
                         <div class="rounded-lg border-2 border-[var(--border)] p-5 space-y-4">
                             <div>
                                 <h2 class="text-lg font-semibold text-[var(--text)]">Everything else</h2>
@@ -366,6 +302,70 @@
                             <div class="flex items-center space-x-4">
                                 <button type="button" onclick="testNotification()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">Send Test Notification</button>
                                 <span id="test-notify-result" class="text-sm text-[var(--text-muted)]"></span>
+                            </div>
+                        </div>
+
+                        <div class="rounded-lg border-2 border-[var(--error-text)] p-5 space-y-4">
+                            <div>
+                                <h2 class="text-lg font-semibold text-[var(--error-text)]">Changing these starts a new full backup</h2>
+                                <p class="text-sm text-[var(--text-muted)] mt-1">These identify which backup this is. Changing any of them means FolderW is now pointed at a different backup, so the old one's history is cleared and a fresh full backup runs from scratch.</p>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <div class="help-wrap">
+                                    <label for="src_dir" class="text-[var(--text)] font-medium">Source Directory:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-src_dir')">?</button>
+                                    <div id="help-src_dir" class="help-popover hidden">Specify the path of the folder or device you want to back up. Example: /home/user/Documents</div>
+                                </div>
+                                <input type="text" id="src_dir" name="src_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ src_dir or '' }}">
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <div class="help-wrap">
+                                    <label for="base_dir" class="text-[var(--text)] font-medium">Base Backup Directory:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-base_dir')">?</button>
+                                    <div id="help-base_dir" class="help-popover hidden">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
+                                </div>
+                                <input type="text" id="base_dir" name="base_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ base_dir or '' }}">
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <div class="help-wrap">
+                                    <label for="full_name" class="text-[var(--text)] font-medium">Full Backup Folder Name:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-full_name')">?</button>
+                                    <div id="help-full_name" class="help-popover hidden">Name of the folder created inside the Base Backup Directory to hold "Full Backup" and "Snapshots". Example: Documents</div>
+                                </div>
+                                <input type="text" id="full_name" name="full_name" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ full_name or '' }}">
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <div class="help-wrap">
+                                    <label for="database" class="text-[var(--text)] font-medium">Database File:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-database')">?</button>
+                                    <div id="help-database" class="help-popover hidden">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
+                                </div>
+                                <input type="text" id="database" name="database" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ database or '' }}">
+                            </div>
+                            <div>
+                                <div class="help-wrap mb-2">
+                                    <label class="block text-[var(--text)] font-medium">Backup Method:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-backup_method')">?</button>
+                                    <div id="help-backup_method" class="help-popover hidden">Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together. Switching between the two starts a new full backup, so snapshots never end up mixing both shapes in the same Snapshots folder.</div>
+                                </div>
+                                <div class="flex space-x-4">
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
+                                        <span class="ml-2 text-[var(--text)]">Incremental</span>
+                                    </label>
+                                    <label class="inline-flex items-center">
+                                        <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'incremental' %}checked{% endif %}>
+                                        <span class="ml-2 text-[var(--text)]">Differential</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <div class="help-wrap">
+                                    <label for="file_exclusions" class="text-[var(--text)] font-medium">File Exclusions:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-file_exclusions')">?</button>
+                                    <div id="help-file_exclusions" class="help-popover hidden">Comma-separated file/folder names or patterns to skip during backup (e.g. <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">node_modules, *.tmp, cache</code>). Uses the same glob syntax as rsync's own exclude file. Leave blank to exclude nothing beyond FolderW's own built-in exclusions.</div>
+                                </div>
+                                <input type="text" id="file_exclusions" name="file_exclusions" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ file_exclusions or '' }}" placeholder="Leave blank to exclude nothing extra">
                             </div>
                         </div>
 
