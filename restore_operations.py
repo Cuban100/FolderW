@@ -514,11 +514,43 @@ def list_files_in_backup(backup_path, search=None, limit=2000):
     return files, truncated
 
 
+def _copy_backup_contents(src_root, dest_root):
+    """Copy every real (non-internal) top-level entry of src_root into
+    dest_root, overwriting anything already there of the same name --
+    the shared mechanism restore_backup() uses to layer a snapshot's
+    files on top of Full Backup's.
+    """
+    for entry in os.listdir(src_root):
+        if entry in _INTERNAL_FILES:
+            continue
+        src = os.path.join(src_root, entry)
+        dst = os.path.join(dest_root, entry)
+        if os.path.isdir(src):
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dst)
+
+
 def restore_backup(backup_id, selected_paths=None):
     """Copy an entire backup/snapshot -- an exact mirror of it -- or just
     the given relative file paths within it, into a new timestamped
     folder under BASE_DIR/Restored/. Never writes into SRC_DIR, so a bad
     pick can't clobber current data.
+
+    Full Backup and any Incremental-mode snapshot are already complete,
+    standalone trees on their own (Incremental's --link-dest hardlinks
+    every unchanged file in), so restoring either alone already gives a
+    true point-in-time copy. A Differential-mode snapshot, or a Merged/
+    Compiled one (compile_latest_snapshot(), deliberately built without
+    Full Backup), is NOT -- it's delta-only, so restoring it alone would
+    silently omit every file that hasn't changed since the full backup.
+    For those, Full Backup is restored first as the base, then this
+    backup's own files copied on top, overwriting anything the base
+    already wrote -- matching compile_latest_snapshot()'s own "later
+    write wins" logic, and README's already-documented restore model
+    ("restoring a specific point in time needs the full backup plus
+    that snapshot together"), just applied automatically instead of
+    left as a manual two-step restore-and-merge-yourself.
     """
     backup_path = get_backup_path(backup_id)
     if backup_path is None:
@@ -532,22 +564,35 @@ def restore_backup(backup_id, selected_paths=None):
 
     backup_real = os.path.realpath(backup_path)
 
+    full_backup = load_other_variables('full_backup')
+    is_compiled = os.path.exists(os.path.join(backup_path, COMPILED_MARKER))
+    needs_full_base = (
+        backup_id != "full"
+        and (is_compiled or load_env_value('BACKUP_METHOD') != 'incremental')
+        and os.path.isdir(full_backup)
+        and os.path.exists(os.path.join(full_backup, COMPLETION_MARKER))
+    )
+    full_backup_real = os.path.realpath(full_backup) if needs_full_base else None
+
     if not selected_paths:
-        for entry in os.listdir(backup_path):
-            if entry in _INTERNAL_FILES:
-                continue
-            src = os.path.join(backup_path, entry)
-            dst = os.path.join(dest_root, entry)
-            if os.path.isdir(src):
-                shutil.copytree(src, dst, dirs_exist_ok=True)
-            else:
-                shutil.copy2(src, dst)
+        if needs_full_base:
+            _copy_backup_contents(full_backup, dest_root)
+        _copy_backup_contents(backup_path, dest_root)
     else:
         for rel_path in selected_paths:
             src = os.path.realpath(os.path.join(backup_path, rel_path))
             if src != backup_real and not src.startswith(backup_real + os.sep):
                 logger.warning(f"Rejected restore of path outside backup: {rel_path}")
                 continue
+            if not os.path.exists(src) and needs_full_base:
+                # Not in the delta -- for a differential/compiled
+                # snapshot that just means this file hasn't changed
+                # since the full backup, so its current, correct
+                # content is still there.
+                full_src = os.path.realpath(os.path.join(full_backup, rel_path))
+                if full_src == full_backup_real or full_src.startswith(full_backup_real + os.sep):
+                    if os.path.exists(full_src):
+                        src = full_src
             if not os.path.exists(src):
                 continue
             dst = os.path.join(dest_root, rel_path)
