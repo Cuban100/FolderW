@@ -4,6 +4,7 @@ rsync.log
 rsync.txt
 logs/
 lib
+lib64
 .cache/
 overlay2/
 **/.docker/desktop/vms

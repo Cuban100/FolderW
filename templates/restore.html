@@ -97,12 +97,39 @@
                                 <a href="/restore/browse/{{ backup.id }}" class="inline-block bg-gray-700 text-white text-sm py-1.5 px-3 rounded hover:bg-gray-800 transition">
                                     Browse / Search
                                 </a>
+                                {% if backup.is_delta_only %}
+                                {% set row_id = backup.id | replace('/', '-') | replace(':', '-') %}
+                                <div class="inline-flex relative align-top">
+                                    <form method="post" action="/restore/execute" class="inline-block"
+                                          onsubmit="return confirm('Restore &quot;{{ backup.label }}&quot; (Full Backup + this snapshot merged) to a new folder under Restored/?');">
+                                        <input type="hidden" name="backup_id" value="{{ backup.id }}">
+                                        <input type="hidden" name="combine_with_full" value="1">
+                                        <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded-l hover:bg-blue-700 transition" title="Full Backup + this snapshot, merged -- a complete point-in-time restore">
+                                            Full Restore
+                                        </button>
+                                    </form>
+                                    <button type="button" onclick="toggleRestoreMenu('{{ row_id }}')" class="bg-blue-600 text-white text-sm py-1.5 px-2 rounded-r border-l border-blue-800 hover:bg-blue-700 transition">
+                                        <span class="mdi mdi-chevron-down"></span>
+                                    </button>
+                                    <div id="restore-menu-{{ row_id }}" class="hidden absolute right-0 top-full mt-1 z-10 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg">
+                                        <form method="post" action="/restore/execute"
+                                              onsubmit="return confirm('Restore only this snapshot&#39;s own changed files (not the full point-in-time state) to a new folder under Restored/?');">
+                                            <input type="hidden" name="backup_id" value="{{ backup.id }}">
+                                            <input type="hidden" name="combine_with_full" value="0">
+                                            <button type="submit" class="text-sm text-[var(--text)] py-2 px-3 hover:bg-[var(--surface-alt)] transition w-full text-left whitespace-nowrap" title="Only this snapshot's own delta -- not a complete point-in-time restore">
+                                                Only Snapshot
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                {% else %}
                                 <form method="post" action="/restore/execute" class="inline-block" onsubmit="return confirm('Restore &quot;{{ backup.label }}&quot; to a new folder under Restored/?');">
                                     <input type="hidden" name="backup_id" value="{{ backup.id }}">
                                     <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded hover:bg-blue-700 transition">
                                         Restore
                                     </button>
                                 </form>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -124,5 +151,20 @@
             {% endif %}
             {% endif %}
         </div>
+
+    <script>
+        function toggleRestoreMenu(rowId) {
+            const menu = document.getElementById('restore-menu-' + rowId);
+            document.querySelectorAll('[id^="restore-menu-"]').forEach(m => {
+                if (m !== menu) m.classList.add('hidden');
+            });
+            menu.classList.toggle('hidden');
+        }
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('[onclick^="toggleRestoreMenu"]') && !event.target.closest('[id^="restore-menu-"]')) {
+                document.querySelectorAll('[id^="restore-menu-"]').forEach(m => m.classList.add('hidden'));
+            }
+        });
+    </script>
 </body>
 </html>

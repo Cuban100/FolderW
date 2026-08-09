@@ -239,6 +239,7 @@ def list_backups():
             "mtime": _snapshot_created_at(full_backup),
             "path": full_backup,
             "note": get_snapshot_note(full_backup),
+            "is_delta_only": False,
         })
 
     if not os.path.isdir(snapshots_root):
@@ -301,6 +302,7 @@ def list_backups():
                     # manager, not just browsed in-app.
                     "path": snapshot_path,
                     "note": get_snapshot_note(snapshot_path),
+                    "is_delta_only": is_compiled or load_env_value('BACKUP_METHOD') != 'incremental',
                 })
 
     # mtime only ever existed to sort by -- label already spells out the
@@ -514,6 +516,31 @@ def list_files_in_backup(backup_path, search=None, limit=2000):
     return files, truncated
 
 
+def _copy_entry(src, dst):
+    """Copy one filesystem entry -- symlink-safe. A symlink is recreated
+    as a symlink (its literal target string preserved), never followed.
+
+    Confirmed live, the hard way: os.path.isdir() returns False for a
+    symlink whose target can't be resolved from that location (e.g. a
+    Python venv's lib64 -> lib, when lib itself is excluded from the
+    backup -- exactly the case that crashed a real restore), so it fell
+    through to shutil.copy2(), which actually tries to open() through
+    the link and dies with a bare FileNotFoundError. Checking
+    os.path.islink() first, before os.path.isdir(), avoids that
+    entirely -- and shutil.copytree(symlinks=True) below prevents the
+    same crash for any symlink NESTED inside a directory being copied,
+    not just one at the top level.
+    """
+    if os.path.islink(src):
+        if os.path.lexists(dst):
+            os.remove(dst)
+        os.symlink(os.readlink(src), dst)
+    elif os.path.isdir(src):
+        shutil.copytree(src, dst, dirs_exist_ok=True, symlinks=True)
+    else:
+        shutil.copy2(src, dst)
+
+
 def _copy_backup_contents(src_root, dest_root):
     """Copy every real (non-internal) top-level entry of src_root into
     dest_root, overwriting anything already there of the same name --
@@ -523,34 +550,49 @@ def _copy_backup_contents(src_root, dest_root):
     for entry in os.listdir(src_root):
         if entry in _INTERNAL_FILES:
             continue
-        src = os.path.join(src_root, entry)
-        dst = os.path.join(dest_root, entry)
-        if os.path.isdir(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True)
-        else:
-            shutil.copy2(src, dst)
+        _copy_entry(os.path.join(src_root, entry), os.path.join(dest_root, entry))
 
 
-def restore_backup(backup_id, selected_paths=None):
+def _is_delta_only(backup_id, backup_path):
+    """Whether this backup's own physical content is a delta -- it needs
+    Full Backup layered underneath it for a genuinely complete point-in-
+    time restore -- rather than an already-complete standalone tree.
+    True for a Differential-mode snapshot or a Merged/Compiled one
+    (compile_latest_snapshot(), deliberately built without Full Backup);
+    False for Full Backup itself or any Incremental-mode snapshot
+    (Incremental's --link-dest hardlinks every unchanged file in, so
+    it's already a complete tree on its own).
+
+    Shared by list_backups() (exposes this so the Restore page only
+    offers the Full Restore / Only Snapshot choice where it actually
+    means something different) and restore_backup() (decides the
+    default when the caller doesn't force one via combine_with_full).
+    """
+    if backup_id == "full":
+        return False
+    if os.path.exists(os.path.join(backup_path, COMPILED_MARKER)):
+        return True
+    return load_env_value('BACKUP_METHOD') != 'incremental'
+
+
+def restore_backup(backup_id, selected_paths=None, combine_with_full=True):
     """Copy an entire backup/snapshot -- an exact mirror of it -- or just
     the given relative file paths within it, into a new timestamped
     folder under BASE_DIR/Restored/. Never writes into SRC_DIR, so a bad
     pick can't clobber current data.
 
-    Full Backup and any Incremental-mode snapshot are already complete,
-    standalone trees on their own (Incremental's --link-dest hardlinks
-    every unchanged file in), so restoring either alone already gives a
-    true point-in-time copy. A Differential-mode snapshot, or a Merged/
-    Compiled one (compile_latest_snapshot(), deliberately built without
-    Full Backup), is NOT -- it's delta-only, so restoring it alone would
-    silently omit every file that hasn't changed since the full backup.
-    For those, Full Backup is restored first as the base, then this
-    backup's own files copied on top, overwriting anything the base
-    already wrote -- matching compile_latest_snapshot()'s own "later
-    write wins" logic, and README's already-documented restore model
-    ("restoring a specific point in time needs the full backup plus
-    that snapshot together"), just applied automatically instead of
-    left as a manual two-step restore-and-merge-yourself.
+    combine_with_full (default True -- "Full Restore" on the Restore
+    page): for a delta-only backup (see _is_delta_only()), Full Backup
+    is restored first as the base, then this backup's own files copied
+    on top, overwriting anything the base already wrote -- matching
+    compile_latest_snapshot()'s own "later write wins" logic, and
+    README's already-documented restore model ("restoring a specific
+    point in time needs the full backup plus that snapshot together").
+    Pass False ("Only Snapshot") to restore exactly and only this
+    backup's own physical content -- e.g. to inspect precisely what
+    changed, or a smaller/faster restore when the full point-in-time
+    state isn't needed. Has no effect on Full Backup itself or an
+    Incremental snapshot, which are already complete either way.
     """
     backup_path = get_backup_path(backup_id)
     if backup_path is None:
@@ -565,10 +607,9 @@ def restore_backup(backup_id, selected_paths=None):
     backup_real = os.path.realpath(backup_path)
 
     full_backup = load_other_variables('full_backup')
-    is_compiled = os.path.exists(os.path.join(backup_path, COMPILED_MARKER))
     needs_full_base = (
-        backup_id != "full"
-        and (is_compiled or load_env_value('BACKUP_METHOD') != 'incremental')
+        combine_with_full
+        and _is_delta_only(backup_id, backup_path)
         and os.path.isdir(full_backup)
         and os.path.exists(os.path.join(full_backup, COMPLETION_MARKER))
     )
@@ -580,27 +621,35 @@ def restore_backup(backup_id, selected_paths=None):
         _copy_backup_contents(backup_path, dest_root)
     else:
         for rel_path in selected_paths:
-            src = os.path.realpath(os.path.join(backup_path, rel_path))
-            if src != backup_real and not src.startswith(backup_real + os.sep):
+            # The containment check below needs the FULLY resolved path
+            # (catches a rel_path trying to escape the backup root via
+            # ../ or a symlink) -- but the actual copy must use the
+            # literal, unresolved path, or a symlink at rel_path would
+            # already be silently dereferenced by realpath() before
+            # _copy_entry() ever gets a chance to preserve it as one.
+            literal_src = os.path.join(backup_path, rel_path)
+            real_src = os.path.realpath(literal_src)
+            if real_src != backup_real and not real_src.startswith(backup_real + os.sep):
                 logger.warning(f"Rejected restore of path outside backup: {rel_path}")
                 continue
-            if not os.path.exists(src) and needs_full_base:
+            src = literal_src
+            # lexists, not exists: a symlink whose target can't be
+            # resolved (see _copy_entry()'s docstring) still needs to be
+            # detected as "something is here" -- exists() would say no.
+            if not os.path.lexists(src) and needs_full_base:
                 # Not in the delta -- for a differential/compiled
                 # snapshot that just means this file hasn't changed
                 # since the full backup, so its current, correct
                 # content is still there.
-                full_src = os.path.realpath(os.path.join(full_backup, rel_path))
-                if full_src == full_backup_real or full_src.startswith(full_backup_real + os.sep):
-                    if os.path.exists(full_src):
-                        src = full_src
-            if not os.path.exists(src):
+                full_literal_src = os.path.join(full_backup, rel_path)
+                full_real_src = os.path.realpath(full_literal_src)
+                if (full_real_src == full_backup_real or full_real_src.startswith(full_backup_real + os.sep)) and os.path.lexists(full_literal_src):
+                    src = full_literal_src
+            if not os.path.lexists(src):
                 continue
             dst = os.path.join(dest_root, rel_path)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            if os.path.isdir(src):
-                shutil.copytree(src, dst, dirs_exist_ok=True)
-            else:
-                shutil.copy2(src, dst)
+            _copy_entry(src, dst)
 
     file_count, _ = summarize_folder(dest_root)
     logger.success(f"Restored {file_count} file(s) from {backup_id} to {dest_root}")

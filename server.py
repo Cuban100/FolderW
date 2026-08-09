@@ -812,9 +812,9 @@ async def restore_set_note(backup_id: str = Form(...), note: str = Form(""), pag
     return RedirectResponse(url=f"/restore?page={page}", status_code=303)
 
 @app.post("/restore/execute", response_class=HTMLResponse)
-async def restore_execute(request: Request, backup_id: str = Form(...), selected_paths: list[str] = Form(default=[])):
+async def restore_execute(request: Request, backup_id: str = Form(...), selected_paths: list[str] = Form(default=[]), combine_with_full: str = Form("1")):
     try:
-        dest_root, file_count = restore_backup(backup_id, selected_paths or None)
+        dest_root, file_count = restore_backup(backup_id, selected_paths or None, combine_with_full=(combine_with_full == "1"))
         return templates.TemplateResponse("restore.html", {
             "request": request,
             "logo": logo,

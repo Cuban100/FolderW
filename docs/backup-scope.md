@@ -10,7 +10,7 @@ A handful of patterns are excluded out of the box, for a few different reasons:
 
 **FolderW's own files** — if `SRC_DIR` is (or contains) FolderW's own install folder, these stop it from backing up itself:
 - `logs/`, `rsync.log`, `rsync.txt`, `.log` — FolderW's own log files
-- `lib`, `__pycache__` — the Python virtual environment and bytecode cache
+- `lib`, `lib64`, `__pycache__` — the Python virtual environment and bytecode cache (`lib64` is usually just a symlink to `lib`; excluded too so it doesn't end up backed up as a dangling symlink pointing at the excluded `lib`)
 - `folder-icon.png`, `FolderW.png`, `.directory` — the branding files FolderW writes into the backup folder itself (see [Branded Backup Folder](../README.md#features))
 
 **Generic junk** — has no value in a backup regardless of what app created it:
