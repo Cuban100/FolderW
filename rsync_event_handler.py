@@ -36,6 +36,12 @@ logfile = load_other_variables('logfile')
 src_dir = load_env_value('SRC_DIR')
 backup_interval = load_env_value('BACKUP_INTERVAL')
 
+# FolderW's own working directory (wherever this file actually lives),
+# not a hardcoded name -- an install can be cloned into any folder name
+# at all, so matching on a literal string here would only ever work for
+# whichever name one particular install happened to use.
+APP_DIR_REAL = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
+
 def _load_patterns(path):
     patterns = []
     try:
@@ -66,9 +72,7 @@ EXCLUDE_PATTERNS = _load_exclude_patterns()
 # user activity (confirmed, not guessed -- see the file's own header) --
 # without this, that alone is enough to keep the watchdog's ceiling
 # (MAX_BACKUP_DELAY_SECONDS, above) firing around the clock.
-TRIGGER_EXEMPT_PATTERNS = _load_patterns(
-    os.path.join(os.path.dirname(load_other_variables('custom_exclude_file')), 'watchdog_trigger_exempt.txt')
-)
+TRIGGER_EXEMPT_PATTERNS = _load_patterns(load_other_variables('trigger_exempt_file'))
 
 def run_backup_script():
     try:
@@ -179,6 +183,19 @@ class BackupHandler(FileSystemEventHandler):
 
     def should_ignore(self, file_path):
         if file_path in (rsync_txt, logfile):
+            return True
+        # FolderW's own working directory, if it happens to sit inside
+        # SRC_DIR -- a real path check, not a name match, so it's correct
+        # regardless of what the install folder is actually called. See
+        # APP_DIR_REAL above. Confirmed live: FolderW's own progress-
+        # reporting writes to its database file during a run were, on
+        # their own, enough to keep re-arming the debounce ceiling before
+        # the run even finished, producing a new backup right after the
+        # previous one, indefinitely, with zero real user activity
+        # involved. Still fully included in every backup like any other
+        # file -- this only stops a write to it from scheduling one.
+        real_path = os.path.realpath(file_path)
+        if real_path == APP_DIR_REAL or real_path.startswith(APP_DIR_REAL + os.sep):
             return True
         try:
             rel_path = os.path.relpath(file_path, src_dir)

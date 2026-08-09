@@ -1,0 +1,18 @@
+# Files listed here are still fully included in every backup -- this
+# list only controls whether writing to them, by itself, is allowed to
+# schedule a new backup run. A file that's rewritten continuously by
+# something else on your machine (a monitoring agent, another app's own
+# log) can otherwise keep the watchdog's 300s ceiling firing around the
+# clock even with zero real user activity. Add an entry only once you've
+# actually confirmed a file behaves this way (e.g. via lsof/stat/
+# systemctl on your own machine) -- see rsync_event_handler.py's
+# should_ignore(). One pattern per line, same glob syntax as the File
+# Exclusions Settings field.
+#
+# Copy this file to logs/watchdog_trigger_exempt.txt (done automatically
+# on first run if it doesn't exist yet) and add your own entries there --
+# that file is per-install and never committed, since what needs this
+# treatment is specific to your own machine.
+#
+# Example:
+# telegraf.log

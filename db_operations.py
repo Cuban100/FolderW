@@ -75,6 +75,22 @@ def load_other_variables(variable_name):
         if not os.path.exists(path):
             open(path, 'a').close()
         return path
+    elif variable_name == 'trigger_exempt_file':
+        # Per-install, not shipped with any default content -- a file that
+        # gets rewritten continuously by something else on one particular
+        # machine (a monitoring agent, another app's own log) is specific
+        # to that machine, not something every install should ship with
+        # baked in. See rsync_event_handler.py's should_ignore(). Seeded
+        # from the tracked .example template (explanatory comments only,
+        # no entries) on first creation, same as .env/.env.example.
+        path = os.path.join(os.path.dirname(__file__), 'logs/watchdog_trigger_exempt.txt')
+        if not os.path.exists(path):
+            example_path = path + '.example'
+            if os.path.exists(example_path):
+                shutil.copy2(example_path, path)
+            else:
+                open(path, 'a').close()
+        return path
     else:
         # For environment variables
         return load_env_value(variable_name)

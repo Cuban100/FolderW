@@ -775,14 +775,14 @@ if __name__ == "__main__":
     # collision was disambiguated above -- used as record_backup_statistics()'s
     # label, so it needs to match the real folder, not the pre-collision name.
     incremental_folder = os.path.relpath(new_snapshot_path, snapshots_root)
-    # Created as this process's own user (caveman), not left for root's
+    # Created as this process's own user (OWNER_USER), not left for root's
     # sudo rsync to create via --mkpath -- confirmed empirically that
     # intermediate directories rsync-as-root creates end up root-owned,
     # silently locking cleanup_old_snapshots()/_prune_empty_parents() (both
-    # run as caveman, both already swallow OSError silently) out of ever
-    # deleting them again. Pre-creating here as caveman avoids that; rsync
-    # then writes into an already-existing directory and leaves its
-    # ownership alone.
+    # run as OWNER_USER, both already swallow OSError silently) out of
+    # ever deleting them again. Pre-creating here as OWNER_USER avoids
+    # that; rsync then writes into an already-existing directory and
+    # leaves its ownership alone.
     os.makedirs(new_snapshot_path, exist_ok=True)
     logger.info(f"New snapshot destination: {new_snapshot_path} (link-dest: {previous_snapshot})")
 
