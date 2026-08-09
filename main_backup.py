@@ -109,7 +109,7 @@ if __name__ == "__main__":
     # Backup button explicitly clears it (see server.py) before restarting
     # this service specifically so a deliberate click always forces a real
     # run regardless of this shortcut.
-    if get_database_value('FULL_BACKUP_COMPLETED', 'settings') == '1':
+    if get_database_value('FULL_BACKUP_COMPLETED', 'settings') == '1' and get_database_value('MANUAL_SNAPSHOT_REQUESTED', 'settings') != '1':
         logger.info("Initial full backup already completed previously -- skipping straight to monitoring/scheduling instead of re-running it.")
         # This branch never launches rsync_incremental.py/rsync_
         # differential.py (that's the whole point of skipping straight to
@@ -128,6 +128,17 @@ if __name__ == "__main__":
         # this check finishing and that process actually existing.
         set_database_value('BACKUP_PREPARING', '')
     else:
+        # MANUAL_SNAPSHOT_REQUESTED (see server.py's /run-all-steps):
+        # explicit signal that "Create a Manual Snapshot" was clicked,
+        # not just a routine deploy/crash/reboot restart -- without it,
+        # this whole branch is indistinguishable from any other restart
+        # once FULL_BACKUP_COMPLETED is '1', and the shortcut above
+        # would silently skip running anything at all. Found live: the
+        # button visibly did nothing, no error, nothing in the logs --
+        # exactly what a swallowed restart looks like. Cleared here,
+        # once, right before actually using it, so a stale '1' can't
+        # cause an extra unwanted run on some later unrelated restart.
+        set_database_value('MANUAL_SNAPSHOT_REQUESTED', '')
         run_regular_backup()
 
     if monitor == '1':

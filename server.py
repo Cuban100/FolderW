@@ -691,15 +691,22 @@ async def run_all_steps(request: Request, force_full: bool = False):
     #
     # force_full=False (the "Create a Manual Snapshot" button, shown
     # once a full backup already exists): leaves FULL_BACKUP_COMPLETED
-    # alone, so main_backup.py's restart-skip shortcut applies normally
-    # and this restart goes straight to one regular incremental/
-    # differential snapshot -- not a full re-transfer. Confirmed live,
-    # the hard way: both buttons used to hit this same route with no way
-    # to tell them apart, so "Create a Manual Snapshot" silently forced
-    # a complete full-backup redo every time, same as the real "Start
-    # Full Backup" button.
+    # alone -- the full backup itself shouldn't redo -- but the restart-
+    # skip shortcut in main_backup.py otherwise skips running ANY
+    # backup at all when that flag is already '1' (it goes straight to
+    # scheduling/monitoring instead), which silently made this button
+    # do nothing. MANUAL_SNAPSHOT_REQUESTED is the explicit signal that
+    # tells main_backup.py "run one regular snapshot immediately even
+    # though the shortcut would normally apply" -- same idea as
+    # FULL_BACKUP_COMPLETED=0 above, just for the non-full case. Found
+    # live: with nothing distinguishing this restart from a routine
+    # deploy/crash restart, main_backup.py couldn't tell "someone
+    # deliberately clicked Manual Snapshot" from "this process just
+    # happened to restart" -- both look identical from its side.
     if force_full:
         set_database_value('FULL_BACKUP_COMPLETED', '0')
+    else:
+        set_database_value('MANUAL_SNAPSHOT_REQUESTED', '1')
 
     try:
         if _backup_service_unit_exists():
