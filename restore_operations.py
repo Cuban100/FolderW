@@ -66,14 +66,13 @@ STATS_CACHE_FILE = '.folderw_stats'
 # edit, and there's nothing else to store alongside it.
 NOTE_FILE = '.folderw_note'
 
-# Internal bookkeeping files that sit at a snapshot's own root -- never
-# real backed-up data, so never counted, listed, searched, or copied into
-# Restored/ output. One shared tuple instead of repeating the names at
-# every exclusion site, so adding another later can't be missed at one
-# of them. FolderW.png/.directory only ever land inside a snapshot for
-# full_backup specifically (its own branding, physically written there
-# now that it's a real directory -- see rsync_incremental.py's
-# ensure_backup_folder_icon()), but harmless to exclude everywhere.
+# Internal bookkeeping files that sit at a snapshot's own root. Counted,
+# listed, searched, and restored the same as everything else now -- a
+# restore should give back exactly what's physically in the backup, no
+# silent omissions. Still used by compile_latest_snapshot() alone, below:
+# copying each source snapshot's own (now-stale, conflicting) marker into
+# a newly merged snapshot wouldn't mean anything -- the merged snapshot
+# writes its own fresh COMPILED_MARKER once it's done instead.
 _INTERNAL_FILES = (COMPLETION_MARKER, STATS_CACHE_FILE, NOTE_FILE, COMPILED_MARKER, 'FolderW.png', '.directory')
 
 def _chmod_775(path):
@@ -129,11 +128,6 @@ def summarize_folder(path):
     total_size = 0
     for dirpath, _, filenames in os.walk(path):
         for f in filenames:
-            # Internal bookkeeping, not real backed-up data -- shouldn't
-            # count toward a snapshot's displayed file count/size, and
-            # only ever sits at a snapshot's own root, never in a subdir.
-            if f in _INTERNAL_FILES and dirpath == path:
-                continue
             fp = os.path.join(dirpath, f)
             try:
                 total_size += os.path.getsize(fp)
@@ -494,8 +488,6 @@ def list_files_in_backup(backup_path, search=None, limit=2000):
     search_lower = search.lower() if search else None
     for dirpath, _, filenames in os.walk(backup_path):
         for f in sorted(filenames):
-            if f in _INTERNAL_FILES and dirpath == backup_path:
-                continue
             fp = os.path.join(dirpath, f)
             rel = os.path.relpath(fp, backup_path)
             if search_lower and search_lower not in rel.lower():
@@ -542,14 +534,14 @@ def _copy_entry(src, dst):
 
 
 def _copy_backup_contents(src_root, dest_root):
-    """Copy every real (non-internal) top-level entry of src_root into
-    dest_root, overwriting anything already there of the same name --
-    the shared mechanism restore_backup() uses to layer a snapshot's
-    files on top of Full Backup's.
+    """Copy every top-level entry of src_root into dest_root, overwriting
+    anything already there of the same name -- the shared mechanism
+    restore_backup() uses to layer a snapshot's files on top of Full
+    Backup's. Copies FolderW's own internal files (_INTERNAL_FILES) too,
+    same as everything else -- restore is a straight copy of what's
+    physically in the backup, nothing held back.
     """
     for entry in os.listdir(src_root):
-        if entry in _INTERNAL_FILES:
-            continue
         _copy_entry(os.path.join(src_root, entry), os.path.join(dest_root, entry))
 
 
