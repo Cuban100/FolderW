@@ -923,7 +923,14 @@
             // again, then do a real reload to pick up the new page/assets.
             const poll = setInterval(async () => {
                 try {
-                    const response = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+                    // GET, not HEAD -- '/' only ever handles GET (and
+                    // POST for a couple of specific actions), so a HEAD
+                    // request here gets 405 Method Not Allowed forever,
+                    // even once the dashboard is genuinely back up.
+                    // Confirmed live: the service had already restarted
+                    // successfully within seconds, but this polling loop
+                    // never noticed and never reloaded the page.
+                    const response = await fetch('/', { method: 'GET', cache: 'no-store' });
                     if (response.ok) {
                         clearInterval(poll);
                         window.location.reload();
