@@ -100,7 +100,7 @@ def load_other_variables(variable_name):
 def get_database_value(name, table):
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         query = f'SELECT value FROM {table} WHERE name = ?'
         cursor.execute(query, (name,))
@@ -118,7 +118,7 @@ def get_database_value(name, table):
 def set_database_value(name, value, table='settings'):
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute(f"REPLACE INTO {table} (name, value) VALUES (?, ?)", (name, str(value)))
         conn.commit()
@@ -128,7 +128,7 @@ def set_database_value(name, value, table='settings'):
 
 def check_connection(database):
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         return conn
     except sqlite3.Error as e:
         logger.error(f"Error connecting to database: {e}")
@@ -136,7 +136,7 @@ def check_connection(database):
 
 def create_all_tables(database):
     try:
-        connection = sqlite3.connect(database)
+        connection = sqlite3.connect(database, timeout=10.0)
         cursor = connection.cursor()
 
         cursor.execute('''
@@ -230,7 +230,7 @@ def reset_backup_history(database):
     numbering (incremental folder naming) and historical stats/backup runs.
     """
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'restore_runs'):
             cursor.execute(f"DELETE FROM {table}")
@@ -257,7 +257,7 @@ def wipe_database_for_fresh_start(database):
     separate file, untouched by this.
     """
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'restore_runs', 'settings'):
             cursor.execute(f"DELETE FROM {table}")
@@ -294,7 +294,7 @@ def list_items_by_session(database):
         logger.info("Failed to connect to the database.")
         return []
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         query = "SELECT path FROM changes WHERE session = ?"
         cursor.execute(query, (last_session_number,))
@@ -313,7 +313,7 @@ def store_changes_in_db(changes):
         logger.info("No changes to store.")
         return
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute("BEGIN TRANSACTION;")
         for action, path in changes:
@@ -335,7 +335,7 @@ def has_completed_backup(database):
     starting over, verification widgets and all.
     """
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM backup_runs WHERE status = 'completed'")
         count = cursor.fetchone()[0]
@@ -353,7 +353,7 @@ def record_backup_run(session, backup_type, label, files_changed, status='comple
     """
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO backup_runs (timestamp, session, backup_type, label, files_changed, status)
@@ -383,7 +383,7 @@ def get_files_changed_by_label(label):
     """
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('SELECT files_changed FROM backup_runs WHERE label = ? ORDER BY id DESC LIMIT 1', (label,))
         row = cursor.fetchone()
@@ -396,7 +396,7 @@ def get_files_changed_by_label(label):
 def count_backup_runs():
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('SELECT COUNT(*) FROM backup_runs')
         count = cursor.fetchone()[0]
@@ -415,7 +415,7 @@ def list_backup_runs(limit, offset):
     """
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('''
             SELECT timestamp, session, backup_type, label, files_changed, status
@@ -447,7 +447,7 @@ def record_restore_run(backup_id, backup_label, destination, file_count, restore
     """
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO restore_runs (timestamp, backup_id, backup_label, destination, file_count, restore_type)
@@ -469,7 +469,7 @@ def record_restore_run(backup_id, backup_label, destination, file_count, restore
 def count_restore_runs():
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('SELECT COUNT(*) FROM restore_runs')
         count = cursor.fetchone()[0]
@@ -487,7 +487,7 @@ def list_restore_runs(limit, offset):
     """
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('''
             SELECT timestamp, backup_id, backup_label, destination, file_count, restore_type
@@ -540,7 +540,7 @@ def get_backup_stats_series(limit=200):
     """
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('''
             SELECT br.id, br.timestamp, br.session, br.backup_type, br.files_changed, br.status,
@@ -578,7 +578,7 @@ def get_backup_stats_summary():
     """
     database = load_env_value('DATABASE')
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*), SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) FROM backup_runs")
         total, completed = cursor.fetchone()
@@ -607,7 +607,7 @@ def get_changes_by_session(session):
     if not check_connection(database):
         return []
     try:
-        conn = sqlite3.connect(database)
+        conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('SELECT path, action, timestamp FROM changes WHERE session = ? ORDER BY id', (session,))
         rows = cursor.fetchall()
@@ -619,7 +619,7 @@ def get_changes_by_session(session):
 
 def save_settings_to_db(log_directory, source_directory, base_backup_directory, database_file, monitor_source_folder, backup_interval):
     try:
-        connection = sqlite3.connect(database_file)
+        connection = sqlite3.connect(database_file, timeout=10.0)
         cursor = connection.cursor()
         settings = [
             ("LOG_DIRECTORY", log_directory),

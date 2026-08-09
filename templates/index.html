@@ -910,6 +910,18 @@
         // not on every single tick.
         let watchdogLastEventTime = null;
         let watchdogNextBackupTime = null;
+        // Tracks the raw server value independently of watchdogLastEventTime
+        // (which gets deliberately nulled once a backup starts, see below) --
+        // without a separate marker, that nulling would make the *next* poll
+        // think the same still-stale server timestamp was a brand new event
+        // and pulse the dot again for nothing.
+        let lastSeenEventTimeRaw = null;
+        // The raw event time a backup has already started for -- server
+        // never clears WATCHDOG_LAST_EVENT_TIME itself, so without this the
+        // display would flip back to "Last change detected Xs ago" on
+        // every poll after the backup starts, forever, since the same
+        // stale timestamp keeps coming back from /watchdog-status.
+        let clearedEventTime = null;
 
         function formatCountdown(seconds) {
             seconds = Math.max(0, Math.round(seconds));
@@ -944,7 +956,7 @@
             try {
                 const response = await fetch('/watchdog-status');
                 const data = await response.json();
-                if (data.watchdog_last_event_time && data.watchdog_last_event_time !== watchdogLastEventTime) {
+                if (data.watchdog_last_event_time && data.watchdog_last_event_time !== lastSeenEventTimeRaw) {
                     // New event since the last check -- brief pulse so
                     // "instant detection" is actually visible, not just
                     // inferred from the countdown appearing.
@@ -952,7 +964,18 @@
                     void dot.offsetWidth; // restart the CSS animation
                     dot.classList.add('pulse');
                 }
-                watchdogLastEventTime = data.watchdog_last_event_time;
+                lastSeenEventTimeRaw = data.watchdog_last_event_time;
+                if (watchdogNextBackupTime && !data.watchdog_next_backup_time) {
+                    // Countdown just ended -- the debounced backup started
+                    // running for this event. Remember it so the display
+                    // stays on "Watching for changes..." for as long as
+                    // the server keeps echoing back this same stale
+                    // timestamp, instead of only on this one poll.
+                    clearedEventTime = data.watchdog_last_event_time;
+                }
+                watchdogLastEventTime = (data.watchdog_last_event_time && data.watchdog_last_event_time !== clearedEventTime)
+                    ? data.watchdog_last_event_time
+                    : null;
                 watchdogNextBackupTime = data.watchdog_next_backup_time;
                 updateWatchdogDisplay();
             } catch (error) {
