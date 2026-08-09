@@ -37,6 +37,12 @@
             </div>
             {% endif %}
 
+            {% if backup_method == 'differential' %}
+            {# Incremental snapshots (--link-dest) are already each a
+               complete, standalone tree, so there's nothing to merge --
+               only Differential snapshots (each a delta against the
+               original full backup) benefit from being compiled into one
+               consolidated view. #}
             <div class="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4 mb-6">
                 <div class="flex items-center justify-between gap-4 flex-wrap">
                     <p class="text-sm text-[var(--text-muted)] max-w-2xl">
@@ -52,6 +58,7 @@
                     </form>
                 </div>
             </div>
+            {% endif %}
 
             {% if not backups %}
             <div class="bg-[var(--surface)] rounded-lg shadow p-6 text-[var(--text-muted)]">

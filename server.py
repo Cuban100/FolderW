@@ -895,6 +895,13 @@ def _restore_page_context(page=1):
         "backups": all_backups[start:start + RESTORE_PAGE_SIZE],
         "page": page,
         "total_pages": total_pages,
+        # Compile Latest Snapshot only makes sense for Differential mode --
+        # each of its snapshots is a delta against the original full
+        # backup, so merging them recovers a consolidated view of every
+        # change. Incremental snapshots (--link-dest) are already each a
+        # complete, standalone tree; "merging" them would be a no-op at
+        # best and confusing at worst.
+        "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
     }
 
 @app.get("/restore", response_class=HTMLResponse)
