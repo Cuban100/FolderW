@@ -111,6 +111,22 @@ if __name__ == "__main__":
     # run regardless of this shortcut.
     if get_database_value('FULL_BACKUP_COMPLETED', 'settings') == '1':
         logger.info("Initial full backup already completed previously -- skipping straight to monitoring/scheduling instead of re-running it.")
+        # This branch never launches rsync_incremental.py/rsync_
+        # differential.py (that's the whole point of skipping straight to
+        # scheduling/monitoring below), so neither of those ever gets a
+        # chance to clear the flag the way they normally would. Found
+        # live: it sat stuck at '1' for as long as this process ran --
+        # which is indefinite in scheduled/monitor mode -- because is_
+        # backup_running() (server.py) cross-checks it against
+        # main_backup.py itself still being alive, not against any actual
+        # rsync process. The dashboard showed a permanent, stale "Backup
+        # in progress" with nothing actually running, cleared only by
+        # luck whenever a real scheduled/watchdog-triggered run
+        # eventually fired. The other branch (run_regular_backup() below)
+        # deliberately leaves the flag set here -- rsync_incremental.py
+        # clears it itself once it takes over, covering the gap between
+        # this check finishing and that process actually existing.
+        set_database_value('BACKUP_PREPARING', '')
     else:
         run_regular_backup()
 
