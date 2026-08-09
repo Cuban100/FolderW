@@ -10,7 +10,7 @@ The **File Exclusions** field on the Settings page (saved to `logs/custom_exclud
 
 Pattern syntax follows `rsync`'s filter rules: a bare name (`node_modules`) matches that name anywhere in the tree; a pattern with a `/` in it (other than a trailing one) is anchored to `SRC_DIR`'s root; use a `**/` prefix (e.g. `**/some/nested/path`) to match a nested path at any depth, and to reliably exclude that path from FolderW's own size/progress calculations too (which use a slightly different wildcard engine than `rsync` itself — `**/` is the form verified to work correctly for both).
 
-This one file drives both **what gets backed up** (rsync's `--exclude-from`) and **what the watchdog reacts to** — a change inside an excluded path won't reset the 2-minute debounce timer either, so a busy cache directory can't perpetually delay a real backup. Changes take effect the next time a backup runs or the watchdog restarts.
+This one file drives both **what gets backed up** (rsync's `--exclude-from`) and **what the watchdog reacts to** — a change inside an excluded path won't reset the debounce timer either (see **Watchdog Delay** in Settings), so a busy cache directory can't perpetually delay a real backup. Changes take effect the next time a backup runs or the watchdog restarts.
 
 ### Things worth excluding, if they apply to you
 

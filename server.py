@@ -164,6 +164,39 @@ def clear_persisted_checks():
     set_database_value('LAST_SRC_SIZE', '')
     set_database_value('LAST_DEST_SPACE', '')
 
+# Mirrors rsync_event_handler.py's own WATCHDOG_DELAY_MIN/MAX (duplicated
+# rather than imported -- that module is a standalone runner script with
+# its own module-level side effects on import, same reasoning as
+# restore_operations.py's separately-duplicated COMPLETION_MARKER).
+WATCHDOG_DELAY_MIN = 30
+WATCHDOG_DELAY_MAX = 1800
+WATCHDOG_DELAY_DEFAULT = 120
+
+
+def _current_watchdog_delay_seconds():
+    try:
+        value = int(load_env_value('WATCHDOG_DELAY_SECONDS'))
+    except (TypeError, ValueError):
+        return WATCHDOG_DELAY_DEFAULT
+    return max(WATCHDOG_DELAY_MIN, min(WATCHDOG_DELAY_MAX, value))
+
+
+def _format_delay_seconds(seconds):
+    """Human-readable form of a watchdog delay value, for the Settings
+    slider's live label and the dashboard's Watchdog Delay stat.
+    """
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        seconds = WATCHDOG_DELAY_DEFAULT
+    if seconds < 60:
+        return f"{seconds} sec"
+    minutes, remainder = divmod(seconds, 60)
+    if remainder:
+        return f"{minutes} min {remainder} sec"
+    return f"{minutes} min"
+
+
 BACKUP_SERVICE_NAME = "folderw-backup.service"
 
 
@@ -708,6 +741,7 @@ def _dashboard_settings_context():
         "post_backup_script": load_env_value('POST_BACKUP_SCRIPT'),
         "backup_service_unit_exists": _backup_service_unit_exists(),
         "backup_service_active": _backup_service_is_active(),
+        "watchdog_delay_display": _format_delay_seconds(load_env_value('WATCHDOG_DELAY_SECONDS') or WATCHDOG_DELAY_DEFAULT),
         **_cached_update_status(),
         **get_backup_stats_context(database),
     }
@@ -977,6 +1011,9 @@ async def settings_page(request: Request):
         "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
         "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
         "file_exclusions": _read_file_exclusions(),
+        "watchdog_delay_seconds": _current_watchdog_delay_seconds(),
+        "watchdog_delay_min": WATCHDOG_DELAY_MIN,
+        "watchdog_delay_max": WATCHDOG_DELAY_MAX,
     })
 
 
@@ -1085,9 +1122,19 @@ async def submit_settings(
     notify_send_always: str = Form(None),
     backup_method: str = Form("differential"),
     file_exclusions: str = Form(""),
+    watchdog_delay_seconds: str = Form(str(WATCHDOG_DELAY_DEFAULT)),
 ):
     logger.info("Response received from Front End for /submit/")
     monitor_enabled = monitor is not None
+    # Clamped rather than rejected with an error -- the slider itself
+    # can't produce an out-of-range value, so this only ever matters for
+    # a raw/malformed POST, and it's not an identity-affecting setting
+    # worth interrupting the save over.
+    try:
+        watchdog_delay_value = int(watchdog_delay_seconds)
+    except (TypeError, ValueError):
+        watchdog_delay_value = WATCHDOG_DELAY_DEFAULT
+    watchdog_delay_value = max(WATCHDOG_DELAY_MIN, min(WATCHDOG_DELAY_MAX, watchdog_delay_value))
 
     # Captured before save_env_values overwrites .env, so we can tell
     # afterward whether the backup identity itself changed (as opposed to,
@@ -1129,6 +1176,9 @@ async def submit_settings(
             "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
             "file_exclusions": file_exclusions,
+            "watchdog_delay_seconds": watchdog_delay_value,
+            "watchdog_delay_min": WATCHDOG_DELAY_MIN,
+            "watchdog_delay_max": WATCHDOG_DELAY_MAX,
         })
 
     max_snapshots = max_snapshots.strip()
@@ -1168,6 +1218,7 @@ async def submit_settings(
         "NOTIFY_URLS": notify_urls.strip(),
         "NOTIFY_SEND_ALWAYS": "1" if notify_send_always is not None else "0",
         "BACKUP_METHOD": "incremental" if backup_method == "incremental" else "differential",
+        "WATCHDOG_DELAY_SECONDS": str(watchdog_delay_value),
         # PRE_BACKUP_SCRIPT/POST_BACKUP_SCRIPT deliberately NOT included
         # here -- moved to their own page/save route (see /backup-hooks
         # below). Writing them from this form too, even just re-saving
@@ -1215,6 +1266,9 @@ async def submit_settings(
             "notify_send_always": load_env_value('NOTIFY_SEND_ALWAYS') == '1',
             "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
             "file_exclusions": file_exclusions,
+            "watchdog_delay_seconds": watchdog_delay_value,
+            "watchdog_delay_min": WATCHDOG_DELAY_MIN,
+            "watchdog_delay_max": WATCHDOG_DELAY_MAX,
         })
 
     save_env_values(new_values)
@@ -1261,6 +1315,9 @@ async def submit_settings(
         "notify_send_always": new_values["NOTIFY_SEND_ALWAYS"] == "1",
         "backup_method": new_values["BACKUP_METHOD"],
         "file_exclusions": ', '.join(saved_file_exclusions),
+        "watchdog_delay_seconds": watchdog_delay_value,
+        "watchdog_delay_min": WATCHDOG_DELAY_MIN,
+        "watchdog_delay_max": WATCHDOG_DELAY_MAX,
     })
 
 

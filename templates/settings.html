@@ -88,20 +88,37 @@
             sendDataToServer(data);
         }
 
+        function formatWatchdogDelay(seconds) {
+            seconds = parseInt(seconds, 10);
+            if (seconds < 60) return seconds + ' sec';
+            const minutes = Math.floor(seconds / 60);
+            const remainder = seconds % 60;
+            return remainder ? (minutes + ' min ' + remainder + ' sec') : (minutes + ' min');
+        }
+
         document.addEventListener("DOMContentLoaded", function() {
             const monitorCheckbox = document.getElementById('monitor');
             const scheduleFields = document.getElementById('schedule-fields');
+            const watchdogDelayField = document.getElementById('watchdog-delay-field');
+            const watchdogDelayInput = document.getElementById('watchdog_delay_seconds');
+            const watchdogDelayLabel = document.getElementById('watchdog-delay-label');
 
             function toggleScheduleFields() {
+                // Opposite of each other -- the watchdog delay only means
+                // anything in Monitor mode (event-driven); the interval
+                // radios only mean anything in scheduled mode.
                 if (monitorCheckbox.checked) {
                     scheduleFields.style.display = 'none';
+                    watchdogDelayField.style.display = 'block';
                 } else {
                     scheduleFields.style.display = 'block';
+                    watchdogDelayField.style.display = 'none';
                 }
             }
 
             // Initial check
             toggleScheduleFields();
+            watchdogDelayLabel.textContent = formatWatchdogDelay(watchdogDelayInput.value);
 
             // Listen for changes
             monitorCheckbox.addEventListener('change', toggleScheduleFields);
@@ -236,6 +253,19 @@
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-monitor')">?</button>
                                     <div id="help-monitor" class="help-popover hidden">Enable this option to monitor changes in the source directory continuously.</div>
                                 </div>
+                            </div>
+
+                            <!-- Watchdog Delay -->
+                            <div id="watchdog-delay-field" style="display: {% if monitor_checked %}block{% else %}none{% endif %};">
+                                <div class="help-wrap mb-2">
+                                    <label for="watchdog_delay_seconds" class="text-[var(--text)] font-medium">Watchdog Delay: <span id="watchdog-delay-label" class="font-mono"></span></label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-watchdog-delay')">?</button>
+                                    <div id="help-watchdog-delay" class="help-popover hidden">How long to wait after your last file change before actually running a backup &mdash; a burst of saves within this window all collapse into one backup. A backup is also guaranteed to run within this many seconds of the <em>first</em> unflushed change, even if you never stop saving/typing.</div>
+                                </div>
+                                <input type="range" id="watchdog_delay_seconds" name="watchdog_delay_seconds"
+                                       min="{{ watchdog_delay_min }}" max="{{ watchdog_delay_max }}" step="30"
+                                       value="{{ watchdog_delay_seconds }}" class="w-full"
+                                       oninput="document.getElementById('watchdog-delay-label').textContent = formatWatchdogDelay(this.value)">
                             </div>
 
                             <!-- Schedule Fields -->

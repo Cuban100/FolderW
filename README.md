@@ -28,6 +28,7 @@
 15. **One-Click Update:** The dashboard detects when there are new commits upstream and shows what changed — click Update Now to pull, update dependencies, and restart, no terminal needed. See [Operations](docs/operations.md#updating).
 16. **Recovery History:** Dashboard page listing every restore ever run — timestamp, source snapshot, restore type, files, destination.
 17. **Find File:** Search for a file or folder by name across every backup and snapshot at once — see exactly which one(s) it's in, and restore just that item to a new Recovery Folder or straight back into your source directory.
+18. **Watchdog Delay:** Adjustable slider (Settings, event-driven mode only) for how long the watchdog waits after a change before backing up, and the ceiling on how long continuous activity can postpone one — reflected live on the dashboard.
 
 ## Quick Start
 

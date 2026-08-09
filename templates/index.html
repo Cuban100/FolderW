@@ -180,6 +180,18 @@
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 16px;
         }
+        /* Fixed 4-per-row instead of auto-fit -- Backup Statistics has
+           enough cards to wrap unpredictably (3 vs 4 per row) depending
+           on window width; this keeps rows deliberate: a full row of 4,
+           then whatever's left underneath, always in the same place. */
+        .stats-grid-4col {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        @media (max-width: 900px) {
+            .stats-grid-4col {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
         .stat-card {
             background-color: var(--surface);
             border-radius: 10px;
@@ -628,7 +640,7 @@
 
             <div class="stats-section">
                 <h2>Backup Statistics</h2>
-                <div class="stats-grid">
+                <div class="stats-grid stats-grid-4col">
                     <div class="stat-card">
                         <div class="stat-label">Source Folder Size</div>
                         <div class="stat-value" id="source-folder-size-value">{{ src_size if src_size else 'Not Available' }}</div>
@@ -657,6 +669,12 @@
                         <div class="stat-label">Snapshots on Disk</div>
                         <div class="stat-value">{{ snapshot_count if snapshot_count is defined else 0 }}</div>
                     </div>
+                    {% if monitor == '1' %}
+                    <div class="stat-card">
+                        <div class="stat-label">Watchdog Delay</div>
+                        <div class="stat-value">{{ watchdog_delay_display }}</div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
