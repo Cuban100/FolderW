@@ -9,7 +9,73 @@
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/index.css">
     <script src="/static/sidebar.js"></script>
+    <style>
+        .help-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 17px;
+            height: 17px;
+            border-radius: 50%;
+            border: 1px solid var(--text-muted);
+            color: var(--text-muted);
+            font-size: 11px;
+            line-height: 1;
+            font-weight: 700;
+            cursor: pointer;
+            background: none;
+            flex-shrink: 0;
+            padding: 0;
+        }
+        .help-icon:hover, .help-icon.active {
+            border-color: #2196f3;
+            color: #2196f3;
+        }
+        .help-popover {
+            position: absolute;
+            z-index: 30;
+            top: 100%;
+            left: 0;
+            margin-top: 6px;
+            background: var(--surface-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.85em;
+            line-height: 1.4;
+            color: var(--text-muted);
+            width: max-content;
+            max-width: 340px;
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+        .help-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+    </style>
     <script>
+        function toggleHelp(event, id) {
+            event.stopPropagation();
+            const popover = document.getElementById(id);
+            const btn = event.currentTarget;
+            document.querySelectorAll('.help-popover').forEach(p => {
+                if (p !== popover) p.classList.add('hidden');
+            });
+            document.querySelectorAll('.help-icon').forEach(b => {
+                if (b !== btn) b.classList.remove('active');
+            });
+            popover.classList.toggle('hidden');
+            btn.classList.toggle('active');
+        }
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.help-wrap')) {
+                document.querySelectorAll('.help-popover').forEach(p => p.classList.add('hidden'));
+                document.querySelectorAll('.help-icon').forEach(b => b.classList.remove('active'));
+            }
+        });
+
         function submitForm(data) {
             if (data.option === 'monitor') {
                 data.interval = "";  // Ensure the interval field is included and empty
@@ -25,7 +91,7 @@
         document.addEventListener("DOMContentLoaded", function() {
             const monitorCheckbox = document.getElementById('monitor');
             const scheduleFields = document.getElementById('schedule-fields');
-            
+
             function toggleScheduleFields() {
                 if (monitorCheckbox.checked) {
                     scheduleFields.style.display = 'none';
@@ -33,10 +99,10 @@
                     scheduleFields.style.display = 'block';
                 }
             }
-            
+
             // Initial check
             toggleScheduleFields();
-            
+
             // Listen for changes
             monitorCheckbox.addEventListener('change', toggleScheduleFields);
         });
@@ -82,36 +148,52 @@
                         {{ success }}
                     </div>
                     {% endif %}
-                    
-                    <form method="post" action="/submit/" class="space-y-6">
 
-                        <div class="rounded-lg border-2 border-[var(--error-text)] p-5 space-y-6">
+                    <form method="post" action="/submit/" class="space-y-4">
+
+                        <div class="rounded-lg border-2 border-[var(--error-text)] p-5 space-y-4">
                             <div>
                                 <h2 class="text-lg font-semibold text-[var(--error-text)]">Changing these starts a new full backup</h2>
                                 <p class="text-sm text-[var(--text-muted)] mt-1">These identify which backup this is. Changing any of them means FolderW is now pointed at a different backup, so the old one's history is cleared and a fresh full backup runs from scratch.</p>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="src_dir" class="text-[var(--text)] font-medium">Source Directory:</label>
+                                <div class="help-wrap">
+                                    <label for="src_dir" class="text-[var(--text)] font-medium">Source Directory:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-src_dir')">?</button>
+                                    <div id="help-src_dir" class="help-popover hidden">Specify the path of the folder or device you want to back up. Example: /home/user/Documents</div>
+                                </div>
                                 <input type="text" id="src_dir" name="src_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ src_dir or '' }}">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Specify the path of the folder or device you want to back up. Example: /home/user/Documents</div>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="base_dir" class="text-[var(--text)] font-medium">Base Backup Directory:</label>
+                                <div class="help-wrap">
+                                    <label for="base_dir" class="text-[var(--text)] font-medium">Base Backup Directory:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-base_dir')">?</button>
+                                    <div id="help-base_dir" class="help-popover hidden">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
+                                </div>
                                 <input type="text" id="base_dir" name="base_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ base_dir or '' }}">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="full_name" class="text-[var(--text)] font-medium">Full Backup Folder Name:</label>
+                                <div class="help-wrap">
+                                    <label for="full_name" class="text-[var(--text)] font-medium">Full Backup Folder Name:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-full_name')">?</button>
+                                    <div id="help-full_name" class="help-popover hidden">Name of the folder created inside the Base Backup Directory to hold "Full Backup" and "Snapshots". Example: Documents</div>
+                                </div>
                                 <input type="text" id="full_name" name="full_name" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ full_name or '' }}">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Name of the folder created inside the Base Backup Directory to hold "Full Backup" and "Snapshots". Example: Documents</div>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="database" class="text-[var(--text)] font-medium">Database File:</label>
+                                <div class="help-wrap">
+                                    <label for="database" class="text-[var(--text)] font-medium">Database File:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-database')">?</button>
+                                    <div id="help-database" class="help-popover hidden">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
+                                </div>
                                 <input type="text" id="database" name="database" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ database or '' }}">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
                             </div>
                             <div>
-                                <label class="block text-[var(--text)] font-medium mb-2">Backup Method:</label>
+                                <div class="help-wrap mb-2">
+                                    <label class="block text-[var(--text)] font-medium">Backup Method:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-backup_method')">?</button>
+                                    <div id="help-backup_method" class="help-popover hidden">Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together. Switching between the two starts a new full backup, so snapshots never end up mixing both shapes in the same Snapshots folder.</div>
+                                </div>
                                 <div class="flex space-x-4">
                                     <label class="inline-flex items-center">
                                         <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
@@ -122,32 +204,38 @@
                                         <span class="ml-2 text-[var(--text)]">Differential</span>
                                     </label>
                                 </div>
-                                <div class="text-sm text-[var(--text-muted)] mt-1">
-                                    Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together. Switching between the two starts a new full backup, so snapshots never end up mixing both shapes in the same Snapshots folder.
-                                </div>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="file_exclusions" class="text-[var(--text)] font-medium">File Exclusions:</label>
+                                <div class="help-wrap">
+                                    <label for="file_exclusions" class="text-[var(--text)] font-medium">File Exclusions:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-file_exclusions')">?</button>
+                                    <div id="help-file_exclusions" class="help-popover hidden">Comma-separated file/folder names or patterns to skip during backup (e.g. <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">node_modules, *.tmp, cache</code>). Uses the same glob syntax as rsync's own exclude file. Leave blank to exclude nothing beyond FolderW's own built-in exclusions.</div>
+                                </div>
                                 <input type="text" id="file_exclusions" name="file_exclusions" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ file_exclusions or '' }}" placeholder="Leave blank to exclude nothing extra">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Comma-separated file/folder names or patterns to skip during backup (e.g. <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">node_modules, *.tmp, cache</code>). Uses the same glob syntax as rsync's own exclude file. Leave blank to exclude nothing beyond FolderW's own built-in exclusions.</div>
                             </div>
                         </div>
 
-                        <div class="rounded-lg border-2 border-[var(--border)] p-5 space-y-6">
+                        <div class="rounded-lg border-2 border-[var(--border)] p-5 space-y-4">
                             <div>
                                 <h2 class="text-lg font-semibold text-[var(--text)]">Everything else</h2>
                                 <p class="text-sm text-[var(--text-muted)] mt-1">These don't identify the backup itself, so changing them never resets history or starts a new full backup.</p>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="log_dir" class="text-[var(--text)] font-medium">Log Directory:</label>
+                                <div class="help-wrap">
+                                    <label for="log_dir" class="text-[var(--text)] font-medium">Log Directory:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-log_dir')">?</button>
+                                    <div id="help-log_dir" class="help-popover hidden">Specify the directory where the rsync log file, typically named 'rsync.log', will be stored.</div>
+                                </div>
                                 <input type="text" id="log_dir" name="log_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ log_dir or '' }}">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Specify the directory where the rsync log file, typically named 'rsync.log', will be stored.</div>
                             </div>
                             <!-- Monitor Source Folder -->
-                            <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-3">
                                 <input type="checkbox" id="monitor" name="monitor" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if monitor_checked %}checked{% endif %}>
-                                <label for="monitor" class="text-[var(--text)]">Monitor Source Folder</label>
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Enable this option to monitor changes in the source directory continuously.</div>
+                                <div class="help-wrap">
+                                    <label for="monitor" class="text-[var(--text)]">Monitor Source Folder</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-monitor')">?</button>
+                                    <div id="help-monitor" class="help-popover hidden">Enable this option to monitor changes in the source directory continuously.</div>
+                                </div>
                             </div>
 
                             <!-- Schedule Fields -->
@@ -176,41 +264,59 @@
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="max_snapshots" class="text-[var(--text)] font-medium">Snapshots to Keep:</label>
+                                <div class="help-wrap">
+                                    <label for="max_snapshots" class="text-[var(--text)] font-medium">Snapshots to Keep:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-max_snapshots')">?</button>
+                                    <div id="help-max_snapshots" class="help-popover hidden">Oldest incremental snapshots beyond this count are deleted automatically after each backup.</div>
+                                </div>
                                 <input type="number" min="1" step="1" id="max_snapshots" name="max_snapshots" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ max_snapshots or '' }}" placeholder="Leave blank to keep all">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Oldest incremental snapshots beyond this count are deleted automatically after each backup.</div>
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label class="text-[var(--text)] font-medium">Pre/Post-Backup Scripts:</label>
+                                <div class="help-wrap">
+                                    <label class="text-[var(--text)] font-medium">Pre/Post-Backup Scripts:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-hooks')">?</button>
+                                    <div id="help-hooks" class="help-popover hidden">Moved to their own page, with a way to test each script before trusting it to run during a real backup.</div>
+                                </div>
                                 <div class="col-span-2">
                                     <a href="/backup-hooks" class="text-blue-600 hover:underline text-sm">Manage on the Backup Hooks page &rarr;</a>
                                 </div>
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Moved to their own page, with a way to test each script before trusting it to run during a real backup.</div>
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="new_password" class="text-[var(--text)] font-medium">Dashboard Password:</label>
+                                <div class="help-wrap">
+                                    <label for="new_password" class="text-[var(--text)] font-medium">Dashboard Password:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-password')">?</button>
+                                    <div id="help-password" class="help-popover hidden">Set or change the password required to log in to this dashboard. Leave blank to keep it unchanged.</div>
+                                </div>
                                 <input type="password" id="new_password" name="new_password" autocomplete="new-password" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" placeholder="Leave blank to keep the current password">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Set or change the password required to log in to this dashboard. Leave blank to keep it unchanged.</div>
                             </div>
-                            <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-3">
                                 <input type="checkbox" id="require_login" name="require_login" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if login_enabled %}checked{% endif %}>
-                                <label for="require_login" class="text-[var(--text)]">Require Login</label>
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Uncheck to disable the login page entirely.</div>
-                            </div>
-
-                            <div class="grid grid-cols-3 gap-4 items-center">
-                                <label for="notify_urls" class="text-[var(--text)] font-medium">Notification URL(s):</label>
-                                <input type="text" id="notify_urls" name="notify_urls" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ notify_urls or '' }}" placeholder="e.g. pover://user@token, ntfy://topic">
-                                <div class="text-sm text-[var(--text-muted)] mt-1">
-                                    Comma-separated <a href="https://github.com/caronc/apprise#supported-notifications" target="_blank" rel="noopener" class="underline">Apprise URLs</a> (Pushover, ntfy, Pushbullet, email, Discord, and 100+ others). Notified on backup failure and full backup completion. Leave blank if you only want desktop notifications below.
+                                <div class="help-wrap">
+                                    <label for="require_login" class="text-[var(--text)]">Require Login</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-require_login')">?</button>
+                                    <div id="help-require_login" class="help-popover hidden">Uncheck to disable the login page entirely.</div>
                                 </div>
                             </div>
-                            <div class="flex items-center space-x-4">
+
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <div class="help-wrap">
+                                    <label for="notify_urls" class="text-[var(--text)] font-medium">Notification URL(s):</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-notify_urls')">?</button>
+                                    <div id="help-notify_urls" class="help-popover hidden">
+                                        Comma-separated <a href="https://github.com/caronc/apprise#supported-notifications" target="_blank" rel="noopener" class="underline">Apprise URLs</a> (Pushover, ntfy, Pushbullet, email, Discord, and 100+ others). Notified on backup failure and full backup completion. Leave blank if you only want desktop notifications below.
+                                    </div>
+                                </div>
+                                <input type="text" id="notify_urls" name="notify_urls" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ notify_urls or '' }}" placeholder="e.g. pover://user@token, ntfy://topic">
+                            </div>
+                            <div class="flex items-center space-x-3">
                                 <input type="checkbox" id="notify_send_always" name="notify_send_always" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if notify_send_always %}checked{% endif %}>
-                                <label for="notify_send_always" class="text-[var(--text)]">Always send a desktop notification</label>
-                                <div class="text-sm text-[var(--text-muted)] mt-1">Uses <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">notify-send</code> to show a notification on this machine's own desktop, independent of (or in addition to) the URL(s) above.</div>
+                                <div class="help-wrap">
+                                    <label for="notify_send_always" class="text-[var(--text)]">Always send a desktop notification</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-notify_always')">?</button>
+                                    <div id="help-notify_always" class="help-popover hidden">Uses <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">notify-send</code> to show a notification on this machine's own desktop, independent of (or in addition to) the URL(s) above.</div>
+                                </div>
                             </div>
                             <div class="flex items-center space-x-4">
                                 <button type="button" onclick="testNotification()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">Send Test Notification</button>
@@ -228,4 +334,3 @@
             </div>
         </body>
         </html>
-        
