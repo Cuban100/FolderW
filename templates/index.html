@@ -562,6 +562,12 @@
             </div>
             {% endif %}
             {# Stop Monitoring / Backup Service controls moved to the sidebar -- see templates/_sidebar.html #}
+            {% if monitor == '1' %}
+            <p class="show" style="text-align: center;">
+                <span class="status-dot" id="watchdog-live-dot"></span>
+                <span id="watchdog-live-text" style="color: var(--text-muted);">Watching for changes&hellip;</span>
+            </p>
+            {% endif %}
             {% if not ready_for_manual_snapshot %}
             <div class="progress-container">
 
@@ -596,10 +602,6 @@
                 This step ensures that there is enough space on the destination directory to accommodate the backup and that the source directory has the necessary space to complete the backup process. By verifying these space requirements, we prevent potential issues during the backup, such as insufficient storage space or data overflow, ensuring a smooth and successful backup process.</p>
                 {% if monitor == '1' %}
                 <p class="show"><span class="status-dot {{ 'green' if watchdog_active else '' }}" id="dot-watchdog"></span><span class="highlight">Watchdog Future (FolderW) is enabled:</span> Enabling the monitoring feature activates the watchdog functionality. This means that the system will continuously watch the source directory for any changes or updates. By choosing to enable monitoring, the watchdog ensures that any new or modified files in the source directory are automatically detected and prepared for backup. This process is incremental, organizing backups by month, day, and time, which means all versions of the same file will be stored in a very organized manner. This ensures your backup is always up-to-date without manual intervention, and you can easily track and retrieve specific versions of your files as needed. This dot stays red until a full backup completes and the watchdog actually starts watching — not just while it's enabled in Settings.</p>
-                <p class="show">
-                    <span class="status-dot" id="watchdog-live-dot"></span>
-                    <span id="watchdog-live-text" style="color: var(--text-muted);">Watching for changes&hellip;</span>
-                </p>
                 {% endif %}
                 {% if interval == 'hourly' or interval == 'daily' or interval == 'weekly' %}
                 <p class="show"><span class="highlight">Interval Backup is enabled:</span> When the interval option is enabled, backups are scheduled to occur at specified time intervals. This step allows you to configure how frequently backups should take place (e.g., every hour, daily, weekly). The system will automatically initiate a backup at each specified interval, ensuring that your data is continuously protected. Each backup is incremental, meaning only the changes made since the last backup are saved. This approach optimizes storage space and organizes all versions of the same file by month, day, and time. This organized storage makes it easy to track and retrieve specific file versions as needed, providing a reliable and efficient backup solution.</p>
