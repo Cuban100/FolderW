@@ -14,7 +14,7 @@ from datetime import datetime
 from notifications import _notify_desktop
 from backup_hooks import run_hook_script
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
@@ -822,6 +822,21 @@ async def restore_set_note(backup_id: str = Form(...), note: str = Form(""), pag
 async def restore_execute(request: Request, backup_id: str = Form(...), selected_paths: list[str] = Form(default=[]), combine_with_full: str = Form("1")):
     try:
         dest_root, file_count = restore_backup(backup_id, selected_paths or None, combine_with_full=(combine_with_full == "1"))
+        # Captured for Recovery History at restore time, not looked up
+        # later -- the source backup/snapshot can be pruned by retention
+        # or deleted afterward, at which point backup_id alone wouldn't
+        # resolve to a label anymore. Falls back to the raw id itself if
+        # the backup has already vanished by the time this runs (rare,
+        # but not impossible with a fast retention cleanup).
+        matching_backup = next((b for b in list_backups() if b["id"] == backup_id), None)
+        backup_label = matching_backup["label"] if matching_backup else backup_id
+        if selected_paths:
+            restore_type = "Selected Files"
+        elif matching_backup and matching_backup["is_delta_only"]:
+            restore_type = "Full Restore" if combine_with_full == "1" else "Only Snapshot"
+        else:
+            restore_type = "Entire Backup"
+        record_restore_run(backup_id, backup_label, dest_root, file_count, restore_type)
         return templates.TemplateResponse("restore.html", {
             "request": request,
             "logo": logo,
@@ -1218,6 +1233,21 @@ async def backup_history(request: Request, page: int = 1):
     page = min(max(1, page), total_pages)
     runs = list_backup_runs(HISTORY_PAGE_SIZE, (page - 1) * HISTORY_PAGE_SIZE)
     return templates.TemplateResponse("backup-history.html", {
+        "request": request,
+        "logo": logo,
+        "runs": runs,
+        "page": page,
+        "total_pages": total_pages,
+    })
+
+
+@app.get("/recovery-history", response_class=HTMLResponse)
+async def recovery_history(request: Request, page: int = 1):
+    total = count_restore_runs()
+    total_pages = max(1, (total + HISTORY_PAGE_SIZE - 1) // HISTORY_PAGE_SIZE)
+    page = min(max(1, page), total_pages)
+    runs = list_restore_runs(HISTORY_PAGE_SIZE, (page - 1) * HISTORY_PAGE_SIZE)
+    return templates.TemplateResponse("recovery-history.html", {
         "request": request,
         "logo": logo,
         "runs": runs,

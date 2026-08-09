@@ -201,6 +201,19 @@ def create_all_tables(database):
         ''')
         logger.info("Table 'backup_runs' created successfully.")
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS restore_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                backup_id TEXT,
+                backup_label TEXT,
+                destination TEXT,
+                file_count INTEGER,
+                restore_type TEXT
+            );
+        ''')
+        logger.info("Table 'restore_runs' created successfully.")
+
         connection.commit()
         connection.close()
         logger.info("All tables created successfully.")
@@ -219,7 +232,7 @@ def reset_backup_history(database):
     try:
         conn = sqlite3.connect(database)
         cursor = conn.cursor()
-        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs'):
+        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'restore_runs'):
             cursor.execute(f"DELETE FROM {table}")
         conn.commit()
         conn.close()
@@ -228,7 +241,7 @@ def reset_backup_history(database):
         # set from the OLD source/destination and skip straight to
         # monitoring instead of actually syncing the new one.
         set_database_value('FULL_BACKUP_COMPLETED', '0')
-        logger.info("Backup history reset (changes/statistics/performance_metrics/backup_runs cleared).")
+        logger.info("Backup history reset (changes/statistics/performance_metrics/backup_runs/restore_runs cleared).")
     except sqlite3.Error as e:
         logger.error(f"Error resetting backup history: {e}")
 
@@ -246,7 +259,7 @@ def wipe_database_for_fresh_start(database):
     try:
         conn = sqlite3.connect(database)
         cursor = conn.cursor()
-        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'settings'):
+        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'restore_runs', 'settings'):
             cursor.execute(f"DELETE FROM {table}")
         conn.commit()
         conn.close()
@@ -423,6 +436,78 @@ def list_backup_runs(limit, offset):
         ]
     except sqlite3.Error as e:
         logger.error(f"Error listing backup runs: {e}")
+        return []
+
+def record_restore_run(backup_id, backup_label, destination, file_count, restore_type):
+    """Log that a restore happened -- the Recovery History page's source
+    of truth. Captures backup_label at restore time (not looked up
+    later) since the source backup/snapshot can be pruned by retention
+    or deleted afterward, at which point its id alone wouldn't resolve
+    to anything meaningful anymore.
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO restore_runs (timestamp, backup_id, backup_label, destination, file_count, restore_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            backup_id,
+            backup_label,
+            destination,
+            file_count,
+            restore_type,
+        ))
+        conn.commit()
+        conn.close()
+        logger.success(f"Recorded restore run: '{backup_label}' ({restore_type}) -> {destination}, {file_count} file(s).")
+    except sqlite3.Error as e:
+        logger.error(f"Error recording restore run: {e}")
+
+def count_restore_runs():
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM restore_runs')
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+    except sqlite3.Error as e:
+        logger.error(f"Error counting restore runs: {e}")
+        return 0
+
+def list_restore_runs(limit, offset):
+    """Paginated, newest-first log of every restore recorded (see
+    record_restore_run) -- grows forever, nothing prunes it, so this is
+    paginated at the SQL level rather than fetching everything and
+    slicing in Python (same reasoning as list_backup_runs).
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT timestamp, backup_id, backup_label, destination, file_count, restore_type
+            FROM restore_runs ORDER BY id DESC LIMIT ? OFFSET ?
+        ''', (limit, offset))
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                "timestamp": r[0],
+                "backup_id": r[1],
+                "backup_label": r[2],
+                "destination": r[3],
+                "file_count": r[4],
+                "restore_type": r[5],
+            }
+            for r in rows
+        ]
+    except sqlite3.Error as e:
+        logger.error(f"Error listing restore runs: {e}")
         return []
 
 def get_backup_stats_series(limit=200):
