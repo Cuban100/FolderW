@@ -101,12 +101,11 @@ def get_folder_size_bytes_du(path, exclude_from=None, apparent_size=True):
     valid, if slightly undercounted, total to stdout. Only treat it as a
     real failure if stdout has nothing usable at all.
 
-    exclude_from (optional): a path, or list of paths, to an rsync-style
-    exclude patterns file (GNU du's --exclude-from uses the same glob
-    syntax; passing it multiple times unions all the files' patterns).
-    Without this, a huge excluded-from-the-backup item — e.g. a sparse
-    virtual disk image with a multi-hundred-GB apparent size — inflates
-    the total far beyond what will actually be transferred.
+    exclude_from (optional): a path to an rsync-style exclude patterns file
+    (GNU du's --exclude-from uses the same glob syntax). Without this, a
+    huge excluded-from-the-backup item — e.g. a sparse virtual disk image
+    with a multi-hundred-GB apparent size — inflates the total far beyond
+    what will actually be transferred.
 
     apparent_size: True (default) sums each file's logical size — matches
     what rsync's own byte counters report, so the live progress-percentage
@@ -131,10 +130,7 @@ def get_folder_size_bytes_du(path, exclude_from=None, apparent_size=True):
     else:
         command.append('--block-size=1')
     if exclude_from:
-        exclude_paths = [exclude_from] if isinstance(exclude_from, str) else exclude_from
-        for exclude_path in exclude_paths:
-            if exclude_path:
-                command.append(f'--exclude-from={exclude_path}')
+        command.append(f'--exclude-from={exclude_from}')
     command.append(path)
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output = result.stdout.decode('utf-8').strip()
@@ -196,7 +192,7 @@ def evaluation_of_resources():
     # `or 0`: unlike the os.walk version, du can return None on total
     # failure (e.g. SRC_DIR unreadable) — keep this always an int like
     # every downstream comparison/formatting call here already assumes.
-    src_size = get_folder_size_bytes_du(load_env_value('SRC_DIR'), exclude_from=[load_other_variables('exclude_file'), load_other_variables('custom_exclude_file')], apparent_size=False) or 0
+    src_size = get_folder_size_bytes_du(load_env_value('SRC_DIR'), exclude_from=load_other_variables('custom_exclude_file'), apparent_size=False) or 0
     total, used, free = destination_space()
     if total is None:
         return (

@@ -49,13 +49,13 @@ def _load_patterns(path):
     return patterns
 
 def _load_exclude_patterns():
-    # Reuses rsync's own exclude file (logs/rsync_exclude.txt) rather than
+    # Reuses rsync's own exclude file (logs/custom_exclude.txt) rather than
     # a separate list, so a change/tmp/cache directory only needs to be
     # excluded in one place to be skipped by both the actual backup and
     # the watchdog that triggers it — otherwise every write inside an
     # excluded directory (e.g. a busy browser cache) would still reset the
     # debounce timer for no reason, delaying real backups indefinitely.
-    return _load_patterns(load_other_variables('exclude_file')) + _load_patterns(load_other_variables('custom_exclude_file'))
+    return _load_patterns(load_other_variables('custom_exclude_file'))
 
 EXCLUDE_PATTERNS = _load_exclude_patterns()
 
@@ -67,7 +67,7 @@ EXCLUDE_PATTERNS = _load_exclude_patterns()
 # without this, that alone is enough to keep the watchdog's ceiling
 # (MAX_BACKUP_DELAY_SECONDS, above) firing around the clock.
 TRIGGER_EXEMPT_PATTERNS = _load_patterns(
-    os.path.join(os.path.dirname(load_other_variables('exclude_file')), 'watchdog_trigger_exempt.txt')
+    os.path.join(os.path.dirname(load_other_variables('custom_exclude_file')), 'watchdog_trigger_exempt.txt')
 )
 
 def run_backup_script():

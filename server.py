@@ -700,10 +700,10 @@ async def restore_compile(request: Request):
 
 
 def _read_file_exclusions():
-    # logs/custom_exclude.txt is the source of truth (one pattern per
-    # line, same convention as the developer-curated logs/rsync_exclude.txt
-    # it sits alongside) -- re-joined with ", " here only for display in
-    # the Settings form field.
+    # logs/custom_exclude.txt (one pattern per line) is the single,
+    # fully user-editable source of truth for what's excluded from
+    # backup -- re-joined with ", " here only for display in the
+    # Settings form field.
     path = load_other_variables('custom_exclude_file')
     with open(path, 'r') as f:
         return ', '.join(line.strip() for line in f if line.strip())

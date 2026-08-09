@@ -64,14 +64,13 @@ def load_other_variables(variable_name):
         return os.path.join(os.path.dirname(__file__), 'logs/rsync.log')
     elif variable_name == 'rsync_txt':
         return os.path.join(os.path.dirname(__file__), 'logs/rsync.txt')
-    elif variable_name == 'exclude_file':
-        return os.path.join(os.path.dirname(__file__), 'logs/rsync_exclude.txt')
     elif variable_name == 'custom_exclude_file':
-        # User-editable exclusions (Settings page), kept separate from the
-        # developer-curated logs/rsync_exclude.txt above so a user's own
-        # patterns never get mixed into (or wipe out) that file. Always
-        # ensured to exist, since every caller passes this straight to
-        # rsync/du's --exclude-from, which errors on a missing file.
+        # The single exclude-patterns file, fully user-editable from the
+        # Settings page -- no separate hardcoded/non-editable exclude list
+        # exists anymore (see git history for the old logs/rsync_exclude.txt
+        # split). Always ensured to exist, since every caller passes this
+        # straight to rsync/du's --exclude-from, which errors on a missing
+        # file.
         path = os.path.join(os.path.dirname(__file__), 'logs/custom_exclude.txt')
         if not os.path.exists(path):
             open(path, 'a').close()
