@@ -15,7 +15,7 @@ from notifications import _notify_desktop
 from backup_hooks import run_hook_script
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs
-from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot
+from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot, search_all_backups, restore_single_path, summarize_folder
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
@@ -880,6 +880,62 @@ async def restore_compile(request: Request):
         "success": f"Compiled {file_count} file(s) into a new merged snapshot at {new_path}.",
         **_restore_page_context(),
     })
+
+
+@app.get("/find-file", response_class=HTMLResponse)
+async def find_file(request: Request, query: str = ""):
+    results = []
+    truncated = False
+    if query.strip():
+        results, truncated = search_all_backups(query.strip())
+    return templates.TemplateResponse("find-file.html", {
+        "request": request,
+        "logo": logo,
+        "query": query,
+        "results": results,
+        "truncated": truncated,
+    })
+
+
+@app.post("/find-file/restore", response_class=HTMLResponse)
+async def find_file_restore(
+    request: Request,
+    backup_id: str = Form(...),
+    rel_path: str = Form(...),
+    target: str = Form(...),
+    query: str = Form(""),
+):
+    context = {"request": request, "logo": logo, "query": query}
+    try:
+        if target == "source":
+            target_dir = load_env_value('SRC_DIR')
+            dest = restore_single_path(backup_id, rel_path, target_dir, safety_backup=True)
+            context["success"] = (
+                f"Restored '{rel_path}' directly into your source directory ({dest}). "
+                "If something already existed at that exact path, it was moved aside "
+                "(suffixed with a timestamp) rather than overwritten, in case this wasn't what you meant to do."
+            )
+        else:
+            timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+            label = backup_id.replace('/', '-').replace(':', '-')
+            item_name = os.path.basename(rel_path.rstrip('/')) or rel_path
+            target_dir = os.path.join(load_env_value('BASE_DIR'), "Restored", f"{timestamp}_{label}_{item_name}")
+            os.makedirs(target_dir, exist_ok=True)
+            dest = restore_single_path(backup_id, rel_path, target_dir, safety_backup=False)
+            context["success"] = f"Restored '{rel_path}' to {dest}."
+
+        file_count = 1 if (os.path.isfile(dest) or os.path.islink(dest)) else summarize_folder(dest)[0]
+        matching_backup = next((b for b in list_backups() if b["id"] == backup_id), None)
+        backup_label = matching_backup["label"] if matching_backup else backup_id
+        restore_type = f"Single item ({'Source' if target == 'source' else 'Recovery Folder'})"
+        record_restore_run(backup_id, backup_label, dest, file_count, restore_type)
+    except ValueError as e:
+        context["error"] = str(e)
+
+    results, truncated = search_all_backups(query.strip()) if query.strip() else ([], False)
+    context["results"] = results
+    context["truncated"] = truncated
+    return templates.TemplateResponse("find-file.html", context)
 
 
 def _read_file_exclusions():

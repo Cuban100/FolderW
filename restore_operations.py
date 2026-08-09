@@ -508,6 +508,114 @@ def list_files_in_backup(backup_path, search=None, limit=2000):
     return files, truncated
 
 
+def search_all_backups(query, limit=200):
+    """Search every backup (full backup + every snapshot, oldest and
+    newest alike) for a file or folder whose relative path contains
+    `query` (case-insensitive substring, same matching rule as
+    list_files_in_backup) -- the point being to answer "which
+    snapshot(s) is this actually in" without knowing in advance, not
+    just search within one already-chosen snapshot.
+
+    Unlike list_files_in_backup, this matches directories too (a
+    restorable unit can be a whole folder, not just a single file), and
+    doesn't exclude FolderW's own internal files -- consistent with
+    restore no longer excluding them either (see _INTERNAL_FILES' own
+    docstring).
+
+    Returns (matches, truncated). Newest-snapshot-first (matches
+    list_backups()' own order), capped at `limit` total matches across
+    all backups combined -- a broad query (e.g. a common word) against
+    many snapshots could otherwise return an unbounded result set.
+    """
+    query_lower = query.lower()
+    matches = []
+    truncated = False
+    for backup in list_backups():
+        if len(matches) >= limit:
+            truncated = True
+            break
+        backup_path = backup["path"]
+        for dirpath, dirnames, filenames in os.walk(backup_path):
+            entries = [(name, False) for name in filenames] + [(name, True) for name in sorted(dirnames)]
+            for name, is_dir in entries:
+                rel = os.path.relpath(os.path.join(dirpath, name), backup_path)
+                if query_lower not in rel.lower():
+                    continue
+                matches.append({
+                    "backup_id": backup["id"],
+                    "backup_label": backup["label"],
+                    "is_delta_only": backup["is_delta_only"],
+                    "rel_path": rel,
+                    "is_dir": is_dir,
+                })
+                if len(matches) >= limit:
+                    truncated = True
+                    break
+            if len(matches) >= limit:
+                break
+    return matches, truncated
+
+
+def restore_single_path(backup_id, rel_path, target_dir, safety_backup=True):
+    """Restore exactly one file or folder (by its relative path within
+    the backup) to target_dir/rel_path -- the cross-snapshot search's
+    per-result restore action. Unlike restore_backup(), target_dir isn't
+    necessarily a fresh BASE_DIR/Restored/... folder; it can be SRC_DIR
+    itself ("Restore to Source"), which is genuinely destructive if the
+    wrong result gets picked.
+
+    safety_backup: if something already exists at the exact destination
+    path, move it aside first (suffixed with a timestamp) instead of
+    silently overwriting/merging over it. Restoring straight back into
+    SRC_DIR could otherwise destroy the one thing a mistaken click was
+    trying to recover in the first place -- pass True there. Pass False
+    for the Recovery Folder destination: always a brand-new, empty,
+    timestamped folder, so there's never anything to collide with, and
+    the rename-aside would just be noise.
+    """
+    backup_path = get_backup_path(backup_id)
+    if backup_path is None:
+        raise ValueError(f"Backup not found: {backup_id}")
+    backup_real = os.path.realpath(backup_path)
+
+    # Containment check needs the fully resolved path (catches rel_path
+    # trying to escape the backup root via ../ or a symlink) -- but the
+    # actual copy source must stay the literal, unresolved path, or a
+    # symlink at rel_path would already be silently dereferenced here
+    # before _copy_entry() ever gets a chance to preserve it as one (see
+    # restore_backup()'s selected_paths branch -- same reasoning).
+    literal_src = os.path.join(backup_path, rel_path)
+    real_src = os.path.realpath(literal_src)
+    if real_src != backup_real and not real_src.startswith(backup_real + os.sep):
+        raise ValueError(f"Rejected restore of path outside backup: {rel_path}")
+    src = literal_src
+
+    if not os.path.lexists(src):
+        # Not in this backup's own physical delta -- for a differential
+        # or compiled snapshot that just means this path hasn't changed
+        # since the full backup, so its current, correct content is
+        # still there (same fallback restore_backup() uses).
+        full_backup = load_other_variables('full_backup')
+        if os.path.isdir(full_backup):
+            full_literal_src = os.path.join(full_backup, rel_path)
+            full_backup_real = os.path.realpath(full_backup)
+            full_real_src = os.path.realpath(full_literal_src)
+            if (full_real_src == full_backup_real or full_real_src.startswith(full_backup_real + os.sep)) and os.path.lexists(full_literal_src):
+                src = full_literal_src
+    if not os.path.lexists(src):
+        raise ValueError(f"{rel_path} not found in '{backup_id}' or the full backup.")
+
+    dst = os.path.join(target_dir, rel_path)
+    if safety_backup and os.path.lexists(dst):
+        aside_path = f"{dst}.folderw-overwritten-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        os.rename(dst, aside_path)
+        logger.info(f"Moved existing {dst} aside to {aside_path} before restoring over it.")
+
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    _copy_entry(src, dst)
+    return dst
+
+
 def _copy_entry(src, dst):
     """Copy one filesystem entry -- symlink-safe. A symlink is recreated
     as a symlink (its literal target string preserved), never followed.

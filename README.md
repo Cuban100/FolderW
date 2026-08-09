@@ -27,6 +27,7 @@
 14. **File Exclusions:** Comma-separated patterns to skip during backup, set on the Settings page. Nothing is excluded unless you say so — no hidden defaults.
 15. **One-Click Update:** The dashboard detects when there are new commits upstream and shows what changed — click Update Now to pull, update dependencies, and restart, no terminal needed. See [Operations](docs/operations.md#updating).
 16. **Recovery History:** Dashboard page listing every restore ever run — timestamp, source snapshot, restore type, files, destination.
+17. **Find File:** Search for a file or folder by name across every backup and snapshot at once — see exactly which one(s) it's in, and restore just that item to a new Recovery Folder or straight back into your source directory.
 
 ## Quick Start
 
@@ -44,7 +45,7 @@ That runs the Tkinter setup wizard to configure your source/destination and gene
 - **[Usage](docs/usage.md)** — key components, how the setup wizard and dashboard fit together
 - **[Operations](docs/operations.md)** — updating, uninstalling, autostart on boot (systemd)
 - **[Login & Notifications](docs/login-and-notifications.md)** — dashboard password, desktop + external notifications
-- **[Restore & Backup Method](docs/restore-and-backup-method.md)** — how restoring works, Incremental vs Differential, snapshot retention, merging snapshots
+- **[Restore & Backup Method](docs/restore-and-backup-method.md)** — how restoring works, Incremental vs Differential, snapshot retention, merging snapshots, finding a file across every snapshot
 - **[What Gets Backed Up](docs/backup-scope.md)** — excluding your own files, nothing excluded by default
 - **[Backup Hooks](docs/backup-hooks.md)** — running your own scripts before/after each backup
 - **[Permissions](docs/permissions.md)** — why `rsync` runs as root, and what ownership/mode backed-up files get

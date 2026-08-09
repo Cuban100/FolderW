@@ -21,7 +21,7 @@ For any backup you can either:
 - **Restore Entire Backup** — copies everything in it, or
 - **Browse / Search** — drills into that one backup, with a search box, and lets you select individual files to restore.
 
-Restoring **never overwrites `SRC_DIR`**. Files are always copied into a new, timestamped folder at `BASE_DIR/Restored/<timestamp>_<backup>/` for you to review and move back into place yourself — a wrong pick can't clobber current data.
+Restoring from this page **never overwrites `SRC_DIR`**. Files are always copied into a new, timestamped folder at `BASE_DIR/Restored/<timestamp>_<backup>/` for you to review and move back into place yourself — a wrong pick can't clobber current data. (Find File, below, is the one deliberate exception to this.)
 
 ### Full Restore vs. Only Snapshot
 
@@ -35,6 +35,15 @@ Incremental snapshots don't show this choice at all — each one is already a co
 ### Compiling Snapshots
 
 **Compile Latest Snapshot** (button above the backup list) merges every existing snapshot (the full backup excluded) into one new "Merged" snapshot, oldest to newest, so later changes win over earlier ones for the same file. The result is the latest version of every file that's ever changed across all your snapshots — not a complete copy of `SRC_DIR`, just a consolidated view of the changes, so it behaves like any other delta-only backup: Restore still offers Full Restore vs. Only Snapshot for it.
+
+## Find File
+
+The **Find File** page (`/find-file`) searches for a file or folder by name across *every* backup and snapshot at once, instead of one at a time — useful when you know what you're looking for but not which snapshot(s) actually have it. Each result shows which backup/snapshot it was found in and offers two restore options:
+
+- **Restore to Recovery Folder (default)** — same behavior as the main Restore page: copies just that one item into a new, empty, timestamped folder under `BASE_DIR/Restored/`. Never touches `SRC_DIR`.
+- **Restore to Source** (the dropdown next to it) — copies that one item directly back into `SRC_DIR`, at the exact path it came from. This is genuinely destructive if the wrong result gets picked — it overwrites whatever's currently there. As a safety net, anything that already exists at that exact path is moved aside first (renamed with a `.folderw-overwritten-<timestamp>` suffix) rather than deleted outright, so a mistaken restore can still be undone by hand — but it's still a real write into your live source directory, not a copy off to the side, so use it deliberately.
+
+Both options work for a Differential (or Merged) snapshot's own delta *and*, if the file hasn't changed since, transparently fall back to the full backup's copy of it — same logic the main Restore page uses for Full Restore.
 
 ## Snapshot Retention
 

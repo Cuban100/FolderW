@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find File</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="/static/index.css">
+    <script src="/static/sidebar.js"></script>
+</head>
+<body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
+    {% include "_sidebar.html" %}
+        <div class="content p-8">
+            <h2 class="text-2xl font-bold mb-2 text-[var(--text)]">Find File</h2>
+            <p class="text-[var(--text-muted)] mb-6">
+                Search for a file or folder by name across every backup and snapshot at once, see exactly which
+                one(s) it's in, and restore just that item &mdash; to a new folder under
+                <span class="font-mono text-xs">Restored/</span>, or straight back into your source directory.
+            </p>
+
+            {% if error %}
+            <div class="bg-[var(--error-bg)] border border-[var(--border)] text-[var(--error-text)] px-4 py-3 rounded relative mb-6" role="alert">
+                {{ error }}
+            </div>
+            {% endif %}
+            {% if success %}
+            <div class="bg-[var(--success-bg)] border border-[var(--border)] text-[var(--success-text)] px-4 py-3 rounded relative mb-6" role="alert">
+                {{ success }}
+            </div>
+            {% endif %}
+
+            <form method="get" action="/find-file" class="flex gap-2 mb-6">
+                <input type="text" name="query" value="{{ query }}" placeholder="File or folder name…"
+                       class="flex-1 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" autofocus>
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">Search</button>
+            </form>
+
+            {% if query and not results %}
+            <div class="bg-[var(--surface)] rounded-lg shadow p-6 text-[var(--text-muted)]">
+                No matches for "{{ query }}" in any backup or snapshot.
+            </div>
+            {% elif results %}
+            {% if truncated %}
+            <div class="bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text-muted)] text-sm px-4 py-2 rounded mb-4">
+                Showing the first {{ results|length }} matches — narrow your search to see more precisely.
+            </div>
+            {% endif %}
+            <div class="bg-[var(--surface)] rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-[var(--border)]">
+                    <thead class="bg-[var(--surface-alt)]">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Path</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Snapshot</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-[var(--text-muted)] uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[var(--border)]">
+                        {% for result in results %}
+                        {% set row_id = loop.index0 %}
+                        <tr>
+                            <td class="px-6 py-4 text-[var(--text)] font-mono text-xs break-all">{{ result.rel_path }}</td>
+                            <td class="px-6 py-4 text-[var(--text-muted)]">
+                                <span class="mdi {{ 'mdi-folder-outline' if result.is_dir else 'mdi-file-outline' }} mr-1"></span>{{ 'Folder' if result.is_dir else 'File' }}
+                            </td>
+                            <td class="px-6 py-4 text-[var(--text-muted)]">{{ result.backup_label }}</td>
+                            <td class="px-6 py-4 text-right whitespace-nowrap align-top">
+                                <div class="inline-flex relative align-top">
+                                    <form method="post" action="/find-file/restore" class="inline-block"
+                                          onsubmit="return confirm('Restore &quot;{{ result.rel_path }}&quot; from &quot;{{ result.backup_label }}&quot; into a new Restored/ folder?');">
+                                        <input type="hidden" name="backup_id" value="{{ result.backup_id }}">
+                                        <input type="hidden" name="rel_path" value="{{ result.rel_path }}">
+                                        <input type="hidden" name="target" value="recovery">
+                                        <input type="hidden" name="query" value="{{ query }}">
+                                        <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded-l hover:bg-blue-700 transition" title="Copies just this item into a new timestamped folder under Restored/ -- never touches your source directory">
+                                            Restore to Recovery Folder
+                                        </button>
+                                    </form>
+                                    <button type="button" onclick="toggleFindFileMenu({{ row_id }})" class="bg-blue-600 text-white text-sm py-1.5 px-2 rounded-r border-l border-blue-800 hover:bg-blue-700 transition">
+                                        <span class="mdi mdi-chevron-down"></span>
+                                    </button>
+                                    <div id="find-file-menu-{{ row_id }}" class="hidden absolute right-0 top-full mt-1 z-10 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg">
+                                        <form method="post" action="/find-file/restore"
+                                              onsubmit="return confirm('Restore &quot;{{ result.rel_path }}&quot; directly into your SOURCE directory, overwriting whatever is currently there at that path?\n\nAnything currently at that exact path will be moved aside (not deleted) first, but this still changes your live source directory. Are you sure?');">
+                                            <input type="hidden" name="backup_id" value="{{ result.backup_id }}">
+                                            <input type="hidden" name="rel_path" value="{{ result.rel_path }}">
+                                            <input type="hidden" name="target" value="source">
+                                            <input type="hidden" name="query" value="{{ query }}">
+                                            <button type="submit" class="text-sm text-[var(--error-text)] py-2 px-3 hover:bg-[var(--surface-alt)] transition w-full text-left whitespace-nowrap" title="Overwrites this exact path in your source directory. Anything currently there is moved aside with a timestamp suffix first, not deleted.">
+                                                Restore to Source
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+
+    <script>
+        function toggleFindFileMenu(rowId) {
+            const menu = document.getElementById('find-file-menu-' + rowId);
+            document.querySelectorAll('[id^="find-file-menu-"]').forEach(m => {
+                if (m !== menu) m.classList.add('hidden');
+            });
+            menu.classList.toggle('hidden');
+        }
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('[onclick^="toggleFindFileMenu"]') && !event.target.closest('[id^="find-file-menu-"]')) {
+                document.querySelectorAll('[id^="find-file-menu-"]').forEach(m => m.classList.add('hidden'));
+            }
+        });
+    </script>
+</body>
+</html>
