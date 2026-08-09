@@ -197,6 +197,8 @@
             <div class="text-sm font-medium mb-2">Files changed</div>
             <div id="drilldown-files" class="text-sm font-mono space-y-1 max-h-[50vh] overflow-y-auto text-[var(--text-muted)]"></div>
         </div>
+
+        {% include "_footer.html" %}
     </div>
 
     <script id="stats-data" type="application/json">{{ series_json | safe }}</script>

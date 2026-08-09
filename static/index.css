@@ -258,3 +258,30 @@ html.sidebar-collapsed .content {
         margin-left: 0;
     }
 }
+
+/* Footer -- shared by every page via templates/_footer.html, included as
+   the last element inside .content so it sits below that page's own
+   content and inherits .content's margin-left (stays clear of the fixed
+   sidebar) without needing its own positioning rules. */
+.app-footer {
+    margin-top: 40px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.app-footer a {
+    color: var(--text-muted);
+    text-decoration: underline;
+}
+.app-footer a:hover {
+    color: var(--text);
+}
+.app-footer-sep {
+    opacity: 0.5;
+}

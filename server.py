@@ -72,8 +72,12 @@ STATIC_VERSION = int(max(
     os.path.getmtime(os.path.join(BASE_DIR, "static", "sidebar.js")),
 ))
 
+# Shown in templates/_footer.html on every page. Bump by hand on releases --
+# there's no build/tag step in this project that could derive it automatically.
+APP_VERSION = "1.0.0"
 
-def _sidebar_context(request):
+
+def _global_template_context(request):
     """Starlette context processor -- runs for EVERY TemplateResponse
     across the whole app (see context_processors= below), not just
     index.html's own routes. templates/_sidebar.html is included on
@@ -87,23 +91,25 @@ def _sidebar_context(request):
     A context processor is the one place this can be fixed globally
     instead of touching every individual route's context dict.
 
-    Deliberately minimal: only the 3 values _sidebar.html actually
-    needs, not the rest of _dashboard_settings_context()'s heavier
-    stats (disk scans, etc.) -- those stay index.html-specific, no
-    reason to pay for them on, say, the Settings page.
+    Deliberately minimal: only the values _sidebar.html/_footer.html
+    actually need, not the rest of _dashboard_settings_context()'s
+    heavier stats (disk scans, etc.) -- those stay index.html-specific,
+    no reason to pay for them on, say, the Settings page.
     """
     return {
         "watchdog_active": is_watchdog_active(),
         "backup_service_unit_exists": _backup_service_unit_exists(),
         "backup_service_active": _backup_service_is_active(),
         "static_version": STATIC_VERSION,
+        "app_version": APP_VERSION,
+        "current_year": datetime.now().year,
     }
 
 
 # Initialize Jinja2 templates
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 logo = '/static/logo.png'
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"), context_processors=[_sidebar_context])
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"), context_processors=[_global_template_context])
 
 SESSION_MAX_AGE = 15 * 24 * 60 * 60  # 15 days
 PUBLIC_PATHS = {"/login"}
