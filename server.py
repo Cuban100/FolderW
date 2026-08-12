@@ -13,6 +13,7 @@ import apprise
 from datetime import datetime
 from notifications import _notify_desktop
 from backup_hooks import run_hook_script
+from cloud_backup import list_rclone_remotes, test_cloud_connection
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot, search_all_backups, restore_single_path, summarize_folder
@@ -390,6 +391,42 @@ def get_backup_stats_context(database):
         "ram_used": f"{mem.used / (1024**3):.2f} GB",
         "ram_total": f"{mem.total / (1024**3):.2f} GB",
         **_watchdog_timing_context(),
+        **_cloud_sync_timing_context(),
+    }
+
+
+def _relative_time_ago(epoch_seconds):
+    """'2h ago' style string -- formatted server-side (not client-side
+    JS, unlike the watchdog widget's per-second countdown) since this
+    only needs to be as fresh as the 30s dashboard-stats poll already
+    is, matching every other stat card's plain pre-formatted-string
+    convention (dest_used, current_backup_size, etc.).
+    """
+    seconds = max(0, int(time.time() - epoch_seconds))
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
+    if days:
+        return f"{days}d ago"
+    if hours:
+        return f"{hours}h ago"
+    if minutes:
+        return f"{minutes}m ago"
+    return f"{seconds}s ago"
+
+
+def _cloud_sync_timing_context():
+    # For the dashboard's "Last Cloud Sync" stat card.
+    last_time = get_database_value('CLOUD_SYNC_LAST_TIME', 'settings')
+    try:
+        last_time = float(last_time) if last_time else None
+    except (TypeError, ValueError):
+        last_time = None
+    last_status = get_database_value('CLOUD_SYNC_LAST_STATUS', 'settings') or None
+    return {
+        "cloud_sync_enabled": load_env_value('CLOUD_SYNC_ENABLED') == '1',
+        "cloud_sync_last_display": f"{_relative_time_ago(last_time)} ({last_status})" if last_time else "Never",
+        "cloud_sync_last_status": last_status,
     }
 
 
@@ -1205,6 +1242,95 @@ async def backup_hooks_test(script_path: str = Form(...), which: str = Form(...)
     return JSONResponse({"success": success, "message": message})
 
 
+def _cloud_backup_page_context():
+    """Shared by the GET page and both POST routes' re-renders, same
+    role _settings_page_context() plays for settings.html -- keeps the
+    dropdown/current-values logic in exactly one place.
+    """
+    rclone_installed, remotes = list_rclone_remotes()
+    saved_remote = load_env_value('CLOUD_SYNC_REMOTE') or ''
+    saved_remote_missing = bool(saved_remote and saved_remote not in remotes)
+    if saved_remote_missing:
+        # Never let a saved value silently vanish from the dropdown just
+        # because the underlying rclone remote was renamed/removed after
+        # it was configured -- shown with a "not found" flag instead so
+        # the mismatch is visible rather than silently reverting to
+        # whatever option happens to be first.
+        remotes = remotes + [saved_remote]
+    return {
+        "cloud_sync_enabled": load_env_value('CLOUD_SYNC_ENABLED') == '1',
+        "cloud_sync_remote": saved_remote,
+        "cloud_sync_remote_path": load_env_value('CLOUD_SYNC_REMOTE_PATH') or '',
+        "cloud_sync_bwlimit": load_env_value('CLOUD_SYNC_BWLIMIT') or '',
+        "rclone_installed": rclone_installed,
+        "rclone_remotes": remotes,
+        "saved_remote_missing": saved_remote_missing,
+        "full_name": load_env_value('FULL_NAME'),
+        "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
+        "cloud_sync_last_display": _cloud_sync_timing_context()["cloud_sync_last_display"],
+    }
+
+
+@app.get("/cloud-backup", response_class=HTMLResponse)
+async def cloud_backup_page(request: Request):
+    return templates.TemplateResponse("cloud_backup.html", {
+        "request": request,
+        "logo": logo,
+        **_cloud_backup_page_context(),
+    })
+
+
+@app.post("/cloud-backup/save", response_class=HTMLResponse)
+async def cloud_backup_save(request: Request,
+                             cloud_sync_enabled: str = Form(None),
+                             cloud_sync_remote: str = Form(""),
+                             cloud_sync_remote_path: str = Form(""),
+                             cloud_sync_bwlimit: str = Form("")):
+    enabled = cloud_sync_enabled is not None
+    remote = cloud_sync_remote.strip()
+
+    # Rejected here rather than silently saved-but-broken: a bad remote
+    # would otherwise only surface as a failed sync (+ critical
+    # notification) after the next real backup, unattended -- catching
+    # it at save time, while the user is right here looking at the
+    # page, is much more useful than a notification hours later.
+    if enabled:
+        rclone_installed, remotes = list_rclone_remotes()
+        if not rclone_installed:
+            return templates.TemplateResponse("cloud_backup.html", {
+                "request": request,
+                "logo": logo,
+                "error": "rclone isn't installed on this machine -- install it (e.g. 'sudo apt install rclone') before enabling cloud sync.",
+                **_cloud_backup_page_context(),
+            })
+        if not remote or remote not in remotes:
+            return templates.TemplateResponse("cloud_backup.html", {
+                "request": request,
+                "logo": logo,
+                "error": "Select a valid, currently-configured rclone remote before enabling cloud sync.",
+                **_cloud_backup_page_context(),
+            })
+
+    save_env_values({
+        "CLOUD_SYNC_ENABLED": "1" if enabled else "0",
+        "CLOUD_SYNC_REMOTE": remote,
+        "CLOUD_SYNC_REMOTE_PATH": cloud_sync_remote_path.strip(),
+        "CLOUD_SYNC_BWLIMIT": cloud_sync_bwlimit.strip(),
+    })
+    return templates.TemplateResponse("cloud_backup.html", {
+        "request": request,
+        "logo": logo,
+        "success": "Cloud backup settings saved.",
+        **_cloud_backup_page_context(),
+    })
+
+
+@app.post("/cloud-backup/test")
+async def cloud_backup_test(remote: str = Form(""), remote_path: str = Form("")):
+    success, message = test_cloud_connection(remote, remote_path)
+    return JSONResponse({"success": success, "message": message})
+
+
 def _is_valid_folder_name(name):
     # Linux (the only supported platform) only actually forbids '/' and
     # the null byte in a directory name -- everything else is technically
@@ -1466,6 +1592,7 @@ async def dashboard_stats():
         "last_session": stats["last_session"],
         "last_session_files": stats["last_session_files"],
         "snapshot_count": stats["snapshot_count"],
+        "cloud_sync_last_display": stats["cloud_sync_last_display"],
     })
 
 

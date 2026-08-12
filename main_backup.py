@@ -4,6 +4,7 @@ from db_operations import load_env_value, load_other_variables, set_database_val
 from notifications import notify
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
 from backup_hooks import run_backup_script_with_hooks
+from cloud_backup import sync_to_cloud
 import subprocess
 import schedule
 import time
@@ -25,6 +26,7 @@ def run_regular_backup():
     try:
         result = run_backup_script_with_hooks([sys.executable, os.path.join(BASE_DIR, script_name)], check=True)
         logger.info(f"Backup result: {result}")
+        sync_to_cloud()
     except subprocess.CalledProcessError as e:
         # Centralized here rather than in rsync_incremental.py/rsync_
         # differential.py themselves so every failure mode is covered with

@@ -266,6 +266,17 @@
 
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
+                                    <label class="text-[var(--text)] font-medium">Cloud Backup:</label>
+                                    <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-cloud-backup')">?</button>
+                                    <div id="help-cloud-backup" class="help-popover hidden">Mirror your backup destination to a cloud remote (Google Drive, Amazon, and 40+ others via rclone) right after every successful backup.</div>
+                                </div>
+                                <div class="col-span-2">
+                                    <a href="/cloud-backup" class="text-blue-600 hover:underline text-sm">Manage on the Cloud Backup page &rarr;</a>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-4 items-center">
+                                <div class="help-wrap">
                                     <label for="new_password" class="text-[var(--text)] font-medium">Dashboard Password:</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-password')">?</button>
                                     <div id="help-password" class="help-popover hidden">Set or change the password required to log in to this dashboard. Leave blank to keep it unchanged.</div>

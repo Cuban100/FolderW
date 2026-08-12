@@ -684,6 +684,12 @@
                         <div class="stat-value">{{ {'hourly': 'Hourly', 'half-day': 'Half-Day', 'daily': 'Daily', 'weekly': 'Weekly'}.get(interval, interval) }}</div>
                     </div>
                     {% endif %}
+                    {% if cloud_sync_enabled %}
+                    <div class="stat-card">
+                        <div class="stat-label">Last Cloud Sync</div>
+                        <div class="stat-value" id="cloud-sync-value">{{ cloud_sync_last_display }}</div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -906,6 +912,7 @@
                 setStatIfPresent('last-session-value', '#' + data.last_session, '#0');
                 setStatIfPresent('last-session-files-value', data.last_session_files, '0');
                 setStatIfPresent('snapshot-count-value', data.snapshot_count, '0');
+                setStatIfPresent('cloud-sync-value', data.cloud_sync_last_display, 'Never');
             } catch (error) {
                 console.error('Error refreshing dashboard stats:', error);
             }

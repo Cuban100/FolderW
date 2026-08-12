@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Backup</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="/static/index.css?v={{ static_version }}">
+    <script src="/static/sidebar.js?v={{ static_version }}"></script>
+    <style>
+        .help-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 17px;
+            height: 17px;
+            border-radius: 50%;
+            border: 1px solid var(--text-muted);
+            color: var(--text-muted);
+            font-size: 11px;
+            line-height: 1;
+            font-weight: 700;
+            cursor: pointer;
+            background: none;
+            flex-shrink: 0;
+            padding: 0;
+        }
+        .help-icon:hover, .help-icon.active {
+            border-color: #2196f3;
+            color: #2196f3;
+        }
+        .help-popover {
+            position: absolute;
+            z-index: 30;
+            top: 100%;
+            left: 0;
+            margin-top: 6px;
+            background: var(--surface-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.85em;
+            line-height: 1.4;
+            color: var(--text-muted);
+            width: max-content;
+            max-width: 420px;
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+        .help-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+    </style>
+</head>
+<body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
+    {% include "_sidebar.html" %}
+
+    <div class="content p-10">
+        <div class="max-w-4xl mx-auto bg-[var(--surface)] rounded-xl shadow-lg p-8">
+            <h1 class="text-3xl font-bold mb-2 text-[var(--text)]">Cloud Backup</h1>
+            <p class="text-[var(--text-muted)] mb-2">
+                Mirrors your entire backup destination (Full Backup + every Snapshot) to a cloud remote right after every
+                successful local backup &mdash; scheduled, watchdog, or manual. Uses <a href="https://rclone.org" target="_blank" rel="noopener" class="text-blue-600 hover:underline">rclone</a>,
+                so any provider rclone supports works (Google Drive, Amazon, Dropbox, Backblaze, and 40+ others) &mdash; configure a remote with
+                <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">rclone config</code> first; FolderW never handles cloud
+                credentials itself.
+            </p>
+            <p class="text-sm text-[var(--text-muted)] mb-6">Last sync: {{ cloud_sync_last_display }}</p>
+
+            {% if backup_method == 'incremental' %}
+            <div class="bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text)] px-4 py-3 rounded relative mb-6 text-sm" role="alert">
+                <strong>Expect cloud storage usage to be much higher than your local Destination Used.</strong>
+                Incremental snapshots share unchanged files as hardlinks on disk, so they cost almost no extra local space &mdash;
+                but hardlinks aren't a concept cloud storage (or rclone syncing to one) understands, so each snapshot uploads as a full,
+                independent copy. Confirmed directly: a 160&nbsp;MB local destination (deduplicated) became 3.6&nbsp;GB once synced &mdash;
+                roughly 23&times; larger. Plan your remote's storage quota (and Snapshots to Keep setting) with this in mind.
+            </div>
+            {% endif %}
+
+            {% if error %}
+            <div class="bg-[var(--error-bg)] border border-[var(--border)] text-[var(--error-text)] px-4 py-3 rounded relative mb-6" role="alert">
+                {{ error }}
+            </div>
+            {% endif %}
+            {% if success %}
+            <div class="bg-[var(--success-bg)] border border-[var(--border)] text-[var(--success-text)] px-4 py-3 rounded relative mb-6" role="alert">
+                {{ success }}
+            </div>
+            {% endif %}
+
+            {% if not rclone_installed %}
+            <div class="bg-[var(--error-bg)] border border-[var(--border)] text-[var(--error-text)] px-4 py-3 rounded relative mb-6" role="alert">
+                rclone not found on this machine &mdash; install it (e.g. <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">sudo apt install rclone</code>) to enable cloud sync.
+            </div>
+            {% elif not rclone_remotes %}
+            <div class="bg-[var(--error-bg)] border border-[var(--border)] text-[var(--error-text)] px-4 py-3 rounded relative mb-6" role="alert">
+                No rclone remotes configured yet &mdash; run <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">rclone config</code> in a terminal on this machine to add one (Google Drive, Dropbox, S3, Backblaze B2, and 40+ others), then reload this page.
+            </div>
+            {% endif %}
+
+            <form method="post" action="/cloud-backup/save" class="space-y-6" autocomplete="off">
+                <div class="flex items-center space-x-3">
+                    <input type="checkbox" id="cloud_sync_enabled" name="cloud_sync_enabled" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                           {% if cloud_sync_enabled %}checked{% endif %} {% if not rclone_installed or not rclone_remotes %}disabled{% endif %}>
+                    <label for="cloud_sync_enabled" class="text-[var(--text)]">Enable Cloud Backup</label>
+                </div>
+
+                <div>
+                    <label for="cloud_sync_remote" class="text-[var(--text)] font-medium block mb-2">Remote</label>
+                    <select id="cloud_sync_remote" name="cloud_sync_remote"
+                            class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
+                            {% if not rclone_remotes %}disabled{% endif %}>
+                        <option value="">-- select a remote --</option>
+                        {% for r in rclone_remotes %}
+                        <option value="{{ r }}" {% if r == cloud_sync_remote %}selected{% endif %}>{{ r }}{% if saved_remote_missing and r == cloud_sync_remote %} (not found in rclone config){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    {% if saved_remote_missing %}
+                    <div class="text-sm text-[var(--error-text)] mt-2">&#9888; "{{ cloud_sync_remote }}" is no longer in your rclone config (renamed or removed) &mdash; select a different remote or re-add it with <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">rclone config</code>.</div>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <div class="help-wrap mb-2">
+                        <label for="cloud_sync_remote_path" class="text-[var(--text)] font-medium">Remote Path</label>
+                        <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-remote-path')">?</button>
+                        <div id="help-remote-path" class="help-popover hidden">
+                            This sync makes the remote folder match your backup destination exactly &mdash; <strong>including deleting anything in it
+                            that isn't part of the backup.</strong> Always point this at a folder used only for FolderW, never your Drive's root or a
+                            folder with other files in it.
+                            <br><br>
+                            Example: if this is set to <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">FolderW-Backup</code> and
+                            you later remove a file from that folder on your Drive by hand, the next sync deletes it from the remote too &mdash;
+                            the same way local Snapshots get pruned by your retention setting.
+                        </div>
+                    </div>
+                    <input type="text" id="cloud_sync_remote_path" name="cloud_sync_remote_path"
+                           class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
+                           value="{{ cloud_sync_remote_path if cloud_sync_remote_path else (full_name or 'FolderW-Backup') }}"
+                           placeholder="e.g. FolderW-Backup">
+                </div>
+
+                <div>
+                    <label for="cloud_sync_bwlimit" class="text-[var(--text)] font-medium block mb-2">Bandwidth Limit</label>
+                    <input type="text" id="cloud_sync_bwlimit" name="cloud_sync_bwlimit"
+                           class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
+                           value="{{ cloud_sync_bwlimit or '' }}" placeholder="e.g. 10M (leave blank for unlimited)">
+                </div>
+
+                <div>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="testCloudConnection()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition whitespace-nowrap">
+                            Test Cloud Connection
+                        </button>
+                    </div>
+                    <div id="test-cloud-result" class="text-sm mt-2"></div>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300 transform hover:-translate-y-1 shadow-lg">
+                        Save Cloud Backup Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        {% include "_footer.html" %}
+    </div>
+
+    <script>
+        function toggleHelp(event, id) {
+            event.stopPropagation();
+            const popover = document.getElementById(id);
+            const btn = event.currentTarget;
+            document.querySelectorAll('.help-popover').forEach(p => {
+                if (p !== popover) p.classList.add('hidden');
+            });
+            document.querySelectorAll('.help-icon').forEach(b => {
+                if (b !== btn) b.classList.remove('active');
+            });
+            popover.classList.toggle('hidden');
+            btn.classList.toggle('active');
+        }
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.help-wrap')) {
+                document.querySelectorAll('.help-popover').forEach(p => p.classList.add('hidden'));
+                document.querySelectorAll('.help-icon').forEach(b => b.classList.remove('active'));
+            }
+        });
+
+        async function testCloudConnection() {
+            const remote = document.getElementById('cloud_sync_remote').value;
+            const remotePath = document.getElementById('cloud_sync_remote_path').value;
+            const resultEl = document.getElementById('test-cloud-result');
+            resultEl.textContent = 'Testing...';
+            resultEl.className = 'text-sm mt-2 text-[var(--text-muted)]';
+            try {
+                const response = await fetch('/cloud-backup/test', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'remote=' + encodeURIComponent(remote) + '&remote_path=' + encodeURIComponent(remotePath)
+                });
+                const data = await response.json();
+                resultEl.textContent = data.message;
+                resultEl.className = 'text-sm mt-2 ' + (data.success ? 'text-green-500' : 'text-red-500');
+            } catch (error) {
+                resultEl.textContent = 'Error running test.';
+                resultEl.className = 'text-sm mt-2 text-red-500';
+            }
+        }
+    </script>
+</body>
+</html>
