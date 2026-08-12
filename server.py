@@ -1499,6 +1499,7 @@ async def statistics_page(request: Request):
         # filter click.
         "series_json": _json_for_script(series),
         "summary": summary,
+        "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
     })
 
 

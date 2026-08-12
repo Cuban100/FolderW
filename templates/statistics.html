@@ -131,8 +131,15 @@
                 <span class="text-sm text-[var(--text-muted)] mr-1">Backup type:</span>
                 <button class="filter-pill active" data-filter-type="all">All</button>
                 <button class="filter-pill" data-filter-type="full">Full</button>
+                {# Only the currently configured method can actually appear in
+                   recorded history -- switching BACKUP_METHOD resets backup
+                   history (see /submit in server.py), so the other one is
+                   never just "not shown yet," it's guaranteed empty. #}
+                {% if backup_method == 'incremental' %}
                 <button class="filter-pill" data-filter-type="incremental">Incremental</button>
+                {% else %}
                 <button class="filter-pill" data-filter-type="differential">Differential</button>
+                {% endif %}
             </div>
 
             <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
@@ -165,8 +172,11 @@
                 </div>
                 <div class="flex items-center gap-4 mt-3 text-sm" id="activity-legend">
                     <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-full)"></span>Full</span>
+                    {% if backup_method == 'incremental' %}
                     <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-incremental)"></span>Incremental</span>
+                    {% else %}
                     <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-differential)"></span>Differential</span>
+                    {% endif %}
                 </div>
             </div>
 
