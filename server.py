@@ -11,9 +11,11 @@ import webbrowser
 import psutil
 import apprise
 from datetime import datetime
+from urllib.parse import urlparse
 from notifications import _notify_desktop
 from backup_hooks import run_hook_script
 from cloud_backup import list_rclone_remotes, test_cloud_connection
+from translations import t, current_language, LANGUAGES
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot, search_all_backups, restore_single_path, summarize_folder
@@ -97,6 +99,7 @@ def _global_template_context(request):
     heavier stats (disk scans, etc.) -- those stay index.html-specific,
     no reason to pay for them on, say, the Settings page.
     """
+    lang = current_language()
     return {
         "watchdog_active": is_watchdog_active(),
         "backup_service_unit_exists": _backup_service_unit_exists(),
@@ -104,6 +107,14 @@ def _global_template_context(request):
         "static_version": STATIC_VERSION,
         "app_version": APP_VERSION,
         "current_year": datetime.now().year,
+        "t": t,
+        "lang": lang,
+        # Only 2 templates (index.html, settings.html) actually embed this
+        # for their own client-side JS -- computed here anyway (cheap: a
+        # dict already in memory, one json.dumps() of ~180 short strings)
+        # for the same reason every other value above is centralized here
+        # instead of duplicated per-route: one place, no drift.
+        "i18n_json": _json_for_script(LANGUAGES[lang]),
     }
 
 
@@ -113,7 +124,11 @@ logo = '/static/logo.png'
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"), context_processors=[_global_template_context])
 
 SESSION_MAX_AGE = 15 * 24 * 60 * 60  # 15 days
-PUBLIC_PATHS = {"/login"}
+# /set-language included: a low-sensitivity global display setting (same
+# tier as MONITOR/BACKUP_METHOD, not a security-relevant one), so the
+# footer's EN|ES switcher works even on the pre-login screen rather than
+# forcing a login first just to change the UI language.
+PUBLIC_PATHS = {"/login", "/set-language"}
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
@@ -154,6 +169,23 @@ async def login_submit(request: Request, password: str = Form(...), next: str = 
         "logo": logo,
         "error": "Incorrect password.",
     })
+
+@app.post("/set-language")
+async def set_language(request: Request, lang: str = Form(...)):
+    if lang not in LANGUAGES:
+        lang = 'en'
+    save_env_values({"LANGUAGE": lang})
+    # Referer's path+query only, never the raw header value -- a redirect
+    # straight to an arbitrary Referer could point off-site (a proxy or
+    # browser extension can set/alter this header). Falls back to / if
+    # there's no usable Referer at all.
+    target = "/"
+    referer = request.headers.get("referer")
+    if referer:
+        parsed = urlparse(referer)
+        if parsed.path:
+            target = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+    return RedirectResponse(url=target, status_code=303)
 
 @app.get("/logout")
 async def logout(request: Request):
@@ -241,11 +273,11 @@ def _format_delay_seconds(seconds):
     except (TypeError, ValueError):
         seconds = MONITORING_DELAY_DEFAULT
     if seconds < 60:
-        return f"{seconds} sec"
+        return t('unit_seconds_short', n=seconds)
     minutes, remainder = divmod(seconds, 60)
     if remainder:
-        return f"{minutes} min {remainder} sec"
-    return f"{minutes} min"
+        return t('unit_min_sec_short', minutes=minutes, seconds=remainder)
+    return t('unit_minutes_short', n=minutes)
 
 
 BACKUP_SERVICE_NAME = "folderw-backup.service"
@@ -745,7 +777,7 @@ async def run_all_steps(request: Request, force_full: bool = False):
             **_dashboard_settings_context(),
         })
 
-    success_message = "All settings, validations, and evaluations are correct. READY"
+    success_message = t('dashboard_all_checks_ready')
     set_database_value('CHECK_STEP', 'starting')
     # force_full=True (the "Start Full Backup" button, shown before any
     # full backup exists yet): a deliberate request for a real full
@@ -797,10 +829,12 @@ async def run_all_steps(request: Request, force_full: bool = False):
                 stderr=backup_log,
                 start_new_session=True,
             )
-        backup_status = "Backup started."
+        backup_status = t('dashboard_backup_started')
+        backup_status_is_error = False
     except Exception as e:
-        backup_status = f"Failed to start backup process: {str(e)}"
-    
+        backup_status = t('dashboard_backup_start_failed', error=str(e))
+        backup_status_is_error = True
+
     return templates.TemplateResponse("index.html", {
         "request": request,
         "logo": logo,
@@ -812,6 +846,7 @@ async def run_all_steps(request: Request, force_full: bool = False):
         "evaluation_status": can_backup,
         "evaluation_message": "",
         "backup_status": backup_status,
+        "backup_status_is_error": backup_status_is_error,
         "src_size": src_size,
         "dest_space": dest_space,
         "can_backup": can_backup,
@@ -1168,7 +1203,7 @@ async def test_notification(notify_urls: str = Form(""), notify_send_always: str
     send_desktop = notify_send_always == '1'
 
     if not urls and not send_desktop:
-        return JSONResponse({"success": False, "message": "No notification URL(s) provided, and desktop notifications aren't enabled."})
+        return JSONResponse({"success": False, "message": t('settings_notify_no_target')})
 
     messages = []
     any_success = False
@@ -1177,18 +1212,18 @@ async def test_notification(notify_urls: str = Form(""), notify_send_always: str
         apobj = apprise.Apprise()
         valid_count = sum(1 for url in urls if apobj.add(url))
         if valid_count == 0:
-            messages.append("No valid URL(s) — check the format.")
+            messages.append(t('settings_notify_no_valid_urls'))
         else:
             try:
                 result = apobj.notify(title="FolderW Test Notification", body="If you're seeing this, your notification setup works.")
                 if result:
                     any_success = True
-                    messages.append("URL(s): sent, check your device.")
+                    messages.append(t('settings_notify_urls_sent'))
                 else:
-                    messages.append("URL(s): Apprise reported failure — check the URL and service status.")
+                    messages.append(t('settings_notify_apprise_failed'))
             except Exception as e:
                 logger.error(f"Test notification failed: {e}")
-                messages.append(f"URL(s): error ({e}).")
+                messages.append(t('settings_notify_url_error', error=str(e)))
 
     if send_desktop:
         # notify-send doesn't report success/failure back to the caller
@@ -1197,7 +1232,7 @@ async def test_notification(notify_urls: str = Form(""), notify_send_always: str
         # eyes confirm whether it actually showed up on screen.
         _notify_desktop("FolderW Test Notification", "If you're seeing this, your notification setup works.", 'normal')
         any_success = True
-        messages.append("Desktop: sent — check your screen.")
+        messages.append(t('settings_notify_desktop_sent'))
 
     return JSONResponse({"success": any_success, "message": " ".join(messages)})
 
@@ -1405,17 +1440,17 @@ async def submit_settings(
 
     max_snapshots = max_snapshots.strip()
     if max_snapshots and (not max_snapshots.isdigit() or int(max_snapshots) <= 0):
-        return _settings_error("Snapshots to Keep must be a positive whole number, or left blank.", max_snapshots)
+        return _settings_error(t('settings_error_max_snapshots'), max_snapshots)
 
     # Database must end in .db -- create_all_tables() below happily
     # creates a SQLite file under any name at all, so nothing else
     # catches a typo'd extension (or none at all) until much later, if
     # ever.
     if database.strip() and not database.strip().lower().endswith('.db'):
-        return _settings_error("Database file name must end with .db", max_snapshots)
+        return _settings_error(t('settings_error_database_ext'), max_snapshots)
 
     if full_name.strip() and not _is_valid_folder_name(full_name.strip()):
-        return _settings_error("Full Backup Folder Name can't contain '/', be empty, or be '.' / '..'.", max_snapshots)
+        return _settings_error(t('settings_error_full_name_invalid'), max_snapshots)
 
     require_login_enabled = require_login is not None
     new_password = new_password.strip()
@@ -1469,11 +1504,7 @@ async def submit_settings(
         return templates.TemplateResponse("settings.html", {
             "request": request,
             "logo": logo,
-            "error": (
-                f"Base Backup Directory + Full Backup Folder Name ({container_dir}) "
-                f"can't overlap with FolderW's own install directory ({app_dir_real}) -- "
-                "choose a different Full Backup Folder Name or Base Backup Directory."
-            ),
+            "error": t('settings_error_overlap', container_dir=container_dir, app_dir_real=app_dir_real),
             **_settings_page_context(),
             "monitor_checked": monitor_enabled,
             "file_exclusions": file_exclusions,
@@ -1509,7 +1540,7 @@ async def submit_settings(
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "logo": logo,
-        "success": "Settings saved successfully.",
+        "success": t('settings_success_saved'),
         **_settings_page_context(),
     })
 
@@ -1647,16 +1678,16 @@ async def delete_old_database(request: Request, database_to_delete: str = Form(.
     error = None
     success = None
     if target == active_database:
-        error = "Cannot delete the currently active database."
+        error = t('settings_error_cannot_delete_active')
     elif not is_sqlite_file(target):
-        error = "Selected file is not a valid database."
+        error = t('settings_error_not_valid_db')
     else:
         try:
             os.remove(target)
-            success = f"Deleted {database_to_delete}."
+            success = t('settings_success_deleted_db', filename=database_to_delete)
             logger.info(f"Deleted old database: {target}")
         except OSError as e:
-            error = f"Failed to delete database: {e}"
+            error = t('settings_error_delete_failed', error=str(e))
             logger.error(error)
 
     return templates.TemplateResponse("settings.html", {
@@ -1676,7 +1707,7 @@ async def reset_active_database(request: Request, confirm_name: str = Form(...))
     error = None
     success = None
     if confirm_name.strip() != active_basename:
-        error = f"Type the database file name exactly ({active_basename}) to confirm."
+        error = t('settings_error_confirm_name_mismatch', name=active_basename)
     else:
         wipe_database_for_fresh_start(active_database)
         # A cleared database alone wouldn't actually start a fresh full
@@ -1694,7 +1725,7 @@ async def reset_active_database(request: Request, confirm_name: str = Form(...))
                 os.remove(marker_path)
         except OSError as e:
             logger.warning(f"Could not remove completion marker at {marker_path}: {e}")
-        success = "Database reset. The next backup run will be a fresh full backup, using the same settings."
+        success = t('settings_success_db_reset')
         logger.warning(f"Active database {active_database} reset for a fresh start by user request.")
 
     return templates.TemplateResponse("settings.html", {

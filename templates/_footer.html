@@ -4,4 +4,10 @@
     <span>FolderW v{{ app_version }}</span>
     <span class="app-footer-sep">&middot;</span>
     <a href="https://github.com/Cuban100/FolderW" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <span class="app-footer-sep">&middot;</span>
+    <form method="post" action="/set-language" class="app-footer-lang">
+        <button type="submit" name="lang" value="en" class="app-footer-lang-btn {{ 'active' if lang == 'en' else '' }}" {% if lang == 'en' %}disabled{% endif %}>EN</button>
+        <span class="app-footer-sep">|</span>
+        <button type="submit" name="lang" value="es" class="app-footer-lang-btn {{ 'active' if lang == 'es' else '' }}" {% if lang == 'es' %}disabled{% endif %}>ES</button>
+    </form>
 </footer>

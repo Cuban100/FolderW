@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <title>{{ t('dashboard_title') }}</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/index.css?v={{ static_version }}">
+    <script>window.FOLDERW_I18N = {{ i18n_json | safe }};</script>
+    <script src="/static/i18n.js?v={{ static_version }}"></script>
     <script src="/static/sidebar.js?v={{ static_version }}"></script>
     <style>
         /* Theme variables (:root / prefers-color-scheme: dark) now live in
@@ -521,23 +523,25 @@
 
         <div class="update-banner" id="update-banner" style="display: {{ 'flex' if update_commits_behind else 'none' }};">
             <div>
-                <div class="update-summary"><span class="highlight" id="update-summary-text">{{ update_commits_behind }} update{{ 's' if update_commits_behind != 1 else '' }} available</span></div>
+                <div class="update-summary"><span class="highlight" id="update-summary-text">{{ t('dashboard_updates_available_one' if update_commits_behind == 1 else 'dashboard_updates_available_other', n=update_commits_behind) }}</span></div>
                 <div class="update-commits" id="update-commits-list">
                     {% for line in update_commit_summaries[:5] %}
                     <div>{{ line }}</div>
                     {% endfor %}
                 </div>
             </div>
-            <button class="update-now-button" onclick="runUpdate(event)">Update Now</button>
+            <button class="update-now-button" onclick="runUpdate(event)"
+                    data-confirm="{{ t('dashboard_confirm_update') }}" data-updating-text="{{ t('dashboard_updating') }}"
+                    data-updating-restarting-text="{{ t('dashboard_updating_restarting') }}">{{ t('dashboard_update_now') }}</button>
         </div>
 
         <div class="section">
             <div class="message">
                 <!-- Success/Error Message Section -->
                 <div>
-                    {% if missing_settings %} 
+                    {% if missing_settings %}
                     <div class="message error">
-                         Missing settings: {{ missing_settings|join(', ') }} </div>
+                         {{ t('dashboard_missing_settings_prefix') }}{{ missing_settings|join(', ') }} </div>
                     {% elif success_message %}
                     <div class="message success">
                         {{ success_message }} 
@@ -553,26 +557,26 @@
                        below can reveal them without a reload. Hidden by
                        default; shown by startBackupStream()/checkBackupActivity(). #}
                     <div id="backup-activity-section" style="display: {% if backup_status or backup_in_progress %}block{% else %}none{% endif %};">
-                    <div class="message {{ 'error' if backup_status and backup_status.startswith('Failed') else 'success' }}" id="backup-status-message">
-                        {{ backup_status or "Backup in progress…" }}
+                    <div class="message {{ 'error' if backup_status_is_error else 'success' }}" id="backup-status-message">
+                        {{ backup_status or t('dashboard_backup_in_progress') }}
                     </div>
                     <div class="progress-bar-container" id="backup-progress-container">
                         <div class="progress-bar"></div>
                     </div>
-                    <div class="progress-bar-text" id="backup-progress-text">Backup running&hellip;</div>
+                    <div class="progress-bar-text" id="backup-progress-text">{{ t('dashboard_backup_running_ellipsis') }}</div>
                     </div>
             {% set ready_for_manual_snapshot = settings_sent == True and validation_status == True and evaluation_status == True and has_completed_backup %}
             {% set backup_active = backup_status or backup_in_progress %}
             {% if ready_for_manual_snapshot %}
             <div class="manual-snapshot-banner" id="manual-snapshot-banner" {% if backup_active %}style="display: none;"{% endif %}>
-                <button class="manual-snapshot-button" onclick="startBackup(false)">Create a Manual Snapshot</button>
+                <button class="manual-snapshot-button" onclick="startBackup(false)">{{ t('dashboard_create_manual_snapshot') }}</button>
             </div>
             {% endif %}
             {# Stop Watchdog / Backup Service controls moved to the sidebar -- see templates/_sidebar.html #}
             {% if monitor == '1' %}
             <p class="show" style="text-align: center;">
                 <span class="status-dot" id="watchdog-live-dot"></span>
-                <span id="watchdog-live-text" style="color: var(--text-muted);">Watching for changes&hellip;</span>
+                <span id="watchdog-live-text" style="color: var(--text-muted);">{{ t('dashboard_watching_for_changes') }}</span>
             </p>
             {% endif %}
             {% if not ready_for_manual_snapshot %}
@@ -589,104 +593,102 @@
                 {% endif %}
                 <div class="{{ start }}">
                     {% if backup_active %}
-                    <button class="check-button stop" onclick="stopWatchdog(event)">Stop Full Backup</button>
+                    <button class="check-button stop" onclick="stopWatchdog(event)"
+                            data-confirm-stop="{{ t('sidebar_confirm_stop') }}" data-stopping-text="{{ t('sidebar_stopping') }}">{{ t('dashboard_stop_full_backup') }}</button>
                     {% else %}
-                    <button id="start-backup-btn" class="check-button" onclick="startBackup(true)">Start Full Backup</button>
-                    <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 8px;">Starting a backup can take up to a minute while the source directory is scanned — the page may look stuck, please don't click again.</p>
+                    <button id="start-backup-btn" class="check-button" onclick="startBackup(true)">{{ t('dashboard_start_full_backup') }}</button>
+                    <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 8px;">{{ t('dashboard_start_backup_help') }}</p>
                     {% endif %}
                 </div>
 
             </div>
             <div class=message-help>
                 {% if not settings_sent %}
-                <p class="show">Missing settings (see above) — fill them in on the <a href="/settings">Settings page</a>, then click Start Full Backup.</p>
+                <p class="show">{{ t('dashboard_missing_settings_help') | safe }}</p>
                 {% endif %}
-                <p class="show"><span class="status-dot {{ 'green' if settings_check_passed else '' }}" id="dot-settings"></span><span class="highlight">Settings:</span> All items from the initial .env file setup are thoroughly checked.
-                The primary goal is to ensure that the Setup step has stored the values accurately.</p>
-                <p class="show"><span class="status-dot {{ 'green' if validation_status else '' }}" id="dot-validation"></span><span class="highlight">Validation:</span> Involves checking the source and destination paths specified in your settings.
-                This step ensures that the paths exist and are accessible, confirming that the source directory contains the data to be backed up, and the destination directory is ready to receive the backup. By verifying these paths, we prevent potential issues during the backup process, such as missing files or inaccessible directories.</p>
-                <p class="show"><span class="status-dot {{ 'green' if evaluation_status else '' }}" id="dot-evaluation"></span><span class="highlight">Evaluation:</span> Involves assessing the available space on both the source and destination directories.
-                This step ensures that there is enough space on the destination directory to accommodate the backup and that the source directory has the necessary space to complete the backup process. By verifying these space requirements, we prevent potential issues during the backup, such as insufficient storage space or data overflow, ensuring a smooth and successful backup process.</p>
+                <p class="show"><span class="status-dot {{ 'green' if settings_check_passed else '' }}" id="dot-settings"></span>{{ t('dashboard_settings_help') | safe }}</p>
+                <p class="show"><span class="status-dot {{ 'green' if validation_status else '' }}" id="dot-validation"></span>{{ t('dashboard_validation_help') | safe }}</p>
+                <p class="show"><span class="status-dot {{ 'green' if evaluation_status else '' }}" id="dot-evaluation"></span>{{ t('dashboard_evaluation_help') | safe }}</p>
                 {% if monitor == '1' %}
-                <p class="show"><span class="status-dot {{ 'green' if watchdog_active else '' }}" id="dot-watchdog"></span><span class="highlight">Watchdog is enabled:</span> Enabling the watchdog means the system continuously watches the source directory for any changes or updates. Any new or modified files are automatically detected and prepared for backup. This process is incremental, organizing backups by month, day, and time, which means all versions of the same file will be stored in a very organized manner. This ensures your backup is always up-to-date without manual intervention, and you can easily track and retrieve specific versions of your files as needed. This dot stays red until a full backup completes and the watchdog actually starts watching — not just while it's enabled in Settings.</p>
+                <p class="show"><span class="status-dot {{ 'green' if watchdog_active else '' }}" id="dot-watchdog"></span>{{ t('dashboard_watchdog_help') | safe }}</p>
                 {% endif %}
                 {% if interval == 'hourly' or interval == 'daily' or interval == 'weekly' %}
-                <p class="show"><span class="highlight">Interval Backup is enabled:</span> When the interval option is enabled, backups are scheduled to occur at specified time intervals. This step allows you to configure how frequently backups should take place (e.g., every hour, daily, weekly). The system will automatically initiate a backup at each specified interval, ensuring that your data is continuously protected. Each backup is incremental, meaning only the changes made since the last backup are saved. This approach optimizes storage space and organizes all versions of the same file by month, day, and time. This organized storage makes it easy to track and retrieve specific file versions as needed, providing a reliable and efficient backup solution.</p>
+                <p class="show">{{ t('dashboard_interval_help') | safe }}</p>
                 {% endif %}
             </div>
             {% endif %}
 
             <div class="stats-section">
-                <h2>System</h2>
+                <h2>{{ t('dashboard_system_heading') }}</h2>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-label">CPU Usage (avg)</div>
-                        <div class="stat-value">{{ cpu_percent if cpu_percent else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_cpu_usage') }}</div>
+                        <div class="stat-value">{{ cpu_percent if cpu_percent else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Busiest Core</div>
-                        <div class="stat-value">{{ cpu_busiest_core if cpu_busiest_core else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_busiest_core') }}</div>
+                        <div class="stat-value">{{ cpu_busiest_core if cpu_busiest_core else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">CPU Cores</div>
-                        <div class="stat-value">{{ cpu_cores if cpu_cores else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_cpu_cores') }}</div>
+                        <div class="stat-value">{{ cpu_cores if cpu_cores else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">RAM Used</div>
-                        <div class="stat-value">{{ ram_used if ram_used else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_ram_used') }}</div>
+                        <div class="stat-value">{{ ram_used if ram_used else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">RAM Total</div>
-                        <div class="stat-value">{{ ram_total if ram_total else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_ram_total') }}</div>
+                        <div class="stat-value">{{ ram_total if ram_total else t('common_not_available') }}</div>
                     </div>
                 </div>
             </div>
 
             <div class="stats-section">
-                <h2>Backup Statistics</h2>
+                <h2>{{ t('dashboard_backup_stats_heading') }}</h2>
                 <div class="stats-grid stats-grid-4col">
                     <div class="stat-card">
-                        <div class="stat-label">Source Folder Size</div>
-                        <div class="stat-value" id="source-folder-size-value">{{ src_size if src_size else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_source_folder_size') }}</div>
+                        <div class="stat-value" id="source-folder-size-value">{{ src_size if src_size else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Current Backup Size</div>
-                        <div class="stat-value" id="current-backup-size-value">{{ current_backup_size if current_backup_size else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_current_backup_size') }}</div>
+                        <div class="stat-value" id="current-backup-size-value">{{ current_backup_size if current_backup_size else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Destination Total</div>
-                        <div class="stat-value" id="dest-total-value">{{ dest_total if dest_total else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_destination_total') }}</div>
+                        <div class="stat-value" id="dest-total-value">{{ dest_total if dest_total else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Destination Used</div>
-                        <div class="stat-value" id="dest-used-value">{{ dest_used if dest_used else 'Not Available' }}</div>
+                        <div class="stat-label">{{ t('dashboard_destination_used') }}</div>
+                        <div class="stat-value" id="dest-used-value">{{ dest_used if dest_used else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Last Backup Session</div>
+                        <div class="stat-label">{{ t('dashboard_last_backup_session') }}</div>
                         <div class="stat-value" id="last-session-value">#{{ last_session if last_session is defined else 0 }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Files Changed (Last Session)</div>
+                        <div class="stat-label">{{ t('dashboard_files_changed_last_session') }}</div>
                         <div class="stat-value" id="last-session-files-value">{{ last_session_files if last_session_files is defined else 0 }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Snapshots on Disk</div>
+                        <div class="stat-label">{{ t('dashboard_snapshots_on_disk') }}</div>
                         <div class="stat-value" id="snapshot-count-value">{{ snapshot_count if snapshot_count is defined else 0 }}</div>
                     </div>
                     {% if monitor == '1' %}
                     <div class="stat-card">
-                        <div class="stat-label">Watchdog Delay</div>
+                        <div class="stat-label">{{ t('dashboard_watchdog_delay') }}</div>
                         <div class="stat-value">{{ monitoring_delay_display }}</div>
                     </div>
                     {% elif interval %}
                     <div class="stat-card">
-                        <div class="stat-label">Backup Interval</div>
-                        <div class="stat-value">{{ {'hourly': 'Hourly', 'half-day': 'Half-Day', 'daily': 'Daily', 'weekly': 'Weekly'}.get(interval, interval) }}</div>
+                        <div class="stat-label">{{ t('dashboard_backup_interval') }}</div>
+                        <div class="stat-value">{{ {'hourly': t('interval_hourly'), 'half-day': t('interval_half_day'), 'daily': t('interval_daily'), 'weekly': t('interval_weekly')}.get(interval, interval) }}</div>
                     </div>
                     {% endif %}
                     {% if cloud_sync_enabled %}
                     <div class="stat-card">
-                        <div class="stat-label">Last Cloud Sync</div>
+                        <div class="stat-label">{{ t('dashboard_last_cloud_sync') }}</div>
                         <div class="stat-value" id="cloud-sync-value">{{ cloud_sync_last_display }}</div>
                     </div>
                     {% endif %}
@@ -698,62 +700,62 @@
     </div>
     <div class="right-section">
         <div class="evaluation">
-            <p id="src_size">Source Size: <span class="right">{{ src_size }}</span></p>
-            <p id="dest_space">Destination Available Space: <span class="right">{{ dest_space }}</span></p>
-            <p id="can_backup">Backup Possible: <span class="right">{{ can_backup }}</span></p>
+            <p id="src_size">{{ t('dashboard_source_size') }} <span class="right">{{ src_size }}</span></p>
+            <p id="dest_space">{{ t('dashboard_dest_available_space') }} <span class="right">{{ dest_space }}</span></p>
+            <p id="can_backup">{{ t('dashboard_backup_possible') }} <span class="right">{{ can_backup }}</span></p>
         </div>
         <div class="settings">
-            <h2>Settings</h2>
+            <h2>{{ t('dashboard_settings_heading') }}</h2>
             <div class="env-content">
                 <div class="env-item">
-                    <label>Source Directory:</label>
-                    <span class="right" title="{{ src_dir }}">{{ src_dir if src_dir else 'Not Verified' }}</span>
+                    <label>{{ t('dashboard_source_directory') }}</label>
+                    <span class="right" title="{{ src_dir }}">{{ src_dir if src_dir else t('common_not_verified') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Base Backup Directory:</label>
-                    <span class="right" title="{{ base_dir }}">{{ base_dir if base_dir else 'Not Verified' }}</span>
+                    <label>{{ t('dashboard_base_backup_directory') }}</label>
+                    <span class="right" title="{{ base_dir }}">{{ base_dir if base_dir else t('common_not_verified') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Full Backup Folder Name:</label>
-                    <span class="right" title="{{ full_name }}">{{ full_name if full_name else 'Not Verified' }}</span>
+                    <label>{{ t('dashboard_full_backup_folder_name') }}</label>
+                    <span class="right" title="{{ full_name }}">{{ full_name if full_name else t('common_not_verified') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Database File:</label>
-                    <span class="right" title="{{ database }}">{{ database if database else 'Not Verified' }}</span>
+                    <label>{{ t('dashboard_database_file') }}</label>
+                    <span class="right" title="{{ database }}">{{ database if database else t('common_not_verified') }}</span>
                 </div>
                 {% if monitor == '1' %}
                 <div class="env-item">
-                    <label>Watchdog:</label>
-                    <span class="right active">Enabled</span>
+                    <label>{{ t('dashboard_watchdog_label') }}</label>
+                    <span class="right active">{{ t('common_enabled') }}</span>
                 </div>
                 {% endif %}
                 <div class="env-item">
-                    <label>Backup Method:</label>
-                    <span class="right active">{{ backup_method | capitalize }}</span>
+                    <label>{{ t('dashboard_backup_method') }}</label>
+                    <span class="right active">{{ t('settings_backup_method_incremental') if backup_method == 'incremental' else t('settings_backup_method_differential') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Snapshots to Keep:</label>
-                    <span class="right active">{{ max_snapshots if max_snapshots else 'Unlimited' }}</span>
+                    <label>{{ t('dashboard_snapshots_to_keep') }}</label>
+                    <span class="right active">{{ max_snapshots if max_snapshots else t('common_unlimited') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Dashboard Login:</label>
-                    <span class="right {{ 'active' if login_enabled else '' }}">{{ 'Enabled' if login_enabled else 'Disabled' }}</span>
+                    <label>{{ t('dashboard_dashboard_login') }}</label>
+                    <span class="right {{ 'active' if login_enabled else '' }}">{{ t('common_enabled') if login_enabled else t('common_disabled') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Desktop Notifications:</label>
-                    <span class="right {{ 'active' if notify_send_always else '' }}">{{ 'Enabled' if notify_send_always else 'Disabled' }}</span>
+                    <label>{{ t('dashboard_desktop_notifications') }}</label>
+                    <span class="right {{ 'active' if notify_send_always else '' }}">{{ t('common_enabled') if notify_send_always else t('common_disabled') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Notification URL(s):</label>
-                    <span class="right {{ 'active' if has_notify_urls else '' }}">{{ 'Configured' if has_notify_urls else 'Not configured' }}</span>
+                    <label>{{ t('dashboard_notification_urls') }}</label>
+                    <span class="right {{ 'active' if has_notify_urls else '' }}">{{ t('common_configured') if has_notify_urls else t('common_not_configured') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Pre-Backup Script:</label>
-                    <span class="right {{ 'active' if pre_backup_script else '' }}" title="{{ pre_backup_script }}">{{ pre_backup_script if pre_backup_script else 'Not configured' }}</span>
+                    <label>{{ t('dashboard_pre_backup_script') }}</label>
+                    <span class="right {{ 'active' if pre_backup_script else '' }}" title="{{ pre_backup_script }}">{{ pre_backup_script if pre_backup_script else t('common_not_configured') }}</span>
                 </div>
                 <div class="env-item">
-                    <label>Post-Backup Script:</label>
-                    <span class="right {{ 'active' if post_backup_script else '' }}" title="{{ post_backup_script }}">{{ post_backup_script if post_backup_script else 'Not configured' }}</span>
+                    <label>{{ t('dashboard_post_backup_script') }}</label>
+                    <span class="right {{ 'active' if post_backup_script else '' }}" title="{{ post_backup_script }}">{{ post_backup_script if post_backup_script else t('common_not_configured') }}</span>
                 </div>
             </div>
         </div>
@@ -765,7 +767,7 @@
                 <span class="rsync-tail-dot" style="background:#ff5f56;"></span>
                 <span class="rsync-tail-dot" style="background:#ffbd2e;"></span>
                 <span class="rsync-tail-dot" style="background:#27c93f;"></span>
-                <span class="rsync-tail-title">rsync activity</span>
+                <span class="rsync-tail-title">{{ t('dashboard_rsync_activity') }}</span>
             </div>
             <pre class="rsync-tail" id="rsync-tail"></pre>
         </div>
@@ -780,7 +782,7 @@
             const btn = document.getElementById('start-backup-btn');
             if (btn) {
                 btn.disabled = true;
-                btn.textContent = 'Starting Backup… (this can take up to a minute)';
+                btn.textContent = t('dashboard_starting_full_backup');
                 btn.style.cursor = 'wait';
             }
 
@@ -847,7 +849,7 @@
                 console.error('Error starting backup:', error);
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = 'Start Full Backup';
+                    btn.textContent = t('dashboard_start_full_backup');
                     btn.style.cursor = '';
                 }
             }
@@ -873,7 +875,7 @@
                 if (!banner || !summaryText || !commitsList) return;
                 if (data.commits_behind > 0) {
                     banner.style.display = 'flex';
-                    summaryText.textContent = data.commits_behind + (data.commits_behind === 1 ? ' update available' : ' updates available');
+                    summaryText.textContent = t(data.commits_behind === 1 ? 'dashboard_updates_available_one' : 'dashboard_updates_available_other', {n: data.commits_behind});
                     commitsList.innerHTML = '';
                     (data.commit_summaries || []).slice(0, 5).forEach(line => {
                         const div = document.createElement('div');
@@ -905,14 +907,14 @@
             try {
                 const response = await fetch('/dashboard-stats');
                 const data = await response.json();
-                setStatIfPresent('source-folder-size-value', data.src_size, 'Not Available');
-                setStatIfPresent('current-backup-size-value', data.current_backup_size, 'Not Available');
-                setStatIfPresent('dest-total-value', data.dest_total, 'Not Available');
-                setStatIfPresent('dest-used-value', data.dest_used, 'Not Available');
+                setStatIfPresent('source-folder-size-value', data.src_size, t('common_not_available'));
+                setStatIfPresent('current-backup-size-value', data.current_backup_size, t('common_not_available'));
+                setStatIfPresent('dest-total-value', data.dest_total, t('common_not_available'));
+                setStatIfPresent('dest-used-value', data.dest_used, t('common_not_available'));
                 setStatIfPresent('last-session-value', '#' + data.last_session, '#0');
                 setStatIfPresent('last-session-files-value', data.last_session_files, '0');
                 setStatIfPresent('snapshot-count-value', data.snapshot_count, '0');
-                setStatIfPresent('cloud-sync-value', data.cloud_sync_last_display, 'Never');
+                setStatIfPresent('cloud-sync-value', data.cloud_sync_last_display, t('common_never'));
             } catch (error) {
                 console.error('Error refreshing dashboard stats:', error);
             }
@@ -948,9 +950,11 @@
             const h = Math.floor(seconds / 3600);
             const m = Math.floor((seconds % 3600) / 60);
             const s = seconds % 60;
-            if (h > 0) return h + 'h ' + m + 'm ' + s + 's ago';
-            if (m > 0) return m + 'm ' + s + 's ago';
-            return s + 's ago';
+            // Just the compact duration -- "ago"/"hace" and its position
+            // (trailing in English, leading in Spanish) is handled by the
+            // unit_ago_suffix translation key, not hardcoded here.
+            const duration = h > 0 ? (h + 'h ' + m + 'm ' + s + 's') : (m > 0 ? (m + 'm ' + s + 's') : (s + 's'));
+            return t('unit_ago_suffix', {duration: duration});
         }
 
         function updateWatchdogDisplay() {
@@ -961,15 +965,15 @@
                 const remaining = watchdogNextBackupTime - now;
                 textEl.style.color = '';
                 textEl.textContent = remaining > 0
-                    ? 'Change detected — backup in ' + formatCountdown(remaining)
-                    : 'Starting backup…';
+                    ? t('dashboard_change_detected_in', {countdown: formatCountdown(remaining)})
+                    : t('dashboard_starting_backup_live');
                 return;
             }
             textEl.style.color = 'var(--text-muted)';
             if (watchdogLastEventTime) {
-                textEl.textContent = 'Last change detected ' + formatElapsed(now - watchdogLastEventTime);
+                textEl.textContent = t('dashboard_last_change_detected', {elapsed: formatElapsed(now - watchdogLastEventTime)});
             } else {
-                textEl.textContent = 'Watching for changes…';
+                textEl.textContent = t('dashboard_watching_for_changes');
             }
         }
 
@@ -1006,22 +1010,24 @@
         }
 
         async function runUpdate(event) {
-            if (!confirm('Pull the latest code and restart FolderW? This can take a minute, and the dashboard will be briefly unreachable while it restarts.')) {
+            const btn = event && event.target;
+            const confirmText = (btn && btn.dataset.confirm) || 'Pull the latest code and restart FolderW? This can take a minute, and the dashboard will be briefly unreachable while it restarts.';
+            if (!confirm(confirmText)) {
                 return;
             }
-            const btn = event && event.target;
+            const updatingText = (btn && btn.dataset.updatingText) || 'Updating…';
             if (btn) {
                 btn.disabled = true;
-                btn.textContent = 'Updating…';
+                btn.textContent = updatingText;
                 btn.style.cursor = 'wait';
             }
             try {
                 const response = await fetch('/run-update', { method: 'POST' });
                 const data = await response.json();
-                if (btn) btn.textContent = data.message || 'Updating…';
+                if (btn) btn.textContent = data.message || updatingText;
             } catch (error) {
                 console.error('Error starting update:', error);
-                if (btn) btn.textContent = 'Updating… (dashboard may already be restarting)';
+                if (btn) btn.textContent = (btn.dataset.updatingRestartingText) || 'Updating… (dashboard may already be restarting)';
             }
             // update.sh restarts the dashboard itself partway through, so
             // this connection (and any request during the brief restart
@@ -1135,11 +1141,11 @@
                         if (data.percent !== null && data.percent !== undefined) {
                             progressBar.classList.add('determinate');
                             progressBar.style.width = data.percent + '%';
-                            progressText.textContent = `Backup running… ${data.percent}%${suffix}`;
+                            progressText.textContent = `${t('dashboard_backup_running_ellipsis')} ${data.percent}%${suffix}`;
                         } else {
                             progressBar.classList.remove('determinate');
                             progressBar.style.width = '';
-                            progressText.textContent = `Backup running…${suffix}`;
+                            progressText.textContent = `${t('dashboard_backup_running_ellipsis')}${suffix}`;
                         }
                     }
                     if (!data.running) {
@@ -1148,8 +1154,8 @@
                         progressContainer.classList.remove('active');
                         progressBar.classList.remove('determinate');
                         progressBar.style.width = '';
-                        progressText.textContent = 'Backup complete.';
-                        statusMessage.textContent = 'Backup complete.';
+                        progressText.textContent = t('dashboard_backup_complete');
+                        statusMessage.textContent = t('dashboard_backup_complete');
                         // Covers both paths this can be reached from: the
                         // Start Full Backup button (document.write() render
                         // mid-backup, when has_completed_backup was still

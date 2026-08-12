@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backup Configuration</title>
+    <title>{{ t('settings_title') }}</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/index.css?v={{ static_version }}">
+    <script>window.FOLDERW_I18N = {{ i18n_json | safe }};</script>
+    <script src="/static/i18n.js?v={{ static_version }}"></script>
     <script src="/static/sidebar.js?v={{ static_version }}"></script>
     <style>
         .help-icon {
@@ -90,10 +92,10 @@
 
         function formatWatchdogDelay(seconds) {
             seconds = parseInt(seconds, 10);
-            if (seconds < 60) return seconds + ' sec';
+            if (seconds < 60) return t('unit_seconds_short', {n: seconds});
             const minutes = Math.floor(seconds / 60);
             const remainder = seconds % 60;
-            return remainder ? (minutes + ' min ' + remainder + ' sec') : (minutes + ' min');
+            return remainder ? t('unit_min_sec_short', {minutes: minutes, seconds: remainder}) : t('unit_minutes_short', {n: minutes});
         }
 
         document.addEventListener("DOMContentLoaded", function() {
@@ -131,13 +133,25 @@
 
             // Listen for changes
             watchdogCheckbox.addEventListener('change', toggleScheduleFields);
+
+            // data-confirm attribute rather than an inline onsubmit="return
+            // confirm('...')" string literal -- the confirm text is now a
+            // translated (possibly apostrophe-containing) string, which is
+            // safer read as an HTML attribute than embedded inside a
+            // single-quoted JS string literal inside an HTML attribute.
+            const resetForm = document.getElementById('reset-db-form');
+            if (resetForm) {
+                resetForm.addEventListener('submit', function(e) {
+                    if (!confirm(resetForm.dataset.confirm)) e.preventDefault();
+                });
+            }
         });
 
         async function testNotification() {
             const resultEl = document.getElementById('test-notify-result');
             const urls = document.getElementById('notify_urls').value;
             const sendAlways = document.getElementById('notify_send_always').checked;
-            resultEl.textContent = 'Sending...';
+            resultEl.textContent = t('settings_test_notify_sending');
             resultEl.className = 'text-sm text-[var(--text-muted)]';
             try {
                 const response = await fetch('/test-notification', {
@@ -149,7 +163,7 @@
                 resultEl.textContent = data.message;
                 resultEl.className = 'text-sm ' + (data.success ? 'text-green-500' : 'text-red-500');
             } catch (error) {
-                resultEl.textContent = 'Error sending test notification.';
+                resultEl.textContent = t('settings_test_notify_error');
                 resultEl.className = 'text-sm text-red-500';
             }
         }
@@ -160,7 +174,7 @@
 
     <div class="content p-10">
                 <div class="max-w-4xl mx-auto bg-[var(--surface)] rounded-xl shadow-lg p-8">
-                    <h1 class="text-3xl font-bold mb-6 text-[var(--text)]">Backup Configuration</h1>
+                    <h1 class="text-3xl font-bold mb-6 text-[var(--text)]">{{ t('settings_title') }}</h1>
 
                     <!-- Error and success messages -->
                     {% if error %}
@@ -179,14 +193,14 @@
 
                         <div class="rounded-lg border-2 border-[var(--border)] p-5 space-y-4">
                             <div>
-                                <h2 class="text-lg font-semibold text-[var(--text)]">Everything else</h2>
-                                <p class="text-sm text-[var(--text-muted)] mt-1">These don't identify the backup itself, so changing them never resets history or starts a new full backup.</p>
+                                <h2 class="text-lg font-semibold text-[var(--text)]">{{ t('settings_section_other_heading') }}</h2>
+                                <p class="text-sm text-[var(--text-muted)] mt-1">{{ t('settings_section_other_sub') }}</p>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="log_dir" class="text-[var(--text)] font-medium">Log Directory:</label>
+                                    <label for="log_dir" class="text-[var(--text)] font-medium">{{ t('settings_log_dir_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-log_dir')">?</button>
-                                    <div id="help-log_dir" class="help-popover hidden">Specify the directory where the rsync log file, typically named 'rsync.log', will be stored.</div>
+                                    <div id="help-log_dir" class="help-popover hidden">{{ t('settings_log_dir_help') }}</div>
                                 </div>
                                 <input type="text" id="log_dir" name="log_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ log_dir or '' }}">
                             </div>
@@ -194,23 +208,23 @@
                             <div class="flex items-center space-x-3">
                                 <input type="checkbox" id="monitor" name="monitor" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if monitor_checked %}checked{% endif %}>
                                 <div class="help-wrap">
-                                    <label for="monitor" class="text-[var(--text)]">Watchdog (Monitor Source Folder)</label>
+                                    <label for="monitor" class="text-[var(--text)]">{{ t('settings_watchdog_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-watchdog')">?</button>
-                                    <div id="help-watchdog" class="help-popover hidden">Enable this option to have the watchdog watch the source directory for changes continuously.</div>
+                                    <div id="help-watchdog" class="help-popover hidden">{{ t('settings_watchdog_help') }}</div>
                                 </div>
                             </div>
 
                             <!-- Watchdog Delay -->
                             <div id="watchdog-delay-field" style="display: {% if monitor_checked %}block{% else %}none{% endif %};">
                                 <div class="help-wrap mb-2">
-                                    <label for="monitoring_delay_seconds" class="text-[var(--text)] font-medium">Watchdog Delay: <span id="watchdog-delay-label" class="font-mono"></span></label>
+                                    <label for="monitoring_delay_seconds" class="text-[var(--text)] font-medium">{{ t('settings_watchdog_delay_label') }} <span id="watchdog-delay-label" class="font-mono"></span></label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-watchdog-delay')">?</button>
                                     <div id="help-watchdog-delay" class="help-popover hidden">
-                                        When the watchdog is on, FolderW doesn't back up the instant a file changes &mdash; it waits this long after your <em>last</em> change first, so a burst of saves (or a big edit session) turns into one backup instead of dozens.
+                                        {{ t('settings_watchdog_delay_help_p1') | safe }}
                                         <br><br>
-                                        If you keep making changes non-stop, a backup still runs automatically once this much time has passed since your <em>first</em> unsaved change &mdash; so you're never left unprotected for longer than this, even during a long editing session.
+                                        {{ t('settings_watchdog_delay_help_p2') | safe }}
                                         <br><br>
-                                        Example at 2 minutes: you save a file at 9:00, then again at 9:01 &mdash; the wait resets, so the backup is now due around 9:03. Keep saving every minute after that and it would never fire on its own, so instead a backup still runs at 9:02 &mdash; exactly 2 minutes after your very first save &mdash; and the whole cycle starts over from there.
+                                        {{ t('settings_watchdog_delay_help_p3') | safe }}
                                     </div>
                                 </div>
                                 <input type="range" id="monitoring_delay_seconds" name="monitoring_delay_seconds"
@@ -222,23 +236,23 @@
                             <!-- Schedule Fields -->
                             <div id="schedule-fields" style="display: {% if interval %}block{% else %}none{% endif %};">
                                 <div>
-                                    <label for="interval" class="block text-[var(--text)] font-medium mb-2">Backup Interval:</label>
+                                    <label for="interval" class="block text-[var(--text)] font-medium mb-2">{{ t('settings_backup_interval_label') }}</label>
                                     <div class="flex space-x-4">
                                         <label class="inline-flex items-center">
                                             <input type="radio" id="interval" name="interval" value="hourly" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'hourly' %}checked{% endif %}>
-                                            <span class="ml-2 text-[var(--text)]">Hourly</span>
+                                            <span class="ml-2 text-[var(--text)]">{{ t('interval_hourly') }}</span>
                                         </label>
                                         <label class="inline-flex items-center">
                                             <input type="radio" id="interval" name="interval" value="half-day" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'half-day' %}checked{% endif %}>
-                                            <span class="ml-2 text-[var(--text)]">Half-Day</span>
+                                            <span class="ml-2 text-[var(--text)]">{{ t('interval_half_day') }}</span>
                                         </label>
                                         <label class="inline-flex items-center">
                                             <input type="radio" id="interval" name="interval" value="daily" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'daily' %}checked{% endif %}>
-                                            <span class="ml-2 text-[var(--text)]">Daily</span>
+                                            <span class="ml-2 text-[var(--text)]">{{ t('interval_daily') }}</span>
                                         </label>
                                         <label class="inline-flex items-center">
                                             <input type="radio" id="interval" name="interval" value="weekly" class="form-radio h-4 w-4 text-blue-600" {% if interval == 'weekly' %}checked{% endif %}>
-                                            <span class="ml-2 text-[var(--text)]">Weekly</span>
+                                            <span class="ml-2 text-[var(--text)]">{{ t('interval_weekly') }}</span>
                                         </label>
                                     </div>
                                 </div>
@@ -246,189 +260,190 @@
 
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="max_snapshots" class="text-[var(--text)] font-medium">Snapshots to Keep:</label>
+                                    <label for="max_snapshots" class="text-[var(--text)] font-medium">{{ t('settings_snapshots_to_keep_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-max_snapshots')">?</button>
-                                    <div id="help-max_snapshots" class="help-popover hidden">Oldest incremental snapshots beyond this count are deleted automatically after each backup.</div>
+                                    <div id="help-max_snapshots" class="help-popover hidden">{{ t('settings_snapshots_to_keep_help') }}</div>
                                 </div>
-                                <input type="number" min="1" step="1" id="max_snapshots" name="max_snapshots" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ max_snapshots or '' }}" placeholder="Leave blank to keep all">
+                                <input type="number" min="1" step="1" id="max_snapshots" name="max_snapshots" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ max_snapshots or '' }}" placeholder="{{ t('settings_snapshots_placeholder') }}">
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label class="text-[var(--text)] font-medium">Pre/Post-Backup Scripts:</label>
+                                    <label class="text-[var(--text)] font-medium">{{ t('settings_hooks_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-hooks')">?</button>
-                                    <div id="help-hooks" class="help-popover hidden">Moved to their own page, with a way to test each script before trusting it to run during a real backup.</div>
+                                    <div id="help-hooks" class="help-popover hidden">{{ t('settings_hooks_help') }}</div>
                                 </div>
                                 <div class="col-span-2">
-                                    <a href="/backup-hooks" class="text-blue-600 hover:underline text-sm">Manage on the Backup Hooks page &rarr;</a>
+                                    <a href="/backup-hooks" class="text-blue-600 hover:underline text-sm">{{ t('settings_manage_on_hooks_page') }}</a>
                                 </div>
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label class="text-[var(--text)] font-medium">Cloud Backup:</label>
+                                    <label class="text-[var(--text)] font-medium">{{ t('settings_cloud_backup_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-cloud-backup')">?</button>
-                                    <div id="help-cloud-backup" class="help-popover hidden">Mirror your backup destination to a cloud remote (Google Drive, Amazon, and 40+ others via rclone) right after every successful backup.</div>
+                                    <div id="help-cloud-backup" class="help-popover hidden">{{ t('settings_cloud_backup_help') }}</div>
                                 </div>
                                 <div class="col-span-2">
-                                    <a href="/cloud-backup" class="text-blue-600 hover:underline text-sm">Manage on the Cloud Backup page &rarr;</a>
+                                    <a href="/cloud-backup" class="text-blue-600 hover:underline text-sm">{{ t('settings_manage_on_cloud_page') }}</a>
                                 </div>
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="new_password" class="text-[var(--text)] font-medium">Dashboard Password:</label>
+                                    <label for="new_password" class="text-[var(--text)] font-medium">{{ t('settings_password_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-password')">?</button>
-                                    <div id="help-password" class="help-popover hidden">Set or change the password required to log in to this dashboard. Leave blank to keep it unchanged.</div>
+                                    <div id="help-password" class="help-popover hidden">{{ t('settings_password_help') }}</div>
                                 </div>
-                                <input type="password" id="new_password" name="new_password" autocomplete="new-password" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" placeholder="Leave blank to keep the current password">
+                                <input type="password" id="new_password" name="new_password" autocomplete="new-password" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" placeholder="{{ t('settings_password_placeholder') }}">
                             </div>
                             <div class="flex items-center space-x-3">
                                 <input type="checkbox" id="require_login" name="require_login" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if login_enabled %}checked{% endif %}>
                                 <div class="help-wrap">
-                                    <label for="require_login" class="text-[var(--text)]">Require Login</label>
+                                    <label for="require_login" class="text-[var(--text)]">{{ t('settings_require_login_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-require_login')">?</button>
-                                    <div id="help-require_login" class="help-popover hidden">Uncheck to disable the login page entirely.</div>
+                                    <div id="help-require_login" class="help-popover hidden">{{ t('settings_require_login_help') }}</div>
                                 </div>
                             </div>
 
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="notify_urls" class="text-[var(--text)] font-medium">Notification URL(s):</label>
+                                    <label for="notify_urls" class="text-[var(--text)] font-medium">{{ t('settings_notify_urls_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-notify_urls')">?</button>
                                     <div id="help-notify_urls" class="help-popover hidden">
-                                        Comma-separated <a href="https://github.com/caronc/apprise#supported-notifications" target="_blank" rel="noopener" class="underline">Apprise URLs</a> (Pushover, ntfy, Pushbullet, email, Discord, and 100+ others). Notified on backup failure and full backup completion. Leave blank if you only want desktop notifications below.
+                                        {{ t('settings_notify_urls_help') | safe }}
                                     </div>
                                 </div>
-                                <input type="text" id="notify_urls" name="notify_urls" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ notify_urls or '' }}" placeholder="e.g. pover://user@token, ntfy://topic">
+                                <input type="text" id="notify_urls" name="notify_urls" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ notify_urls or '' }}" placeholder="{{ t('settings_notify_urls_placeholder') }}">
                             </div>
                             <div class="flex items-center space-x-3">
                                 <input type="checkbox" id="notify_send_always" name="notify_send_always" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if notify_send_always %}checked{% endif %}>
                                 <div class="help-wrap">
-                                    <label for="notify_send_always" class="text-[var(--text)]">Always send a desktop notification</label>
+                                    <label for="notify_send_always" class="text-[var(--text)]">{{ t('settings_notify_always_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-notify_always')">?</button>
-                                    <div id="help-notify_always" class="help-popover hidden">Uses <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">notify-send</code> to show a notification on this machine's own desktop, independent of (or in addition to) the URL(s) above.</div>
+                                    <div id="help-notify_always" class="help-popover hidden">{{ t('settings_notify_always_help') | safe }}</div>
                                 </div>
                             </div>
                             <div class="flex items-center space-x-4">
-                                <button type="button" onclick="testNotification()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">Send Test Notification</button>
+                                <button type="button" onclick="testNotification()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">{{ t('settings_send_test_notification') }}</button>
                                 <span id="test-notify-result" class="text-sm text-[var(--text-muted)]"></span>
                             </div>
                         </div>
 
                         <div class="rounded-lg border-2 border-[var(--error-text)] p-5 space-y-4">
                             <div>
-                                <h2 class="text-lg font-semibold text-[var(--error-text)]">Changing these starts a new full backup</h2>
-                                <p class="text-sm text-[var(--text-muted)] mt-1">These identify which backup this is. Changing any of them means FolderW is now pointed at a different backup, so the old one's history is cleared and a fresh full backup runs from scratch.</p>
+                                <h2 class="text-lg font-semibold text-[var(--error-text)]">{{ t('settings_section_identity_heading') }}</h2>
+                                <p class="text-sm text-[var(--text-muted)] mt-1">{{ t('settings_section_identity_sub') }}</p>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="src_dir" class="text-[var(--text)] font-medium">Source Directory:</label>
+                                    <label for="src_dir" class="text-[var(--text)] font-medium">{{ t('settings_src_dir_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-src_dir')">?</button>
-                                    <div id="help-src_dir" class="help-popover hidden">Specify the path of the folder or device you want to back up. Example: /home/user/Documents</div>
+                                    <div id="help-src_dir" class="help-popover hidden">{{ t('settings_src_dir_help') }}</div>
                                 </div>
                                 <input type="text" id="src_dir" name="src_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ src_dir or '' }}">
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="base_dir" class="text-[var(--text)] font-medium">Base Backup Directory:</label>
+                                    <label for="base_dir" class="text-[var(--text)] font-medium">{{ t('settings_base_dir_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-base_dir')">?</button>
-                                    <div id="help-base_dir" class="help-popover hidden">Specify the directory where the backups will be stored. Ensure there is enough space for the backup.</div>
+                                    <div id="help-base_dir" class="help-popover hidden">{{ t('settings_base_dir_help') }}</div>
                                 </div>
                                 <input type="text" id="base_dir" name="base_dir" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ base_dir or '' }}">
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="full_name" class="text-[var(--text)] font-medium">Full Backup Folder Name:</label>
+                                    <label for="full_name" class="text-[var(--text)] font-medium">{{ t('settings_full_name_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-full_name')">?</button>
-                                    <div id="help-full_name" class="help-popover hidden">Name of the folder created inside the Base Backup Directory to hold "Full Backup" and "Snapshots". Example: Documents</div>
+                                    <div id="help-full_name" class="help-popover hidden">{{ t('settings_full_name_help') }}</div>
                                 </div>
                                 <input type="text" id="full_name" name="full_name" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ full_name or '' }}">
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="database" class="text-[var(--text)] font-medium">Database File:</label>
+                                    <label for="database" class="text-[var(--text)] font-medium">{{ t('settings_database_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-database')">?</button>
-                                    <div id="help-database" class="help-popover hidden">Specify the name and location of the SQLite database file that will store configuration settings and backup records.</div>
+                                    <div id="help-database" class="help-popover hidden">{{ t('settings_database_help') }}</div>
                                 </div>
                                 <input type="text" id="database" name="database" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ database or '' }}">
                             </div>
                             <div>
                                 <div class="help-wrap mb-2">
-                                    <label class="block text-[var(--text)] font-medium">Backup Method:</label>
+                                    <label class="block text-[var(--text)] font-medium">{{ t('settings_backup_method_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-backup_method')">?</button>
-                                    <div id="help-backup_method" class="help-popover hidden">Incremental: each snapshot is a complete, independently restorable copy, only storing what changed since the last snapshot &mdash; stays small indefinitely. Differential: each snapshot stores only the files changed since the original full backup, growing larger over time &mdash; restoring a point in time needs the full backup plus that snapshot together. Switching between the two starts a new full backup, so snapshots never end up mixing both shapes in the same Snapshots folder.</div>
+                                    <div id="help-backup_method" class="help-popover hidden">{{ t('settings_backup_method_help') | safe }}</div>
                                 </div>
                                 <div class="flex space-x-4">
                                     <label class="inline-flex items-center">
                                         <input type="radio" id="backup_method_incremental" name="backup_method" value="incremental" class="form-radio h-4 w-4 text-blue-600" {% if backup_method == 'incremental' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Incremental</span>
+                                        <span class="ml-2 text-[var(--text)]">{{ t('settings_backup_method_incremental') }}</span>
                                     </label>
                                     <label class="inline-flex items-center">
                                         <input type="radio" id="backup_method_differential" name="backup_method" value="differential" class="form-radio h-4 w-4 text-blue-600" {% if backup_method != 'incremental' %}checked{% endif %}>
-                                        <span class="ml-2 text-[var(--text)]">Differential</span>
+                                        <span class="ml-2 text-[var(--text)]">{{ t('settings_backup_method_differential') }}</span>
                                     </label>
                                 </div>
                             </div>
                             <div class="grid grid-cols-3 gap-4 items-center">
                                 <div class="help-wrap">
-                                    <label for="file_exclusions" class="text-[var(--text)] font-medium">File Exclusions:</label>
+                                    <label for="file_exclusions" class="text-[var(--text)] font-medium">{{ t('settings_file_exclusions_label') }}</label>
                                     <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-file_exclusions')">?</button>
-                                    <div id="help-file_exclusions" class="help-popover hidden">Comma-separated file/folder names or patterns to skip during backup (e.g. <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">node_modules, *.tmp, cache</code>). Uses the same glob syntax as rsync's own exclude file. Leave blank to exclude nothing beyond FolderW's own built-in exclusions.</div>
+                                    <div id="help-file_exclusions" class="help-popover hidden">{{ t('settings_file_exclusions_help') | safe }}</div>
                                 </div>
-                                <input type="text" id="file_exclusions" name="file_exclusions" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ file_exclusions or '' }}" placeholder="Leave blank to exclude nothing extra">
+                                <input type="text" id="file_exclusions" name="file_exclusions" class="col-span-2 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" value="{{ file_exclusions or '' }}" placeholder="{{ t('settings_file_exclusions_placeholder') }}">
                             </div>
                         </div>
 
                         <div class="pt-6">
                             <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300 transform hover:-translate-y-1 shadow-lg">
-                                Save Settings
+                                {{ t('settings_save_button') }}
                             </button>
                         </div>
                     </form>
 
                     <div class="mt-6 rounded-lg border-2 border-[var(--border)] p-5 space-y-4">
                         <div class="help-wrap">
-                            <h2 class="text-lg font-semibold text-[var(--text)]">Database Management</h2>
+                            <h2 class="text-lg font-semibold text-[var(--text)]">{{ t('settings_db_management_heading') }}</h2>
                             <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-db-management')">?</button>
-                            <div id="help-db-management" class="help-popover hidden">"Previous" databases are old <span style="font-family: monospace;">.db</span> files left behind in the same folder after changing the Database File name above &mdash; deleting one here only removes that leftover file, it's never the one currently in use.</div>
+                            <div id="help-db-management" class="help-popover hidden">{{ t('settings_db_management_help') | safe }}</div>
                         </div>
-                        <p class="text-sm text-[var(--text-muted)]">Current database: <span class="font-medium text-[var(--text)]">{{ active_database or "(none configured)" }}</span></p>
+                        <p class="text-sm text-[var(--text-muted)]">{{ t('settings_current_database') }} <span class="font-medium text-[var(--text)]">{{ active_database or t('settings_none_configured') }}</span></p>
 
                         {% if previous_databases %}
                         <form method="post" action="/delete-old-database/" class="space-y-2">
-                            <label for="database_to_delete" class="text-[var(--text)] font-medium">Delete an old database file:</label>
+                            <label for="database_to_delete" class="text-[var(--text)] font-medium">{{ t('settings_delete_old_db_label') }}</label>
                             <div class="flex gap-2">
                                 <select name="database_to_delete" id="database_to_delete" class="flex-1 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]">
                                     {% for filename in previous_databases %}
                                     <option value="{{ filename }}">{{ filename }}</option>
                                     {% endfor %}
                                 </select>
-                                <button type="submit" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">Delete</button>
+                                <button type="submit" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">{{ t('settings_delete_button') }}</button>
                             </div>
                         </form>
                         {% else %}
-                        <p class="text-sm text-[var(--text-muted)]">No previous database files to clean up right now &mdash; this only fills in after changing the Database File name above at least once.</p>
+                        <p class="text-sm text-[var(--text-muted)]">{{ t('settings_no_previous_databases') }}</p>
                         {% endif %}
                     </div>
 
                     <div class="mt-6 rounded-lg border-2 border-[var(--error-text)] p-5 space-y-4">
                         <div class="help-wrap">
-                            <h2 class="text-lg font-semibold text-[var(--error-text)]">Start fresh with the same settings</h2>
+                            <h2 class="text-lg font-semibold text-[var(--error-text)]">{{ t('settings_start_fresh_heading') }}</h2>
                             <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-db-reset')">?</button>
-                            <div id="help-db-reset" class="help-popover hidden">Wipes every table in the current database &mdash; all recorded sessions, changes, statistics, and backup run history. Your actual settings (Source Directory, Base Backup Directory, password, notifications, etc.) live in a separate file and are not touched. The next backup run will be a genuine fresh full backup, the same as changing Source Directory/Base Backup Directory/Full Backup Folder Name above does &mdash; except it re-syncs into the same destination instead of starting a new one.</div>
+                            <div id="help-db-reset" class="help-popover hidden">{{ t('settings_db_reset_help') }}</div>
                         </div>
                         <form method="post" action="/reset-active-database/"
-                              onsubmit="return confirm('This permanently wipes all recorded history in {{ active_database }} and forces a fresh full backup on the next run. This cannot be undone. Continue?');"
+                              id="reset-db-form"
+                              data-confirm="{{ t('settings_reset_confirm', database=active_database) }}"
                               class="space-y-3">
                             <label for="confirm_name" class="text-[var(--text)] font-medium block">
-                                Type the database file name ({{ active_database }}) to confirm:
+                                {{ t('settings_confirm_type_db_name', database=active_database) }}
                             </label>
                             <input type="text" id="confirm_name" name="confirm_name" autocomplete="off"
                                    class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
                                    placeholder="{{ active_database }}">
                             <button type="submit" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">
-                                Reset Database &amp; Start Fresh
+                                {{ t('settings_reset_button') }}
                             </button>
                         </form>
                     </div>

@@ -1,4 +1,4 @@
-<button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar">
+<button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="{{ t('sidebar_toggle') }}" aria-label="{{ t('sidebar_toggle') }}">
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
     </svg>
@@ -12,16 +12,16 @@
     <nav>
         <ul>
             {% set menu_items = [
-                ('/', 'Dashboard', 'mdi mdi-view-dashboard'),
-                ('/backup-history', 'Backup History', 'mdi mdi-clock-outline'),
-                ('/recovery-history', 'Recovery History', 'mdi mdi-history'),
-                ('/statistics', 'Statistics', 'mdi mdi-chart-line'),
-                ('/restore', 'Restore', 'mdi mdi-backup-restore'),
-                ('/find-file', 'Find File', 'mdi mdi-file-search-outline'),
-                ('/settings', 'Settings', 'mdi mdi-cogs'),
-                ('/backup-hooks', 'Backup Hooks', 'mdi mdi-script-text-outline'),
-                ('/cloud-backup', 'Cloud Backup', 'mdi mdi-cloud-upload-outline'),
-                ('/logout', 'Log out', 'mdi mdi-logout')
+                ('/', t('sidebar_nav_dashboard'), 'mdi mdi-view-dashboard'),
+                ('/backup-history', t('sidebar_nav_backup_history'), 'mdi mdi-clock-outline'),
+                ('/recovery-history', t('sidebar_nav_recovery_history'), 'mdi mdi-history'),
+                ('/statistics', t('sidebar_nav_statistics'), 'mdi mdi-chart-line'),
+                ('/restore', t('sidebar_nav_restore'), 'mdi mdi-backup-restore'),
+                ('/find-file', t('sidebar_nav_find_file'), 'mdi mdi-file-search-outline'),
+                ('/settings', t('sidebar_nav_settings'), 'mdi mdi-cogs'),
+                ('/backup-hooks', t('sidebar_nav_backup_hooks'), 'mdi mdi-script-text-outline'),
+                ('/cloud-backup', t('sidebar_nav_cloud_backup'), 'mdi mdi-cloud-upload-outline'),
+                ('/logout', t('sidebar_nav_logout'), 'mdi mdi-logout')
             ] %}
             {% for href, label, icon_class in menu_items %}
             <li>
@@ -39,21 +39,24 @@
     <div class="sidebar-controls">
         {% if watchdog_active is defined and watchdog_active %}
         <div class="sidebar-control-row help-wrap">
-            <button type="button" class="sidebar-action-btn" onclick="stopWatchdog(event)">Stop Watchdog</button>
+            <button type="button" class="sidebar-action-btn" onclick="stopWatchdog(event)"
+                    data-confirm-stop="{{ t('sidebar_confirm_stop') }}" data-stopping-text="{{ t('sidebar_stopping') }}">{{ t('sidebar_stop_watchdog') }}</button>
             <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-stop-watchdog')">?</button>
-            <div id="help-stop-watchdog" class="help-popover hidden">Stops the watchdog that's currently watching your source folder for changes &mdash; any backup already in progress is stopped too. The dashboard itself keeps running; the watchdog won't resume until you start it again (Start Backup Service below, or restart it another way).</div>
+            <div id="help-stop-watchdog" class="help-popover hidden">{{ t('sidebar_help_stop_watchdog') | safe }}</div>
         </div>
         {% endif %}
 
         {% if backup_service_unit_exists is defined and backup_service_unit_exists %}
         <div class="sidebar-control-row help-wrap">
             {% if backup_service_active %}
-            <button type="button" class="sidebar-action-btn" onclick="stopWatchdog(event)">Stop Backup Service</button>
+            <button type="button" class="sidebar-action-btn" onclick="stopWatchdog(event)"
+                    data-confirm-stop="{{ t('sidebar_confirm_stop') }}" data-stopping-text="{{ t('sidebar_stopping') }}">{{ t('sidebar_stop_backup_service') }}</button>
             {% else %}
-            <button type="button" class="sidebar-action-btn" onclick="startBackupService(event)">Start Backup Service</button>
+            <button type="button" class="sidebar-action-btn" onclick="startBackupService(event)"
+                    data-starting-text="{{ t('sidebar_starting') }}">{{ t('sidebar_start_backup_service') }}</button>
             {% endif %}
             <button type="button" class="help-icon" onclick="toggleHelp(event, 'help-backup-service')">?</button>
-            <div id="help-backup-service" class="help-popover hidden">Stops or starts backing up and the watchdog entirely (<span style="font-family: monospace;">folderw-backup.service</span>) &mdash; the dashboard itself (this page you're looking at right now) keeps running either way, so you're never locked out.</div>
+            <div id="help-backup-service" class="help-popover hidden">{{ t('sidebar_help_backup_service') | safe }}</div>
         </div>
         {% endif %}
     </div>

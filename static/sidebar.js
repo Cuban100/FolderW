@@ -40,7 +40,15 @@ document.addEventListener('click', (event) => {
 // Stop Watchdog / Stop Backup Service buttons and index.html's own
 // "Stop Full Backup" button (shown while a backup is actively running).
 async function stopWatchdog(event) {
-    if (!confirm('Stop the watchdog and any backup currently in progress?')) {
+    // Translated text comes from the clicked button's own data-* attributes
+    // (rendered server-side in the current language by whichever template
+    // owns that button -- _sidebar.html or index.html) rather than a
+    // client-side i18n dependency, so pages that include sidebar.js but
+    // aren't otherwise translated yet still work correctly (falls back to
+    // English if a button doesn't set the attribute).
+    const btn = event && event.target;
+    const confirmText = (btn && btn.dataset.confirmStop) || 'Stop the watchdog and any backup currently in progress?';
+    if (!confirm(confirmText)) {
         return;
     }
     // systemctl stop blocks until the service (and rsync under it)
@@ -48,10 +56,9 @@ async function stopWatchdog(event) {
     // (mid-transfer, cleaning up a partial file), that wait can run to
     // systemd's stop timeout. Give immediate feedback so the page
     // doesn't look frozen/unresponsive in the meantime.
-    const btn = event && event.target;
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Stopping… (this can take a moment)';
+        btn.textContent = (btn.dataset.stoppingText) || 'Stopping… (this can take a moment)';
         btn.style.cursor = 'wait';
     }
     try {
@@ -76,7 +83,7 @@ async function startBackupService(event) {
     const btn = event && event.target;
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Starting…';
+        btn.textContent = (btn.dataset.startingText) || 'Starting…';
         btn.style.cursor = 'wait';
     }
     try {
