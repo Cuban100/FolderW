@@ -940,6 +940,20 @@
             return m + ':' + String(s).padStart(2, '0');
         }
 
+        // Elapsed-since display for "Last change detected" -- plain seconds
+        // reads fine for a minute or two, but the watchdog can easily sit
+        // quiet for hours between changes, and nobody wants to do the
+        // arithmetic on a 5-digit second count to know how long that's been.
+        function formatElapsed(seconds) {
+            seconds = Math.max(0, Math.round(seconds));
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = seconds % 60;
+            if (h > 0) return h + 'h ' + m + 'm ' + s + 's ago';
+            if (m > 0) return m + 'm ' + s + 's ago';
+            return s + 's ago';
+        }
+
         function updateWatchdogDisplay() {
             const textEl = document.getElementById('watchdog-live-text');
             if (!textEl) return; // not in Watchdog mode -- element doesn't exist
@@ -954,7 +968,7 @@
             }
             textEl.style.color = 'var(--text-muted)';
             if (watchdogLastEventTime) {
-                textEl.textContent = 'Last change detected ' + Math.max(0, Math.round(now - watchdogLastEventTime)) + 's ago';
+                textEl.textContent = 'Last change detected ' + formatElapsed(now - watchdogLastEventTime);
             } else {
                 textEl.textContent = 'Watching for changes…';
             }
