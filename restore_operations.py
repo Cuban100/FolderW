@@ -4,7 +4,7 @@ import json
 import shutil
 from datetime import datetime
 from db_operations import load_env_value, load_other_variables, get_files_changed_by_label
-from statistics_operations import human_readable_size
+from statistics_operations import human_readable_size, get_folder_size_bytes_du
 from loguru import logger
 
 # Must match rsync_incremental.py's COMPLETION_MARKER -- duplicated rather
@@ -310,14 +310,30 @@ def list_backups():
 
 def total_destination_size_bytes():
     """True current footprint of the backup destination -- full backup
-    plus every current snapshot, in bytes. Reuses list_backups()'s
-    existing per-backup cache (_cached_summarize_snapshot(), one
-    .folderw_stats file per backup) rather than a fresh recursive du of
-    the whole destination -- only recomputes for a backup that doesn't
-    have a cached size yet, same as the Restore page already relies on
-    for its own listing to stay fast.
+    plus every current snapshot, in bytes.
+
+    NOT a sum of each snapshot's own cached size (_cached_summarize_
+    snapshot(), via list_backups()) -- that's each snapshot's own logical
+    content size, correct for "how much would restoring just this one
+    give me," but summing them massively overcounts a hardlinked
+    destination. Incremental mode (--link-dest) means most files in any
+    given snapshot are hardlinks sharing the exact same disk blocks as
+    the same file in the previous snapshot -- os.path.getsize() (what
+    summarize_folder() uses) reports each hardlink's full logical size
+    every time, with no way to know it's already been counted once per
+    other snapshot referencing it. Found live: 34 incremental snapshots
+    of a ~100MB source reported as ~4GB and climbing with every run,
+    while `du` on the real destination folder showed ~100MB the whole
+    time. A single `du` pass over the whole destination tree (not one
+    per snapshot) is what actually gets this right -- GNU du counts a
+    multiply-hardlinked file's disk usage exactly once, regardless of
+    how many separate directory entries (snapshots, here) point to it,
+    as long as they're all included in the same invocation.
     """
-    return sum(b["size_bytes"] for b in list_backups())
+    full_backup = load_other_variables('full_backup')
+    destination_root = os.path.dirname(full_backup)
+    size = get_folder_size_bytes_du(destination_root, apparent_size=False)
+    return size if size is not None else 0
 
 
 def compile_latest_snapshot():
