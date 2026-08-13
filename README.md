@@ -30,6 +30,8 @@
 16. **Recovery History:** Dashboard page listing every restore ever run — timestamp, source snapshot, restore type, files, destination.
 17. **Find File:** Search for a file or folder by name across every backup and snapshot at once — see exactly which one(s) it's in, and restore just that item to a new Recovery Folder or straight back into your source directory.
 18. **Watchdog Delay:** Adjustable slider (Settings, event-driven mode only) for how long the watchdog waits after a change before backing up, and the ceiling on how long continuous activity can postpone one — reflected live on the dashboard.
+19. **Cloud Backup:** Optionally mirror your backup destination to any [rclone](https://rclone.org)-supported remote (Google Drive, Amazon, Dropbox, Backblaze, and 40+ others) right after each successful local backup — scheduled, watchdog, or manual. Configure the remote with `rclone config`; FolderW never handles cloud credentials itself.
+20. **English/Spanish Language Switching:** Switch the entire dashboard between English and Spanish from the footer, no restart needed — a global setting for the whole install.
 
 ## FolderW vs. Timeshift
 
@@ -46,6 +48,7 @@ FolderW's snapshot mechanism (full backup + `--link-dest` snapshots, unchanged f
 | Hooks | Pre/post-backup scripts, testable from the dashboard | Not built in |
 | Notifications | Desktop + external (see [Login & Notifications](docs/login-and-notifications.md)) | Not built in |
 | History | Every backup and every restore ever run, logged and browsable | Not built in |
+| Cloud Backup | Optional mirror to any rclone-supported remote after each backup | Not built in |
 
 Timeshift still wins for its actual use case — full OS state, boot-time restore, no setup beyond installing it. FolderW is for the case Timeshift isn't aimed at: keep watch over a specific folder and make it easy to see, search, and restore from anywhere.
 
