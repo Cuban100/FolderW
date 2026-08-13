@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backup Hooks</title>
+    <title>{{ t('hooks_title') }}</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/index.css?v={{ static_version }}">
+    <script>window.FOLDERW_I18N = {{ i18n_json | safe }};</script>
+    <script src="/static/i18n.js?v={{ static_version }}"></script>
     <script src="/static/sidebar.js?v={{ static_version }}"></script>
 </head>
 <body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
@@ -15,10 +17,9 @@
 
     <div class="content p-10">
         <div class="max-w-4xl mx-auto bg-[var(--surface)] rounded-xl shadow-lg p-8">
-            <h1 class="text-3xl font-bold mb-2 text-[var(--text)]">Backup Hooks</h1>
+            <h1 class="text-3xl font-bold mb-2 text-[var(--text)]">{{ t('hooks_title') }}</h1>
             <p class="text-[var(--text-muted)] mb-6">
-                Optional scripts run around every backup, regardless of what triggers it (scheduled, watchdog, or manual).
-                Both are entirely optional &mdash; leave either blank if you don't need it.
+                {{ t('hooks_intro') }}
             </p>
 
             {% if error %}
@@ -34,43 +35,40 @@
 
             <form method="post" action="/backup-hooks/save" class="space-y-8">
                 <div>
-                    <label for="pre_backup_script" class="text-[var(--text)] font-medium block mb-2">Pre-Backup Script</label>
+                    <label for="pre_backup_script" class="text-[var(--text)] font-medium block mb-2">{{ t('hooks_pre_label') }}</label>
                     <div class="flex gap-2">
                         <input type="text" id="pre_backup_script" name="pre_backup_script"
                                class="flex-1 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
-                               value="{{ pre_backup_script or '' }}" placeholder="e.g. /home/user/scripts/dump-db.sh">
+                               value="{{ pre_backup_script or '' }}" placeholder="{{ t('hooks_placeholder_pre') }}">
                         <button type="button" onclick="testScript('pre')" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition whitespace-nowrap">
-                            Test Script
+                            {{ t('hooks_test_script') }}
                         </button>
                     </div>
                     <div class="text-sm text-[var(--text-muted)] mt-2">
-                        Executable (<code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">chmod +x</code>) run before every backup.
-                        <strong>If it exits non-zero, the backup is skipped entirely</strong> &mdash; useful for a database dump or stopping a
-                        service beforehand, so a failed pre-step never lets a backup capture inconsistent state.
+                        {{ t('hooks_pre_help') | safe }}
                     </div>
                     <div id="pre-test-result" class="text-sm mt-2"></div>
                 </div>
 
                 <div>
-                    <label for="post_backup_script" class="text-[var(--text)] font-medium block mb-2">Post-Backup Script</label>
+                    <label for="post_backup_script" class="text-[var(--text)] font-medium block mb-2">{{ t('hooks_post_label') }}</label>
                     <div class="flex gap-2">
                         <input type="text" id="post_backup_script" name="post_backup_script"
                                class="flex-1 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
-                               value="{{ post_backup_script or '' }}" placeholder="e.g. /home/user/scripts/restart-service.sh">
+                               value="{{ post_backup_script or '' }}" placeholder="{{ t('hooks_placeholder_post') }}">
                         <button type="button" onclick="testScript('post')" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition whitespace-nowrap">
-                            Test Script
+                            {{ t('hooks_test_script') }}
                         </button>
                     </div>
                     <div class="text-sm text-[var(--text-muted)] mt-2">
-                        Executable, run after every backup &mdash; <strong>always, whether the backup (or the pre-backup script) succeeded or
-                        not</strong> &mdash; e.g. restarting a service the pre-backup script stopped, so a failed backup can't leave it down indefinitely.
+                        {{ t('hooks_post_help') | safe }}
                     </div>
                     <div id="post-test-result" class="text-sm mt-2"></div>
                 </div>
 
                 <div class="pt-2">
                     <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300 transform hover:-translate-y-1 shadow-lg">
-                        Save Backup Hooks
+                        {{ t('hooks_save_button') }}
                     </button>
                 </div>
             </form>
@@ -85,7 +83,7 @@
             const resultId = which === 'pre' ? 'pre-test-result' : 'post-test-result';
             const scriptPath = document.getElementById(inputId).value;
             const resultEl = document.getElementById(resultId);
-            resultEl.textContent = 'Running...';
+            resultEl.textContent = t('hooks_running');
             resultEl.className = 'text-sm mt-2 text-[var(--text-muted)]';
             try {
                 const response = await fetch('/backup-hooks/test', {
@@ -97,7 +95,7 @@
                 resultEl.textContent = data.message;
                 resultEl.className = 'text-sm mt-2 ' + (data.success ? 'text-green-500' : 'text-red-500');
             } catch (error) {
-                resultEl.textContent = 'Error running test.';
+                resultEl.textContent = t('hooks_error_running_test');
                 resultEl.className = 'text-sm mt-2 text-red-500';
             }
         }

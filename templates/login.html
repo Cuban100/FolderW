@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Log In - FolderW</title>
+    <title>{{ t('login_title') }}</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <link rel="stylesheet" type="text/css" href="/static/index.css?v={{ static_version }}">
     <style>
@@ -112,10 +112,10 @@
         <form method="post" action="/login">
             <input type="hidden" name="next" value="{{ next or '/' }}">
             <div class="login-field">
-                <label for="password">Password</label>
+                <label for="password">{{ t('login_password_label') }}</label>
                 <input type="password" id="password" name="password" autocomplete="current-password" autofocus required>
             </div>
-            <button type="submit" class="login-button">Log In</button>
+            <button type="submit" class="login-button">{{ t('login_button') }}</button>
         </form>
     </div>
     {% include "_footer.html" %}

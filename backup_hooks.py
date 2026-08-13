@@ -2,6 +2,7 @@ import os
 import subprocess
 from db_operations import load_env_value
 from notifications import notify
+from translations import t
 from loguru import logger
 
 # Generous but bounded -- a hung "stop service"/"dump database" command
@@ -20,32 +21,32 @@ def run_hook_script(path, label):
     desktop notification.
     """
     if not os.path.isfile(path):
-        message = f"Script not found: {path}"
+        message = t('hooks_error_not_found', path=path)
         logger.error(f"{label} script not found: {path}")
         notify(f"FolderW: {label} script missing", f"Configured {label.lower()} script not found: {path}", level='critical')
         return False, message
     if not os.access(path, os.X_OK):
-        message = f"Not executable (run: chmod +x {path})"
+        message = t('hooks_error_not_executable', path=path)
         logger.error(f"{label} script is not executable: {path}")
         notify(f"FolderW: {label} script not executable", f"Configured {label.lower()} script isn't executable (chmod +x): {path}", level='critical')
         return False, message
     try:
         result = subprocess.run([path], timeout=HOOK_TIMEOUT_SECONDS, capture_output=True, text=True)
         if result.returncode != 0:
-            message = f"Exited {result.returncode}: {result.stderr.strip() or '(no error output)'}"
+            message = t('hooks_error_exited', code=result.returncode, stderr=(result.stderr.strip() or t('hooks_no_error_output')))
             logger.error(f"{label} script ({path}) exited {result.returncode}: {result.stderr.strip()}")
             notify(f"FolderW: {label} script failed", f"{path} exited {result.returncode}. Check FolderW logs for details.", level='critical')
             return False, message
-        message = "Completed successfully" + (f": {result.stdout.strip()}" if result.stdout.strip() else "")
+        message = t('hooks_success_with_output', output=result.stdout.strip()) if result.stdout.strip() else t('hooks_success')
         logger.info(f"{label} script completed successfully: {path}")
         return True, message
     except subprocess.TimeoutExpired:
-        message = f"Timed out after {HOOK_TIMEOUT_SECONDS}s"
+        message = t('hooks_error_timeout', seconds=HOOK_TIMEOUT_SECONDS)
         logger.error(f"{label} script timed out after {HOOK_TIMEOUT_SECONDS}s: {path}")
         notify(f"FolderW: {label} script timed out", f"{path} did not finish within {HOOK_TIMEOUT_SECONDS}s.", level='critical')
         return False, message
     except OSError as e:
-        message = f"Could not run script: {e}"
+        message = t('hooks_error_could_not_run', error=str(e))
         logger.error(f"Error running {label.lower()} script {path}: {e}")
         notify(f"FolderW: {label} script error", f"Could not run {path}: {e}", level='critical')
         return False, message

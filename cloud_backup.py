@@ -4,6 +4,7 @@ import subprocess
 import time
 from db_operations import load_env_value, load_other_variables, set_database_value
 from notifications import notify
+from translations import t
 from loguru import logger
 
 CLOUD_SYNC_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs', 'cloud_sync.log')
@@ -50,21 +51,21 @@ def test_cloud_connection(remote, remote_path):
     """
     rclone_path = rclone_binary_path()
     if not rclone_path:
-        return False, "rclone not found on this machine."
+        return False, t('cloud_test_not_found')
     remote = (remote or '').strip()
     if not remote:
-        return False, "No remote selected."
+        return False, t('cloud_test_no_remote')
     remote_path = (remote_path or '').strip()
     target = f"{remote}:{remote_path}" if remote_path else f"{remote}:"
     try:
         result = subprocess.run([rclone_path, 'lsd', target], capture_output=True, text=True, timeout=20)
         if result.returncode != 0:
-            return False, f"Could not reach {target}: {result.stderr.strip() or '(no error output)'}"
-        return True, f"Connected to {target} successfully."
+            return False, t('cloud_test_could_not_reach', target=target, error=(result.stderr.strip() or t('hooks_no_error_output')))
+        return True, t('cloud_test_connected', target=target)
     except subprocess.TimeoutExpired:
-        return False, f"Timed out reaching {target} after 20s."
+        return False, t('cloud_test_timeout', target=target)
     except OSError as e:
-        return False, f"Could not run rclone: {e}"
+        return False, t('cloud_test_could_not_run', error=str(e))
 
 
 def sync_to_cloud():

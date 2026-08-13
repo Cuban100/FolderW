@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restore</title>
+    <title>{{ t('restore_title') }}</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
@@ -15,15 +15,9 @@
 
         <!-- Main content -->
         <div class="content p-8">
-            <h2 class="text-2xl font-bold mb-2 text-[var(--text)]">Restore</h2>
+            <h2 class="text-2xl font-bold mb-2 text-[var(--text)]">{{ t('restore_title') }}</h2>
             <p class="text-[var(--text-muted)] mb-6">
-                Each snapshot below is a complete, exact copy of your source directory as it
-                existed at that point in time &mdash; not just the files that changed. Browse or
-                search inside one, or open its Location path directly in your file manager.
-                Restoring never overwrites your source directory: files are copied into a new,
-                timestamped folder under
-                <code class="bg-[var(--value-bg)] text-[var(--value-text)] px-1 rounded">BASE_DIR/Restored/</code>
-                for you to review and move back yourself.
+                {{ t('restore_intro') | safe }}
             </p>
 
             {% if error %}
@@ -46,14 +40,11 @@
             <div class="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4 mb-6">
                 <div class="flex items-center justify-between gap-4 flex-wrap">
                     <p class="text-sm text-[var(--text-muted)] max-w-2xl">
-                        <span class="font-medium text-[var(--text)]">Compile Latest Snapshot</span> merges every snapshot below
-                        (Full Backup excluded) into one new "Merged" snapshot containing the latest version of every file that's
-                        ever changed &mdash; not a complete copy of your source, just a consolidated view of the changes.
+                        <span class="font-medium text-[var(--text)]">{{ t('restore_compile_label') }}</span> {{ t('restore_compile_desc') }}
                     </p>
-                    <form method="post" action="/restore/compile"
-                          onsubmit="return confirm('Merge every snapshot into one new snapshot with the latest version of each changed file?');">
+                    <form method="post" action="/restore/compile" class="restore-confirm-form" data-confirm="{{ t('restore_compile_confirm') }}">
                         <button type="submit" class="bg-gray-700 text-white text-sm py-2 px-4 rounded hover:bg-gray-800 transition whitespace-nowrap">
-                            Compile Latest Snapshot
+                            {{ t('restore_compile_label') }}
                         </button>
                     </form>
                 </div>
@@ -62,19 +53,19 @@
 
             {% if not backups %}
             <div class="bg-[var(--surface)] rounded-lg shadow p-6 text-[var(--text-muted)]">
-                No backups found yet. Run a backup first.
+                {{ t('restore_none_found') }}
             </div>
             {% else %}
             <div class="bg-[var(--surface)] rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-[var(--border)]">
                     <thead class="bg-[var(--surface-alt)]">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Backup</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Files</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase" title="Files new or modified in this specific snapshot, vs the total tree size in Files">Changed</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Size</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Location</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-[var(--text-muted)] uppercase">Actions</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('restore_col_backup') }}</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('restore_col_files') }}</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase" title="{{ t('restore_col_changed_title') }}">{{ t('restore_col_changed') }}</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('restore_col_size') }}</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('restore_col_location') }}</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('restore_col_actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--border)]">
@@ -86,13 +77,13 @@
                                 <div class="text-xs font-normal italic text-[var(--text-muted)] mt-1 max-w-xs">{{ backup.note }}</div>
                                 {% endif %}
                                 <details class="mt-1">
-                                    <summary class="text-xs font-normal text-blue-600 hover:underline cursor-pointer list-none">{{ 'Edit note' if backup.note else '+ Add note' }}</summary>
+                                    <summary class="text-xs font-normal text-blue-600 hover:underline cursor-pointer list-none">{{ t('restore_edit_note') if backup.note else t('restore_add_note') }}</summary>
                                     <form method="post" action="/restore/note" class="mt-2 flex flex-col gap-1 max-w-xs">
                                         <input type="hidden" name="backup_id" value="{{ backup.id }}">
                                         <input type="hidden" name="page" value="{{ page }}">
-                                        <textarea name="note" rows="2" placeholder="What was special about this snapshot?"
+                                        <textarea name="note" rows="2" placeholder="{{ t('restore_note_placeholder') }}"
                                                   class="bg-[var(--surface-alt)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text)] font-normal">{{ backup.note }}</textarea>
-                                        <button type="submit" class="self-start bg-blue-600 text-white text-xs py-1 px-2 rounded hover:bg-blue-700 transition">Save</button>
+                                        <button type="submit" class="self-start bg-blue-600 text-white text-xs py-1 px-2 rounded hover:bg-blue-700 transition">{{ t('restore_save') }}</button>
                                     </form>
                                 </details>
                             </td>
@@ -102,38 +93,38 @@
                             <td class="px-6 py-4 text-[var(--text-muted)] font-mono text-xs max-w-xs truncate align-top" title="{{ backup.path }}">{{ backup.path }}</td>
                             <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap align-top">
                                 <a href="/restore/browse/{{ backup.id }}" class="inline-block bg-gray-700 text-white text-sm py-1.5 px-3 rounded hover:bg-gray-800 transition">
-                                    Browse / Search
+                                    {{ t('restore_browse_search') }}
                                 </a>
                                 {% if backup.is_delta_only %}
                                 {% set row_id = backup.id | replace('/', '-') | replace(':', '-') %}
                                 <div class="inline-flex relative align-top">
-                                    <form method="post" action="/restore/execute" class="inline-block"
-                                          onsubmit="return confirm('Restore &quot;{{ backup.label }}&quot; (Full Backup + this snapshot merged) to a new folder under Restored/?');">
+                                    <form method="post" action="/restore/execute" class="inline-block restore-confirm-form"
+                                          data-confirm="{{ t('restore_confirm_full', label=backup.label) }}">
                                         <input type="hidden" name="backup_id" value="{{ backup.id }}">
                                         <input type="hidden" name="combine_with_full" value="1">
-                                        <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded-l hover:bg-blue-700 transition" title="Full Backup + this snapshot, merged -- a complete point-in-time restore">
-                                            Full Restore
+                                        <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded-l hover:bg-blue-700 transition" title="{{ t('restore_full_restore_title') }}">
+                                            {{ t('restore_full_restore') }}
                                         </button>
                                     </form>
                                     <button type="button" onclick="toggleRestoreMenu('{{ row_id }}')" class="bg-blue-600 text-white text-sm py-1.5 px-2 rounded-r border-l border-blue-800 hover:bg-blue-700 transition">
                                         <span class="mdi mdi-chevron-down"></span>
                                     </button>
                                     <div id="restore-menu-{{ row_id }}" class="hidden absolute right-0 top-full mt-1 z-10 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg">
-                                        <form method="post" action="/restore/execute"
-                                              onsubmit="return confirm('Restore only this snapshot&#39;s own changed files (not the full point-in-time state) to a new folder under Restored/?');">
+                                        <form method="post" action="/restore/execute" class="restore-confirm-form"
+                                              data-confirm="{{ t('restore_confirm_only_snapshot') }}">
                                             <input type="hidden" name="backup_id" value="{{ backup.id }}">
                                             <input type="hidden" name="combine_with_full" value="0">
-                                            <button type="submit" class="text-sm text-[var(--text)] py-2 px-3 hover:bg-[var(--surface-alt)] transition w-full text-left whitespace-nowrap" title="Only this snapshot's own delta -- not a complete point-in-time restore">
-                                                Only Snapshot
+                                            <button type="submit" class="text-sm text-[var(--text)] py-2 px-3 hover:bg-[var(--surface-alt)] transition w-full text-left whitespace-nowrap" title="{{ t('restore_only_snapshot_title') }}">
+                                                {{ t('restore_only_snapshot') }}
                                             </button>
                                         </form>
                                     </div>
                                 </div>
                                 {% else %}
-                                <form method="post" action="/restore/execute" class="inline-block" onsubmit="return confirm('Restore &quot;{{ backup.label }}&quot; to a new folder under Restored/?');">
+                                <form method="post" action="/restore/execute" class="inline-block restore-confirm-form" data-confirm="{{ t('restore_confirm_simple', label=backup.label) }}">
                                     <input type="hidden" name="backup_id" value="{{ backup.id }}">
                                     <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded hover:bg-blue-700 transition">
-                                        Restore
+                                        {{ t('restore_button') }}
                                     </button>
                                 </form>
                                 {% endif %}
@@ -145,13 +136,13 @@
             </div>
             {% if total_pages > 1 %}
             <div class="flex items-center justify-between mt-4 text-sm text-[var(--text-muted)]">
-                <div>Page {{ page }} of {{ total_pages }}</div>
+                <div>{{ t('history_page_of', page=page, total_pages=total_pages) }}</div>
                 <div class="space-x-2">
                     {% if page > 1 %}
-                    <a href="/restore?page={{ page - 1 }}" class="inline-block bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] py-1.5 px-3 rounded hover:bg-[var(--surface-alt)] transition">&larr; Previous</a>
+                    <a href="/restore?page={{ page - 1 }}" class="inline-block bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] py-1.5 px-3 rounded hover:bg-[var(--surface-alt)] transition">{{ t('history_previous') }}</a>
                     {% endif %}
                     {% if page < total_pages %}
-                    <a href="/restore?page={{ page + 1 }}" class="inline-block bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] py-1.5 px-3 rounded hover:bg-[var(--surface-alt)] transition">Next &rarr;</a>
+                    <a href="/restore?page={{ page + 1 }}" class="inline-block bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] py-1.5 px-3 rounded hover:bg-[var(--surface-alt)] transition">{{ t('history_next') }}</a>
                     {% endif %}
                 </div>
             </div>
@@ -173,6 +164,16 @@
             if (!event.target.closest('[onclick^="toggleRestoreMenu"]') && !event.target.closest('[id^="restore-menu-"]')) {
                 document.querySelectorAll('[id^="restore-menu-"]').forEach(m => m.classList.add('hidden'));
             }
+        });
+        // data-confirm attribute rather than inline onsubmit="return
+        // confirm('...')" string literals -- same reasoning as
+        // find-file.html: these confirm texts are translated and
+        // per-row-interpolated, unsafe to embed directly in a quoted JS
+        // string literal inside an HTML attribute.
+        document.querySelectorAll('.restore-confirm-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                if (!confirm(form.dataset.confirm)) e.preventDefault();
+            });
         });
     </script>
 </body>

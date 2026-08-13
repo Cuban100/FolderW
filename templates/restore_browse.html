@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restore &ndash; {{ backup_id }}</title>
+    <title>{{ t('restore_title') }} &ndash; {{ backup_id }}</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/index.css?v={{ static_version }}">
+    <script>window.FOLDERW_I18N = {{ i18n_json | safe }};</script>
+    <script src="/static/i18n.js?v={{ static_version }}"></script>
     <script src="/static/sidebar.js?v={{ static_version }}"></script>
     <style>
         .tree-list {
@@ -43,26 +45,26 @@
 
         <!-- Main content -->
         <div class="content p-8">
-            <a href="/restore" class="text-blue-600 hover:underline text-sm">&larr; Back to Restore</a>
+            <a href="/restore" class="text-blue-600 hover:underline text-sm">{{ t('browse_back_to_restore') }}</a>
             <h2 class="text-2xl font-bold mt-2 mb-2 text-[var(--text)]">{{ backup_id }}</h2>
 
             <form method="get" action="/restore/browse/{{ backup_id }}" class="mb-6 flex gap-2">
-                <input type="text" name="search" value="{{ search }}" placeholder="Search files in this snapshot&hellip;"
+                <input type="text" name="search" value="{{ search }}" placeholder="{{ t('browse_search_placeholder') }}"
                        class="flex-1 max-w-md bg-[var(--surface)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text)]">
                 <button type="submit" class="bg-blue-600 text-white text-sm py-2 px-4 rounded hover:bg-blue-700 transition">
-                    Search
+                    {{ t('browse_search') }}
                 </button>
                 {% if search %}
-                <a href="/restore/browse/{{ backup_id }}" class="text-sm text-blue-600 hover:underline self-center">Clear</a>
+                <a href="/restore/browse/{{ backup_id }}" class="text-sm text-blue-600 hover:underline self-center">{{ t('browse_clear') }}</a>
                 {% endif %}
             </form>
 
             {% if truncated %}
             <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-6">
                 {% if search %}
-                Showing the first {{ files|length }} matches for &quot;{{ search }}&quot;. Refine your search to narrow it down.
+                {{ t('browse_truncated_search', n=files|length, query=search) }}
                 {% else %}
-                Showing the first {{ files|length }} files (alphabetical). Search above to find something specific across the whole snapshot, or use "Restore" on the Restore page to restore everything.
+                {{ t('browse_truncated_all', n=files|length) }}
                 {% endif %}
             </div>
             {% endif %}
@@ -70,21 +72,21 @@
             {% if not files %}
             <div class="bg-[var(--surface)] rounded-lg shadow p-6 text-[var(--text-muted)]">
                 {% if search %}
-                No files matching &quot;{{ search }}&quot; in this snapshot.
+                {{ t('browse_no_matches', query=search) }}
                 {% else %}
-                This backup is empty.
+                {{ t('browse_empty') }}
                 {% endif %}
             </div>
             {% else %}
             <form method="post" action="/restore/execute">
                 <input type="hidden" name="backup_id" value="{{ backup_id }}">
                 <div class="mb-4 space-x-3">
-                    <button type="button" onclick="setAll(true)" class="text-sm text-blue-600 hover:underline">Select all</button>
-                    <button type="button" onclick="setAll(false)" class="text-sm text-blue-600 hover:underline">Select none</button>
+                    <button type="button" onclick="setAll(true)" class="text-sm text-blue-600 hover:underline">{{ t('browse_select_all') }}</button>
+                    <button type="button" onclick="setAll(false)" class="text-sm text-blue-600 hover:underline">{{ t('browse_select_none') }}</button>
                 </div>
                 <div class="bg-[var(--surface)] rounded-lg shadow p-4 mb-6" id="file-tree-root"></div>
                 <button type="submit" class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">
-                    Restore Selected Files
+                    {{ t('browse_restore_selected') }}
                 </button>
             </form>
             {% endif %}
@@ -123,7 +125,7 @@
                     const dirCb = document.createElement('input');
                     dirCb.type = 'checkbox';
                     dirCb.className = 'dir-checkbox';
-                    dirCb.setAttribute('aria-label', 'Select all in ' + entry.name);
+                    dirCb.setAttribute('aria-label', t('browse_select_all_in', {name: entry.name}));
                     // stopPropagation, not preventDefault: lets the
                     // checkbox's own click-to-toggle behavior happen
                     // normally, while keeping the click from also

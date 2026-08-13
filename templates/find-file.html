@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find File</title>
+    <title>{{ t('findfile_title') }}</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
@@ -13,11 +13,9 @@
 <body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
     {% include "_sidebar.html" %}
         <div class="content p-8">
-            <h2 class="text-2xl font-bold mb-2 text-[var(--text)]">Find File</h2>
+            <h2 class="text-2xl font-bold mb-2 text-[var(--text)]">{{ t('findfile_title') }}</h2>
             <p class="text-[var(--text-muted)] mb-6">
-                Search for a file or folder by name across every backup and snapshot at once, see exactly which
-                one(s) it's in, and restore just that item &mdash; to a new folder under
-                <span class="font-mono text-xs">Restored/</span>, or straight back into your source directory.
+                {{ t('findfile_intro') | safe }}
             </p>
 
             {% if error %}
@@ -32,29 +30,29 @@
             {% endif %}
 
             <form method="get" action="/find-file" class="flex gap-2 mb-6">
-                <input type="text" name="query" value="{{ query }}" placeholder="File or folder name…"
+                <input type="text" name="query" value="{{ query }}" placeholder="{{ t('findfile_placeholder') }}"
                        class="flex-1 border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]" autofocus>
-                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">Search</button>
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">{{ t('findfile_search') }}</button>
             </form>
 
             {% if query and not results %}
             <div class="bg-[var(--surface)] rounded-lg shadow p-6 text-[var(--text-muted)]">
-                No matches for "{{ query }}" in any backup or snapshot.
+                {{ t('findfile_no_matches', query=query) }}
             </div>
             {% elif results %}
             {% if truncated %}
             <div class="bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text-muted)] text-sm px-4 py-2 rounded mb-4">
-                Showing the first {{ results|length }} matches — narrow your search to see more precisely.
+                {{ t('findfile_truncated', n=results|length) }}
             </div>
             {% endif %}
             <div class="bg-[var(--surface)] rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-[var(--border)]">
                     <thead class="bg-[var(--surface-alt)]">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Path</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Type</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">Snapshot</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-[var(--text-muted)] uppercase">Actions</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('findfile_col_path') }}</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('findfile_col_type') }}</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('findfile_col_snapshot') }}</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-[var(--text-muted)] uppercase">{{ t('findfile_col_actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--border)]">
@@ -63,33 +61,33 @@
                         <tr>
                             <td class="px-6 py-4 text-[var(--text)] font-mono text-xs break-all">{{ result.rel_path }}</td>
                             <td class="px-6 py-4 text-[var(--text-muted)]">
-                                <span class="mdi {{ 'mdi-folder-outline' if result.is_dir else 'mdi-file-outline' }} mr-1"></span>{{ 'Folder' if result.is_dir else 'File' }}
+                                <span class="mdi {{ 'mdi-folder-outline' if result.is_dir else 'mdi-file-outline' }} mr-1"></span>{{ t('findfile_type_folder') if result.is_dir else t('findfile_type_file') }}
                             </td>
                             <td class="px-6 py-4 text-[var(--text-muted)]">{{ result.backup_label }}</td>
                             <td class="px-6 py-4 text-right whitespace-nowrap align-top">
                                 <div class="inline-flex relative align-top">
-                                    <form method="post" action="/find-file/restore" class="inline-block"
-                                          onsubmit="return confirm('Restore &quot;{{ result.rel_path }}&quot; from &quot;{{ result.backup_label }}&quot; into a new Restored/ folder?');">
+                                    <form method="post" action="/find-file/restore" class="inline-block find-file-confirm-form"
+                                          data-confirm="{{ t('findfile_confirm_recovery', path=result.rel_path, backup=result.backup_label) }}">
                                         <input type="hidden" name="backup_id" value="{{ result.backup_id }}">
                                         <input type="hidden" name="rel_path" value="{{ result.rel_path }}">
                                         <input type="hidden" name="target" value="recovery">
                                         <input type="hidden" name="query" value="{{ query }}">
-                                        <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded-l hover:bg-blue-700 transition" title="Copies just this item into a new timestamped folder under Restored/ -- never touches your source directory">
-                                            Restore to Recovery Folder
+                                        <button type="submit" class="bg-blue-600 text-white text-sm py-1.5 px-3 rounded-l hover:bg-blue-700 transition" title="{{ t('findfile_restore_to_recovery_title') }}">
+                                            {{ t('findfile_restore_to_recovery') }}
                                         </button>
                                     </form>
                                     <button type="button" onclick="toggleFindFileMenu({{ row_id }})" class="bg-blue-600 text-white text-sm py-1.5 px-2 rounded-r border-l border-blue-800 hover:bg-blue-700 transition">
                                         <span class="mdi mdi-chevron-down"></span>
                                     </button>
                                     <div id="find-file-menu-{{ row_id }}" class="hidden absolute right-0 top-full mt-1 z-10 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg">
-                                        <form method="post" action="/find-file/restore"
-                                              onsubmit="return confirm('Restore &quot;{{ result.rel_path }}&quot; directly into your SOURCE directory, overwriting whatever is currently there at that path?\n\nAnything currently at that exact path will be moved aside (not deleted) first, but this still changes your live source directory. Are you sure?');">
+                                        <form method="post" action="/find-file/restore" class="find-file-confirm-form"
+                                              data-confirm="{{ t('findfile_confirm_source', path=result.rel_path) }}">
                                             <input type="hidden" name="backup_id" value="{{ result.backup_id }}">
                                             <input type="hidden" name="rel_path" value="{{ result.rel_path }}">
                                             <input type="hidden" name="target" value="source">
                                             <input type="hidden" name="query" value="{{ query }}">
-                                            <button type="submit" class="text-sm text-[var(--error-text)] py-2 px-3 hover:bg-[var(--surface-alt)] transition w-full text-left whitespace-nowrap" title="Overwrites this exact path in your source directory. Anything currently there is moved aside with a timestamp suffix first, not deleted.">
-                                                Restore to Source
+                                            <button type="submit" class="text-sm text-[var(--error-text)] py-2 px-3 hover:bg-[var(--surface-alt)] transition w-full text-left whitespace-nowrap" title="{{ t('findfile_restore_to_source_title') }}">
+                                                {{ t('findfile_restore_to_source') }}
                                             </button>
                                         </form>
                                     </div>
@@ -117,6 +115,16 @@
             if (!event.target.closest('[onclick^="toggleFindFileMenu"]') && !event.target.closest('[id^="find-file-menu-"]')) {
                 document.querySelectorAll('[id^="find-file-menu-"]').forEach(m => m.classList.add('hidden'));
             }
+        });
+        // data-confirm attribute rather than an inline onsubmit="return
+        // confirm('...')" string literal -- the confirm text is a
+        // translated, per-row-interpolated (and possibly apostrophe/quote-
+        // containing) string, unsafe to embed directly inside a quoted JS
+        // string literal inside an HTML attribute.
+        document.querySelectorAll('.find-file-confirm-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                if (!confirm(form.dataset.confirm)) e.preventDefault();
+            });
         });
     </script>
 </body>

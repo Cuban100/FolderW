@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Statistics</title>
+    <title>{{ t('stats_title') }}</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="/static/index.css?v={{ static_version }}">
+    <script>window.FOLDERW_I18N = {{ i18n_json | safe }};</script>
+    <script src="/static/i18n.js?v={{ static_version }}"></script>
     <script src="/static/sidebar.js?v={{ static_version }}"></script>
     <style>
         /* Chart-specific tokens, scoped under .viz-root -- kept separate
@@ -112,83 +114,83 @@
     {% include "_sidebar.html" %}
     <div class="content p-8 viz-root">
         <div class="flex items-center justify-between mb-2">
-            <h1 class="text-2xl font-bold text-[var(--text)]">Statistics</h1>
-            <a href="/backup-history" class="text-sm text-[var(--text-muted)] underline">View full run history &rarr;</a>
+            <h1 class="text-2xl font-bold text-[var(--text)]">{{ t('stats_title') }}</h1>
+            <a href="/backup-history" class="text-sm text-[var(--text-muted)] underline">{{ t('stats_view_full_history') }}</a>
         </div>
         <p class="text-sm text-[var(--text-muted)] mb-6">
-            {{ summary.total_runs }} backup{{ '' if summary.total_runs == 1 else 's' }} recorded all-time
-            ({{ summary.full_runs }} full)
-            {% if summary.success_rate is not none %}&middot; {{ summary.success_rate }}% completed successfully{% endif %}
-            &middot; {{ (summary.total_size_processed / 1048576) | round(1) }} MB processed all-time.
+            {{ t('stats_summary_one', n=summary.total_runs) if summary.total_runs == 1 else t('stats_summary_other', n=summary.total_runs) }}
+            {{ t('stats_summary_full_suffix', n=summary.full_runs) }}
+            {% if summary.success_rate is not none %}&middot; {{ t('stats_summary_success_rate', pct=summary.success_rate) }}{% endif %}
+            &middot; {{ t('stats_summary_processed', mb=(summary.total_size_processed / 1048576) | round(1)) }}
         </p>
 
         <div id="empty-state" class="hidden text-[var(--text-muted)] py-12 text-center">
-            No backup runs recorded yet. Charts will appear here after your first backup completes.
+            {{ t('stats_empty') }}
         </div>
 
         <div id="charts-root">
-            <div class="flex items-center gap-2 mb-6" role="group" aria-label="Filter by backup type">
-                <span class="text-sm text-[var(--text-muted)] mr-1">Backup type:</span>
-                <button class="filter-pill active" data-filter-type="all">All</button>
-                <button class="filter-pill" data-filter-type="full">Full</button>
+            <div class="flex items-center gap-2 mb-6" role="group" aria-label="{{ t('stats_filter_type_aria') }}">
+                <span class="text-sm text-[var(--text-muted)] mr-1">{{ t('stats_backup_type_label') }}</span>
+                <button class="filter-pill active" data-filter-type="all">{{ t('stats_filter_all') }}</button>
+                <button class="filter-pill" data-filter-type="full">{{ t('history_type_full') }}</button>
                 {# Only the currently configured method can actually appear in
                    recorded history -- switching BACKUP_METHOD resets backup
                    history (see /submit in server.py), so the other one is
                    never just "not shown yet," it's guaranteed empty. #}
                 {% if backup_method == 'incremental' %}
-                <button class="filter-pill" data-filter-type="incremental">Incremental</button>
+                <button class="filter-pill" data-filter-type="incremental">{{ t('settings_backup_method_incremental') }}</button>
                 {% else %}
-                <button class="filter-pill" data-filter-type="differential">Differential</button>
+                <button class="filter-pill" data-filter-type="differential">{{ t('settings_backup_method_differential') }}</button>
                 {% endif %}
             </div>
 
             <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
-                <h2 class="text-lg font-semibold mb-1">Destination Storage Over Time</h2>
-                <p class="text-sm text-[var(--text-muted)] mb-3">Total size of the full backup plus every current snapshot, after each run. Click a point for details.</p>
+                <h2 class="text-lg font-semibold mb-1">{{ t('stats_storage_title') }}</h2>
+                <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_storage_desc') }}</p>
                 <div class="relative" id="storage-chart-container">
-                    <svg id="storage-chart" width="100%" height="220" role="img" aria-label="Destination storage over time"></svg>
+                    <svg id="storage-chart" width="100%" height="220" role="img" aria-label="{{ t('stats_storage_aria') }}"></svg>
                     <div class="chart-tooltip" id="storage-tooltip"></div>
                 </div>
             </div>
 
             <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
                 <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
-                    <h2 class="text-lg font-semibold">Per-Backup Activity</h2>
+                    <h2 class="text-lg font-semibold">{{ t('stats_activity_title') }}</h2>
                     <div class="flex items-center gap-2 flex-wrap">
-                        <div class="flex items-center gap-2" role="group" aria-label="Metric">
-                            <button class="filter-pill active" data-metric="files_changed">Files Changed</button>
-                            <button class="filter-pill" data-metric="size_processed">Data Added</button>
+                        <div class="flex items-center gap-2" role="group" aria-label="{{ t('stats_metric_aria') }}">
+                            <button class="filter-pill active" data-metric="files_changed">{{ t('stats_metric_files_changed') }}</button>
+                            <button class="filter-pill" data-metric="size_processed">{{ t('stats_metric_data_added') }}</button>
                         </div>
-                        <div class="flex items-center gap-2" role="group" aria-label="Scale">
-                            <button class="filter-pill" data-scale="linear" title="Bar height directly proportional to value -- a single much-larger run (e.g. the initial full backup) can make every smaller run's bar nearly invisible">Linear</button>
-                            <button class="filter-pill active" data-scale="log" title="Compresses the range so smaller runs stay visible alongside a much larger one, at the cost of bar height no longer being directly proportional to value -- hover a bar for its exact number">Log Scale</button>
+                        <div class="flex items-center gap-2" role="group" aria-label="{{ t('stats_scale_aria') }}">
+                            <button class="filter-pill" data-scale="linear" title="{{ t('stats_scale_linear_title') }}">{{ t('stats_scale_linear') }}</button>
+                            <button class="filter-pill active" data-scale="log" title="{{ t('stats_scale_log_title') }}">{{ t('stats_scale_log') }}</button>
                         </div>
                     </div>
                 </div>
-                <p class="text-sm text-[var(--text-muted)] mb-3">One bar per backup run, colored by method. Click a bar for the file list.</p>
+                <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_activity_desc') }}</p>
                 <div class="relative" id="activity-chart-container">
-                    <svg id="activity-chart" width="100%" height="240" role="img" aria-label="Files changed or data added per backup run"></svg>
+                    <svg id="activity-chart" width="100%" height="240" role="img" aria-label="{{ t('stats_activity_aria') }}"></svg>
                     <div class="chart-tooltip" id="activity-tooltip"></div>
                 </div>
                 <div class="flex items-center gap-4 mt-3 text-sm" id="activity-legend">
-                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-full)"></span>Full</span>
+                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-full)"></span>{{ t('history_type_full') }}</span>
                     {% if backup_method == 'incremental' %}
-                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-incremental)"></span>Incremental</span>
+                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-incremental)"></span>{{ t('settings_backup_method_incremental') }}</span>
                     {% else %}
-                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-differential)"></span>Differential</span>
+                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-differential)"></span>{{ t('settings_backup_method_differential') }}</span>
                     {% endif %}
                 </div>
             </div>
 
             <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
-                <h2 class="text-lg font-semibold mb-1">Backup Duration</h2>
-                <p class="text-sm text-[var(--text-muted)] mb-3">How long each run took, start to finish.</p>
+                <h2 class="text-lg font-semibold mb-1">{{ t('stats_duration_title') }}</h2>
+                <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_duration_desc') }}</p>
                 <div class="relative" id="duration-chart-container">
-                    <svg id="duration-chart" width="100%" height="200" role="img" aria-label="Backup duration per run"></svg>
+                    <svg id="duration-chart" width="100%" height="200" role="img" aria-label="{{ t('stats_duration_aria') }}"></svg>
                     <div class="chart-tooltip" id="duration-tooltip"></div>
                 </div>
                 <p class="hidden text-sm text-[var(--text-muted)] py-8 text-center" id="duration-empty">
-                    Duration tracking starts with this update &mdash; it'll appear here after your next few backups.
+                    {{ t('stats_duration_empty') }}
                 </p>
             </div>
         </div>
@@ -198,13 +200,13 @@
     <div id="drilldown-panel">
         <div class="p-5">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold" id="drilldown-title">Backup Run</h3>
-                <button onclick="closeDrilldown()" class="text-[var(--text-muted)] hover:text-[var(--text)]" aria-label="Close">
+                <h3 class="text-lg font-semibold" id="drilldown-title">{{ t('stats_drilldown_default_title') }}</h3>
+                <button onclick="closeDrilldown()" class="text-[var(--text-muted)] hover:text-[var(--text)]" aria-label="{{ t('stats_close') }}">
                     <span class="mdi mdi-close"></span>
                 </button>
             </div>
             <dl class="text-sm space-y-1 mb-4" id="drilldown-meta"></dl>
-            <div class="text-sm font-medium mb-2">Files changed</div>
+            <div class="text-sm font-medium mb-2">{{ t('stats_field_files_changed') }}</div>
             <div id="drilldown-files" class="text-sm font-mono space-y-1 max-h-[50vh] overflow-y-auto text-[var(--text-muted)]"></div>
         </div>
 
@@ -226,6 +228,17 @@
 
         function filteredRuns() {
             return typeFilter === 'all' ? allRuns : allRuns.filter(r => r.backup_type === typeFilter);
+        }
+
+        function typeLabel(type) {
+            if (type === 'full') return t('history_type_full');
+            if (type === 'incremental') return t('settings_backup_method_incremental');
+            if (type === 'differential') return t('settings_backup_method_differential');
+            return type;
+        }
+
+        function statusLabel(status) {
+            return status === 'completed' ? t('history_status_completed') : status;
         }
 
         function seriesColor(type) {
@@ -453,7 +466,7 @@
                 }
                 hit.addEventListener('pointerenter', () => {
                     showTooltip(tooltip, container, x, y,
-                        `<strong>${formatter(value)}</strong> ${r.backup_type}<br>${formatTimestamp(r.timestamp)}${r.status !== 'completed' ? '<br><span style="color:var(--status-critical)">' + r.status + '</span>' : ''}`);
+                        `<strong>${formatter(value)}</strong> ${typeLabel(r.backup_type)}<br>${formatTimestamp(r.timestamp)}${r.status !== 'completed' ? '<br><span style="color:var(--status-critical)">' + statusLabel(r.status) + '</span>' : ''}`);
                 });
                 hit.addEventListener('pointerleave', () => hideTooltip(tooltip));
                 hit.addEventListener('click', () => openDrilldown(r));
@@ -521,16 +534,16 @@
         async function openDrilldown(run) {
             const panel = document.getElementById('drilldown-panel');
             const overlay = document.getElementById('drilldown-overlay');
-            document.getElementById('drilldown-title').textContent = run.backup_type.charAt(0).toUpperCase() + run.backup_type.slice(1) + ' backup';
+            document.getElementById('drilldown-title').textContent = t('stats_drilldown_title_' + run.backup_type);
             const meta = document.getElementById('drilldown-meta');
             meta.innerHTML = '';
             const rows = [
-                ['Started', formatTimestamp(run.timestamp)],
-                ['Status', run.status],
-                ['Files changed', run.files_changed.toLocaleString()],
-                ['Data added', formatBytes(run.size_processed)],
-                ['Destination size', formatBytes(run.destination_size)],
-                ['Duration', formatDuration(run.duration_seconds)],
+                [t('stats_field_started'), formatTimestamp(run.timestamp)],
+                [t('stats_field_status'), statusLabel(run.status)],
+                [t('stats_field_files_changed'), run.files_changed.toLocaleString()],
+                [t('stats_field_data_added'), formatBytes(run.size_processed)],
+                [t('stats_field_destination_size'), formatBytes(run.destination_size)],
+                [t('stats_field_duration'), formatDuration(run.duration_seconds)],
             ];
             for (const [label, value] of rows) {
                 const dt = document.createElement('dt');
@@ -546,7 +559,7 @@
             }
 
             const filesEl = document.getElementById('drilldown-files');
-            filesEl.textContent = 'Loading…';
+            filesEl.textContent = t('stats_loading');
             panel.classList.add('open');
             overlay.classList.add('open');
 
@@ -555,7 +568,7 @@
                 const data = await response.json();
                 filesEl.textContent = '';
                 if (!data.changes || data.changes.length === 0) {
-                    filesEl.textContent = 'No individual file records for this run.';
+                    filesEl.textContent = t('stats_no_file_records');
                 } else {
                     data.changes.forEach(c => {
                         const row = document.createElement('div');
@@ -564,7 +577,7 @@
                     });
                 }
             } catch (e) {
-                filesEl.textContent = 'Could not load file list.';
+                filesEl.textContent = t('stats_load_error');
             }
         }
 

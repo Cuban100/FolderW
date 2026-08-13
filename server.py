@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 from notifications import _notify_desktop
 from backup_hooks import run_hook_script
 from cloud_backup import list_rclone_remotes, test_cloud_connection
-from translations import t, current_language, LANGUAGES
+from translations import t, t_or_raw, current_language, LANGUAGES
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot, search_all_backups, restore_single_path, summarize_folder
@@ -108,6 +108,7 @@ def _global_template_context(request):
         "app_version": APP_VERSION,
         "current_year": datetime.now().year,
         "t": t,
+        "t_or_raw": t_or_raw,
         "lang": lang,
         # Only 2 templates (index.html, settings.html) actually embed this
         # for their own client-side JS -- computed here anyway (cheap: a
@@ -167,7 +168,7 @@ async def login_submit(request: Request, password: str = Form(...), next: str = 
         "request": request,
         "next": next,
         "logo": logo,
-        "error": "Incorrect password.",
+        "error": t('login_error_incorrect'),
     })
 
 @app.post("/set-language")
@@ -1034,17 +1035,23 @@ async def restore_execute(request: Request, backup_id: str = Form(...), selected
         # but not impossible with a fast retention cleanup).
         matching_backup = next((b for b in list_backups() if b["id"] == backup_id), None)
         backup_label = matching_backup["label"] if matching_backup else backup_id
+        # Stored as a stable, language-independent key (translated only at
+        # display time in recovery-history.html), not the pre-formatted
+        # English label these used to be -- since this is written once to
+        # the database and read back indefinitely, baking in whichever
+        # language happened to be active at restore time would freeze old
+        # rows in a different language than new ones after a switch.
         if selected_paths:
-            restore_type = "Selected Files"
+            restore_type = "selected_files"
         elif matching_backup and matching_backup["is_delta_only"]:
-            restore_type = "Full Restore" if combine_with_full == "1" else "Only Snapshot"
+            restore_type = "full_restore" if combine_with_full == "1" else "only_snapshot"
         else:
-            restore_type = "Entire Backup"
+            restore_type = "entire_backup"
         record_restore_run(backup_id, backup_label, dest_root, file_count, restore_type)
         return templates.TemplateResponse("restore.html", {
             "request": request,
             "logo": logo,
-            "success": f"Restored {file_count} file(s) to {dest_root}",
+            "success": t('restore_success_execute', n=file_count, dest=dest_root),
             **_restore_page_context(),
         })
     except ValueError as e:
@@ -1063,13 +1070,13 @@ async def restore_compile(request: Request):
         return templates.TemplateResponse("restore.html", {
             "request": request,
             "logo": logo,
-            "error": "No snapshots to compile yet -- this needs at least one Incremental or Differential snapshot beyond the full backup.",
+            "error": t('restore_error_no_snapshots'),
             **_restore_page_context(),
         })
     return templates.TemplateResponse("restore.html", {
         "request": request,
         "logo": logo,
-        "success": f"Compiled {file_count} file(s) into a new merged snapshot at {new_path}.",
+        "success": t('restore_success_compile', n=file_count, dest=new_path),
         **_restore_page_context(),
     })
 
@@ -1102,11 +1109,7 @@ async def find_file_restore(
         if target == "source":
             target_dir = load_env_value('SRC_DIR')
             dest = restore_single_path(backup_id, rel_path, target_dir, safety_backup=True)
-            context["success"] = (
-                f"Restored '{rel_path}' directly into your source directory ({dest}). "
-                "If something already existed at that exact path, it was moved aside "
-                "(suffixed with a timestamp) rather than overwritten, in case this wasn't what you meant to do."
-            )
+            context["success"] = t('findfile_success_source', path=rel_path, dest=dest)
         else:
             timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
             label = backup_id.replace('/', '-').replace(':', '-')
@@ -1114,12 +1117,13 @@ async def find_file_restore(
             target_dir = os.path.join(load_env_value('BASE_DIR'), "Restored", f"{timestamp}_{label}_{item_name}")
             os.makedirs(target_dir, exist_ok=True)
             dest = restore_single_path(backup_id, rel_path, target_dir, safety_backup=False)
-            context["success"] = f"Restored '{rel_path}' to {dest}."
+            context["success"] = t('findfile_success_recovery', path=rel_path, dest=dest)
 
         file_count = 1 if (os.path.isfile(dest) or os.path.islink(dest)) else summarize_folder(dest)[0]
         matching_backup = next((b for b in list_backups() if b["id"] == backup_id), None)
         backup_label = matching_backup["label"] if matching_backup else backup_id
-        restore_type = f"Single item ({'Source' if target == 'source' else 'Recovery Folder'})"
+        # Same stable-key convention as restore_execute() above.
+        restore_type = "single_item_source" if target == "source" else "single_item_recovery_folder"
         record_restore_run(backup_id, backup_label, dest, file_count, restore_type)
     except ValueError as e:
         context["error"] = str(e)
@@ -1256,7 +1260,7 @@ async def backup_hooks_save(request: Request, pre_backup_script: str = Form(""),
     return templates.TemplateResponse("backup_hooks.html", {
         "request": request,
         "logo": logo,
-        "success": "Backup hooks saved.",
+        "success": t('hooks_saved'),
         "pre_backup_script": pre_backup_script.strip(),
         "post_backup_script": post_backup_script.strip(),
     })
@@ -1272,7 +1276,7 @@ async def backup_hooks_test(script_path: str = Form(...), which: str = Form(...)
     script_path = script_path.strip()
     label = 'Pre-backup' if which == 'pre' else 'Post-backup'
     if not script_path:
-        return JSONResponse({"success": False, "message": "No script path entered."})
+        return JSONResponse({"success": False, "message": t('hooks_no_script_path')})
     success, message = run_hook_script(script_path, label)
     return JSONResponse({"success": success, "message": message})
 
@@ -1335,14 +1339,14 @@ async def cloud_backup_save(request: Request,
             return templates.TemplateResponse("cloud_backup.html", {
                 "request": request,
                 "logo": logo,
-                "error": "rclone isn't installed on this machine -- install it (e.g. 'sudo apt install rclone') before enabling cloud sync.",
+                "error": t('cloud_error_rclone_not_installed'),
                 **_cloud_backup_page_context(),
             })
         if not remote or remote not in remotes:
             return templates.TemplateResponse("cloud_backup.html", {
                 "request": request,
                 "logo": logo,
-                "error": "Select a valid, currently-configured rclone remote before enabling cloud sync.",
+                "error": t('cloud_error_invalid_remote'),
                 **_cloud_backup_page_context(),
             })
 
@@ -1355,7 +1359,7 @@ async def cloud_backup_save(request: Request,
     return templates.TemplateResponse("cloud_backup.html", {
         "request": request,
         "logo": logo,
-        "success": "Cloud backup settings saved.",
+        "success": t('cloud_settings_saved'),
         **_cloud_backup_page_context(),
     })
 
