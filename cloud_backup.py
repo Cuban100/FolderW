@@ -1,9 +1,10 @@
+import json
 import os
 import shutil
 import subprocess
 import time
 from db_operations import load_env_value, load_other_variables, set_database_value
-from notifications import notify
+from notifications import notify, _notify_desktop
 from translations import t
 from loguru import logger
 
@@ -68,6 +69,115 @@ def test_cloud_connection(remote, remote_path):
         return False, t('cloud_test_could_not_run', error=str(e))
 
 
+def get_remote_type(remote):
+    """The backend type (e.g. 'drive', 'dropbox') of an already-configured
+    rclone remote, parsed from `rclone config show` -- used by the Cloud
+    Backup page's Renew Token section to tell the user exactly which
+    `rclone authorize "<type>"` command to run for the remote they have
+    selected.
+    """
+    rclone_path = rclone_binary_path()
+    if not rclone_path or not remote:
+        return None
+    try:
+        result = subprocess.run([rclone_path, 'config', 'show', remote], capture_output=True, text=True, timeout=10)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    for line in result.stdout.splitlines():
+        key, _, value = line.partition('=')
+        if key.strip() == 'type':
+            return value.strip()
+    return None
+
+
+def renew_remote_token(remote, token_json):
+    """(success, message) for the Cloud Backup page's Renew Token button.
+
+    FolderW never runs the OAuth browser flow itself (see sync_to_cloud()'s
+    docstring -- it never handles cloud credentials directly): the user
+    runs `rclone authorize "<type>"` themselves on any device with a
+    browser, then pastes the resulting JSON token blob here. This writes
+    that blob into the named remote's config via `rclone config update`
+    and immediately verifies it with a real connection test -- rclone
+    itself writes ANY string into the token field with no validation
+    (confirmed directly: `rclone config update <remote> token 'not-json'`
+    exits 0 and silently corrupts the remote), so both the JSON shape
+    check before writing and the connectivity check after are
+    load-bearing, not just nice-to-haves.
+    """
+    rclone_path = rclone_binary_path()
+    if not rclone_path:
+        return False, t('cloud_test_not_found')
+
+    remote = (remote or '').strip()
+    if not remote:
+        return False, t('cloud_renew_error_no_remote')
+
+    _, remotes = list_rclone_remotes()
+    if remote not in remotes:
+        return False, t('cloud_renew_error_unknown_remote', remote=remote)
+
+    token_json = (token_json or '').strip()
+    try:
+        parsed = json.loads(token_json)
+    except (ValueError, TypeError):
+        return False, t('cloud_renew_error_invalid_json')
+    if not isinstance(parsed, dict) or 'access_token' not in parsed or 'token_type' not in parsed:
+        return False, t('cloud_renew_error_missing_fields')
+
+    try:
+        result = subprocess.run(
+            [rclone_path, 'config', 'update', remote, 'token', token_json, '--non-interactive'],
+            capture_output=True, text=True, timeout=20,
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return False, t('cloud_renew_error_could_not_run', error=str(e))
+    if result.returncode != 0:
+        return False, t('cloud_renew_error_rclone_failed', error=(result.stderr.strip() or result.stdout.strip() or t('hooks_no_error_output')))
+
+    verified, verify_message = test_cloud_connection(remote, '')
+    if verified:
+        return True, t('cloud_renew_success', remote=remote)
+    return False, t('cloud_renew_success_unverified', error=verify_message)
+
+
+def _notify_synced_files(log_file, start_offset):
+    """Fires one desktop notify-send per file the last sync_to_cloud()
+    call actually copied -- explicitly requested (per-file, not a single
+    summary), and desktop-only by design: routing this through notify()
+    would also fan it out to every configured Apprise URL, which would
+    turn a big sync into a phone-buzzing storm on Pushover/ntfy. Gated on
+    NOTIFY_SEND_ALWAYS like every other desktop notification, so enabling
+    cloud sync alone can't surprise someone who's opted out of desktop
+    notifications.
+
+    Reads only the bytes appended to `log_file` since `start_offset` --
+    rclone's --log-file APPENDS across runs rather than truncating
+    (confirmed directly), so reading the whole file every time would
+    re-notify about every previous sync's files too.
+    """
+    if load_env_value('NOTIFY_SEND_ALWAYS') != '1':
+        return
+    try:
+        with open(log_file, 'r') as f:
+            f.seek(start_offset)
+            new_content = f.read()
+    except OSError:
+        return
+    for line in new_content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get('msg') in ('Copied (new)', 'Copied (replaced existing)'):
+            _notify_desktop("FolderW: Cloud sync", f"Sent: {entry.get('object', '?')}", 'low')
+
+
 def sync_to_cloud():
     """Mirrors the backup destination (Full Backup + every Snapshot --
     BASE_DIR/FULL_NAME, same root restore_operations.py's
@@ -118,11 +228,15 @@ def sync_to_cloud():
     target = f"{remote}:{remote_path}" if remote_path else f"{remote}:"
 
     os.makedirs(os.path.dirname(CLOUD_SYNC_LOG_FILE), exist_ok=True)
+    try:
+        log_start_offset = os.path.getsize(CLOUD_SYNC_LOG_FILE)
+    except OSError:
+        log_start_offset = 0
     cmd = [
         rclone_path, 'sync', destination_root, target,
         '--transfers', '4', '--checkers', '8',
         '--timeout', RCLONE_TIMEOUT, '--contimeout', RCLONE_CONTIMEOUT,
-        '--log-file', CLOUD_SYNC_LOG_FILE, '--log-level', 'INFO',
+        '--log-file', CLOUD_SYNC_LOG_FILE, '--log-level', 'INFO', '--use-json-log',
     ]
     if bwlimit:
         cmd += ['--bwlimit', bwlimit]
@@ -137,6 +251,7 @@ def sync_to_cloud():
         logger.info(message)
         set_database_value('CLOUD_SYNC_LAST_STATUS', 'success')
         set_database_value('CLOUD_SYNC_LAST_TIME', str(time.time()))
+        _notify_synced_files(CLOUD_SYNC_LOG_FILE, log_start_offset)
         return True, message
     except OSError as e:
         return _fail(f"Could not run rclone: {e}")

@@ -14,7 +14,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 from notifications import _notify_desktop
 from backup_hooks import run_hook_script
-from cloud_backup import list_rclone_remotes, test_cloud_connection
+from cloud_backup import list_rclone_remotes, test_cloud_connection, get_remote_type, renew_remote_token
 from translations import t, t_or_raw, current_language, LANGUAGES
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs
@@ -1307,6 +1307,7 @@ def _cloud_backup_page_context():
         "full_name": load_env_value('FULL_NAME'),
         "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
         "cloud_sync_last_display": _cloud_sync_timing_context()["cloud_sync_last_display"],
+        "remote_type": get_remote_type(saved_remote) if saved_remote and not saved_remote_missing else None,
     }
 
 
@@ -1367,6 +1368,21 @@ async def cloud_backup_save(request: Request,
 @app.post("/cloud-backup/test")
 async def cloud_backup_test(remote: str = Form(""), remote_path: str = Form("")):
     success, message = test_cloud_connection(remote, remote_path)
+    return JSONResponse({"success": success, "message": message})
+
+
+@app.get("/cloud-backup/remote-type")
+async def cloud_backup_remote_type(remote: str = ""):
+    # Backs the Renew Token section's JS: re-looked-up whenever the
+    # dropdown selection changes, so the displayed `rclone authorize
+    # "<type>"` command always matches whichever remote is currently
+    # selected, not just the one saved in .env.
+    return JSONResponse({"type": get_remote_type(remote.strip()) if remote.strip() else None})
+
+
+@app.post("/cloud-backup/renew-token")
+async def cloud_backup_renew_token(remote: str = Form(""), token_json: str = Form("")):
+    success, message = renew_remote_token(remote, token_json)
     return JSONResponse({"success": success, "message": message})
 
 

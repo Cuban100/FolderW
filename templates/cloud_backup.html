@@ -155,6 +155,28 @@
                     </button>
                 </div>
             </form>
+
+            <details class="mt-8 pt-6 border-t border-[var(--border)]">
+                <summary class="cursor-pointer text-[var(--text)] font-medium">{{ t('cloud_renew_title') }}</summary>
+                <div class="mt-4 space-y-3 max-w-2xl">
+                    <p class="text-sm text-[var(--text-muted)]">{{ t('cloud_renew_desc') }}</p>
+                    <div>
+                        <p class="text-sm text-[var(--text-muted)] mb-1">{{ t('cloud_renew_step1') }}</p>
+                        <code id="renew-authorize-command" class="block bg-[var(--surface-alt)] border border-[var(--border)] rounded px-3 py-2 text-sm font-mono text-[var(--text)]">{% if remote_type %}rclone authorize "{{ remote_type }}"{% else %}{{ t('cloud_renew_step1_fallback') }}{% endif %}</code>
+                    </div>
+                    <p class="text-sm text-[var(--text-muted)]">{{ t('cloud_renew_step2') }}</p>
+                    <div>
+                        <label for="renew_token_json" class="text-sm text-[var(--text-muted)] block mb-1">{{ t('cloud_renew_paste_label') }}</label>
+                        <textarea id="renew_token_json" rows="3"
+                                  class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)] font-mono text-xs"
+                                  placeholder="{{ t('cloud_renew_token_placeholder') }}"></textarea>
+                    </div>
+                    <button type="button" onclick="renewCloudToken()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition whitespace-nowrap">
+                        {{ t('cloud_renew_button') }}
+                    </button>
+                    <div id="renew-token-result" class="text-sm mt-2"></div>
+                </div>
+            </details>
         </div>
 
         {% include "_footer.html" %}
@@ -196,6 +218,59 @@
                 const data = await response.json();
                 resultEl.textContent = data.message;
                 resultEl.className = 'text-sm mt-2 ' + (data.success ? 'text-green-500' : 'text-red-500');
+            } catch (error) {
+                resultEl.textContent = t('cloud_error_running_test');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+            }
+        }
+
+        // Keeps the displayed `rclone authorize "<type>"` command in sync
+        // with whichever remote is selected right now, not just the one
+        // saved in .env -- otherwise switching remotes without saving
+        // first would show a command for the wrong backend.
+        async function updateRenewAuthorizeCommand() {
+            const remote = document.getElementById('cloud_sync_remote').value;
+            const codeEl = document.getElementById('renew-authorize-command');
+            if (!remote) {
+                codeEl.textContent = t('cloud_renew_step1_fallback');
+                return;
+            }
+            try {
+                const response = await fetch('/cloud-backup/remote-type?remote=' + encodeURIComponent(remote));
+                const data = await response.json();
+                codeEl.textContent = data.type ? `rclone authorize "${data.type}"` : t('cloud_renew_step1_fallback');
+            } catch (error) {
+                codeEl.textContent = t('cloud_renew_step1_fallback');
+            }
+        }
+        document.getElementById('cloud_sync_remote').addEventListener('change', updateRenewAuthorizeCommand);
+
+        async function renewCloudToken() {
+            const remote = document.getElementById('cloud_sync_remote').value;
+            const tokenJson = document.getElementById('renew_token_json').value.trim();
+            const resultEl = document.getElementById('renew-token-result');
+            if (!remote) {
+                resultEl.textContent = t('cloud_renew_no_remote_selected');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+                return;
+            }
+            if (!tokenJson) {
+                resultEl.textContent = t('cloud_renew_empty_token');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+                return;
+            }
+            resultEl.textContent = t('cloud_renew_saving');
+            resultEl.className = 'text-sm mt-2 text-[var(--text-muted)]';
+            try {
+                const response = await fetch('/cloud-backup/renew-token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'remote=' + encodeURIComponent(remote) + '&token_json=' + encodeURIComponent(tokenJson)
+                });
+                const data = await response.json();
+                resultEl.textContent = data.message;
+                resultEl.className = 'text-sm mt-2 ' + (data.success ? 'text-green-500' : 'text-red-500');
+                if (data.success) document.getElementById('renew_token_json').value = '';
             } catch (error) {
                 resultEl.textContent = t('cloud_error_running_test');
                 resultEl.className = 'text-sm mt-2 text-red-500';
