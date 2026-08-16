@@ -160,6 +160,17 @@
                 <summary class="cursor-pointer text-[var(--text)] font-medium">{{ t('cloud_renew_title') }}</summary>
                 <div class="mt-4 space-y-3 max-w-2xl">
                     <p class="text-sm text-[var(--text-muted)]">{{ t('cloud_renew_desc') }}</p>
+
+                    <div>
+                        <button type="button" onclick="startBrowserAuthorize()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition whitespace-nowrap">
+                            {{ t('cloud_authorize_button') }}
+                        </button>
+                        <div id="authorize-result" class="text-sm mt-2"></div>
+                        <p class="text-xs text-[var(--text-muted)] mt-2">{{ t('cloud_authorize_same_machine_note') }}</p>
+                    </div>
+
+                    <p class="text-sm text-[var(--text-muted)] text-center pt-2">{{ t('cloud_authorize_or_paste') }}</p>
+
                     <div>
                         <p class="text-sm text-[var(--text-muted)] mb-1">{{ t('cloud_renew_step1') }}</p>
                         <code id="renew-authorize-command" class="block bg-[var(--surface-alt)] border border-[var(--border)] rounded px-3 py-2 text-sm font-mono text-[var(--text)]">{% if remote_type %}rclone authorize "{{ remote_type }}"{% else %}{{ t('cloud_renew_step1_fallback') }}{% endif %}</code>
@@ -275,6 +286,73 @@
                 resultEl.textContent = t('cloud_error_running_test');
                 resultEl.className = 'text-sm mt-2 text-red-500';
             }
+        }
+
+        let authorizePollTimer = null;
+
+        async function startBrowserAuthorize() {
+            const remote = document.getElementById('cloud_sync_remote').value;
+            const resultEl = document.getElementById('authorize-result');
+            if (!remote) {
+                resultEl.textContent = t('cloud_renew_no_remote_selected');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+                return;
+            }
+            if (authorizePollTimer) clearInterval(authorizePollTimer);
+            resultEl.textContent = t('cloud_authorize_opening');
+            resultEl.className = 'text-sm mt-2 text-[var(--text-muted)]';
+            try {
+                const response = await fetch('/cloud-backup/authorize/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'remote=' + encodeURIComponent(remote)
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    resultEl.textContent = data.message;
+                    resultEl.className = 'text-sm mt-2 text-red-500';
+                    return;
+                }
+                // window.open() must be called synchronously from the click
+                // handler to avoid the popup blocker -- this await chain
+                // still counts as "user-initiated" in every major browser,
+                // but if it's blocked anyway, the job keeps running
+                // server-side regardless, so fall back to a clickable link.
+                const popup = window.open(data.auth_url, '_blank');
+                if (!popup) {
+                    resultEl.innerHTML = t('cloud_authorize_popup_blocked', {url: data.auth_url})
+                        .replace(data.auth_url, `<a href="${data.auth_url}" target="_blank" class="underline">${data.auth_url}</a>`);
+                    resultEl.className = 'text-sm mt-2 text-red-500';
+                } else {
+                    resultEl.textContent = t('cloud_authorize_waiting');
+                    resultEl.className = 'text-sm mt-2 text-[var(--text-muted)]';
+                }
+                pollAuthorizeStatus(data.job_id, popup);
+            } catch (error) {
+                resultEl.textContent = t('cloud_error_running_test');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+            }
+        }
+
+        function pollAuthorizeStatus(jobId, popup) {
+            const resultEl = document.getElementById('authorize-result');
+            authorizePollTimer = setInterval(async () => {
+                try {
+                    const response = await fetch('/cloud-backup/authorize/status?job_id=' + encodeURIComponent(jobId));
+                    const data = await response.json();
+                    if (data.status === 'waiting') return;
+                    clearInterval(authorizePollTimer);
+                    authorizePollTimer = null;
+                    resultEl.textContent = data.message;
+                    resultEl.className = 'text-sm mt-2 ' + (data.status === 'success' ? 'text-green-500' : 'text-red-500');
+                    if (popup && !popup.closed) popup.close();
+                } catch (error) {
+                    clearInterval(authorizePollTimer);
+                    authorizePollTimer = null;
+                    resultEl.textContent = t('cloud_error_running_test');
+                    resultEl.className = 'text-sm mt-2 text-red-500';
+                }
+            }, 2000);
         }
     </script>
 </body>

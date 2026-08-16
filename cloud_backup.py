@@ -1,8 +1,12 @@
 import json
 import os
+import re
+import select
 import shutil
 import subprocess
+import threading
 import time
+import uuid
 from db_operations import load_env_value, load_other_variables, set_database_value
 from notifications import notify, _notify_desktop
 from translations import t
@@ -17,6 +21,14 @@ CLOUD_SYNC_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '
 # no data moved in 5 minutes, or the initial connection itself hangs.
 RCLONE_TIMEOUT = '300s'
 RCLONE_CONTIMEOUT = '30s'
+
+# How long to wait for the user to finish logging in in the browser tab
+# before giving up on a "Log In via Browser" job and killing the rclone
+# process holding the local OAuth callback port open.
+AUTHORIZE_JOB_TIMEOUT = 300
+
+_authorize_jobs = {}
+_authorize_jobs_lock = threading.Lock()
 
 
 def rclone_binary_path():
@@ -141,6 +153,154 @@ def renew_remote_token(remote, token_json):
     if verified:
         return True, t('cloud_renew_success', remote=remote)
     return False, t('cloud_renew_success_unverified', error=verify_message)
+
+
+_AUTHORIZE_LINK_RE = re.compile(r'Please go to the following link:\s*(\S+)')
+
+
+def start_remote_authorize(remote):
+    """(job_id, auth_url, error_message) for the Cloud Backup page's "Log
+    In via Browser" button -- the fully web-UI version of renew_remote_
+    token(), no terminal needed. Only job_id/auth_url or error_message is
+    ever non-None.
+
+    Runs `rclone authorize "<type>"` as a background subprocess. That
+    command starts a local webserver (127.0.0.1:53682 by default) and
+    prints a link that itself points at that local server -- rclone's
+    own redirector, which then bounces the browser to Google/Dropbox/etc.
+    and catches the callback. This means the link this function returns
+    ONLY works from a browser running on THIS machine (confirmed
+    directly: even the very first link rclone prints is a 127.0.0.1 one,
+    not just the final OAuth callback) -- on a different device on the
+    LAN, opening it hits that device's own loopback with nothing
+    listening. cloud_backup.html surfaces this; the manual paste-a-token
+    flow in renew_remote_token() remains the only option for remote
+    access, this is a same-machine convenience on top of it.
+
+    Only one job runs at a time -- rclone's local OAuth webserver binds a
+    fixed port, so a second concurrent job would just fail to bind it.
+    """
+    rclone_path = rclone_binary_path()
+    if not rclone_path:
+        return None, None, t('cloud_test_not_found')
+
+    remote = (remote or '').strip()
+    if not remote:
+        return None, None, t('cloud_renew_error_no_remote')
+
+    _, remotes = list_rclone_remotes()
+    if remote not in remotes:
+        return None, None, t('cloud_renew_error_unknown_remote', remote=remote)
+
+    backend_type = get_remote_type(remote)
+    if not backend_type:
+        return None, None, t('cloud_authorize_error_unknown_type')
+
+    with _authorize_jobs_lock:
+        if any(j['status'] == 'waiting' for j in _authorize_jobs.values()):
+            return None, None, t('cloud_authorize_error_already_running')
+
+    try:
+        process = subprocess.Popen(
+            [rclone_path, 'authorize', backend_type, '--auth-no-open-browser'],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+        )
+    except OSError as e:
+        return None, None, t('cloud_authorize_error_process', error=str(e))
+
+    # rclone prints the link within the first couple lines, before it
+    # blocks waiting for the OAuth callback -- read line-by-line (not
+    # process.communicate(), which would block until the whole process
+    # exits, i.e. until the login is done) until that line shows up or
+    # the process dies without ever printing one. select() (not a bare
+    # readline() loop) is what makes the 10s deadline real: readline()
+    # blocks with no timeout of its own, so a deadline only re-checked
+    # between readline() calls would never fire against a process that's
+    # alive but silent -- select() bounds each wait explicitly instead.
+    lines = []
+    auth_url = None
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        ready, _, _ = select.select([process.stdout], [], [], max(0.0, deadline - time.time()))
+        if not ready:
+            break
+        line = process.stdout.readline()
+        if not line:
+            if process.poll() is not None:
+                break
+            continue
+        lines.append(line)
+        match = _AUTHORIZE_LINK_RE.search(line)
+        if match:
+            auth_url = match.group(1)
+            break
+
+    if not auth_url:
+        process.kill()
+        process.wait()
+        return None, None, t('cloud_authorize_error_no_url')
+
+    job_id = uuid.uuid4().hex
+    with _authorize_jobs_lock:
+        _authorize_jobs[job_id] = {'status': 'waiting', 'message': '', 'remote': remote}
+
+    thread = threading.Thread(target=_finish_authorize_job, args=(job_id, process, remote, lines), daemon=True)
+    thread.start()
+    return job_id, auth_url, None
+
+
+def _finish_authorize_job(job_id, process, remote, lines):
+    try:
+        # communicate() (not another readline() loop) is what actually
+        # makes the timeout real: readline() blocks forever on a process
+        # that's still alive but has nothing more to print (exactly the
+        # "user opened the tab, then walked away" case), so a deadline
+        # only checked between readline() calls never fires. communicate()
+        # enforces the timeout itself and raises instead of hanging.
+        try:
+            remaining_output, _ = process.communicate(timeout=AUTHORIZE_JOB_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            with _authorize_jobs_lock:
+                _authorize_jobs[job_id] = {'status': 'error', 'message': t('cloud_authorize_timeout'), 'remote': remote}
+            return
+        if remaining_output:
+            lines.extend(remaining_output.splitlines())
+
+        token_json = None
+        for line in lines:
+            line = line.strip()
+            if not line.startswith('{'):
+                continue
+            try:
+                parsed = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(parsed, dict) and 'access_token' in parsed:
+                token_json = line
+                break
+
+        if not token_json:
+            with _authorize_jobs_lock:
+                _authorize_jobs[job_id] = {'status': 'error', 'message': t('cloud_authorize_error_no_token'), 'remote': remote}
+            return
+
+        success, message = renew_remote_token(remote, token_json)
+        with _authorize_jobs_lock:
+            _authorize_jobs[job_id] = {'status': 'success' if success else 'error', 'message': message, 'remote': remote}
+    except Exception as e:
+        logger.error(f"Browser authorize job {job_id} for {remote} crashed: {e}")
+        with _authorize_jobs_lock:
+            _authorize_jobs[job_id] = {'status': 'error', 'message': t('cloud_authorize_error_process', error=str(e)), 'remote': remote}
+
+
+def get_authorize_job_status(job_id):
+    with _authorize_jobs_lock:
+        job = _authorize_jobs.get(job_id)
+    if not job:
+        return {'status': 'error', 'message': t('cloud_authorize_error_no_token')}
+    return {'status': job['status'], 'message': job['message']}
 
 
 def _notify_synced_files(log_file, start_offset):
