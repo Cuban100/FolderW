@@ -27,6 +27,20 @@ RCLONE_CONTIMEOUT = '30s'
 # process holding the local OAuth callback port open.
 AUTHORIZE_JOB_TIMEOUT = 300
 
+# Deliberately a short, curated subset of the "Add a New Remote" form's
+# dropdown, not all 40+ backends rclone supports -- these are the OAuth
+# ones that "Log In via Browser" can fully finish end to end right after
+# creation. Backends needing other credentials (S3-style keys, SFTP/FTP
+# passwords, WebDAV) need fields this minimal name+type form doesn't
+# collect, so they're left to `rclone config` in a terminal as before.
+KNOWN_REMOTE_TYPES = [
+    ('drive', 'Google Drive'),
+    ('dropbox', 'Dropbox'),
+    ('onedrive', 'Microsoft OneDrive'),
+    ('box', 'Box'),
+    ('pcloud', 'pCloud'),
+]
+
 _authorize_jobs = {}
 _authorize_jobs_lock = threading.Lock()
 
@@ -102,6 +116,52 @@ def get_remote_type(remote):
         if key.strip() == 'type':
             return value.strip()
     return None
+
+
+_REMOTE_NAME_RE = re.compile(r'[A-Za-z0-9_-]+')
+
+
+def create_remote(name, backend_type):
+    """(success, message) for the Cloud Backup page's "Add a New Remote"
+    form -- the other half of the zero-terminal setup story alongside
+    start_remote_authorize(): this registers a bare remote entry (just a
+    name and backend type, no credentials yet) via `rclone config
+    create`, so "Log In via Browser" has something to authenticate right
+    after. Never contacts the provider itself -- confirmed directly that
+    `rclone config create <name> <type> --non-interactive` writes a
+    minimal `[name]\\ntype = <type>` entry and returns even for backends
+    that would normally ask more setup questions (e.g. onedrive), since
+    --non-interactive just leaves those unanswered rather than blocking.
+    """
+    rclone_path = rclone_binary_path()
+    if not rclone_path:
+        return False, t('cloud_test_not_found')
+
+    name = (name or '').strip()
+    if not name:
+        return False, t('cloud_create_error_no_name')
+    if not _REMOTE_NAME_RE.fullmatch(name):
+        return False, t('cloud_create_error_invalid_name')
+
+    valid_types = {key for key, _ in KNOWN_REMOTE_TYPES}
+    if backend_type not in valid_types:
+        return False, t('cloud_create_error_invalid_type')
+
+    _, remotes = list_rclone_remotes()
+    if name in remotes:
+        return False, t('cloud_create_error_exists', name=name)
+
+    try:
+        result = subprocess.run(
+            [rclone_path, 'config', 'create', name, backend_type, '--non-interactive'],
+            capture_output=True, text=True, timeout=20,
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return False, t('cloud_create_error_could_not_run', error=str(e))
+    if result.returncode != 0:
+        return False, t('cloud_create_error_rclone_failed', error=(result.stderr.strip() or result.stdout.strip() or t('hooks_no_error_output')))
+
+    return True, t('cloud_create_success', name=name)
 
 
 def renew_remote_token(remote, token_json):
