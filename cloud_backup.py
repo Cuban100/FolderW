@@ -149,9 +149,22 @@ def renew_remote_token(remote, token_json):
     if result.returncode != 0:
         return False, t('cloud_renew_error_rclone_failed', error=(result.stderr.strip() or result.stdout.strip() or t('hooks_no_error_output')))
 
-    verified, verify_message = test_cloud_connection(remote, '')
-    if verified:
-        return True, t('cloud_renew_success', remote=remote)
+    # A single verification attempt run immediately after writing a
+    # freshly-exchanged OAuth token can hit a transient timeout that a
+    # retry moments later doesn't -- confirmed directly: a "timed out"
+    # renewal result, followed right away by clicking the page's own
+    # Test Cloud Connection button, succeeded against the very same
+    # token that had just supposedly failed. Two attempts with a short
+    # pause avoids reporting a scary false-negative for what's actually
+    # a working token, without masking a genuinely broken one (which
+    # will still fail both attempts).
+    verify_message = ''
+    for attempt in range(2):
+        verified, verify_message = test_cloud_connection(remote, '')
+        if verified:
+            return True, t('cloud_renew_success', remote=remote)
+        if attempt == 0:
+            time.sleep(3)
     return False, t('cloud_renew_success_unverified', error=verify_message)
 
 
