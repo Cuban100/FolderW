@@ -108,6 +108,26 @@
         #drilldown-overlay.open {
             display: block;
         }
+        /* FolderW's own backup stats on the left, rclone/Cloud Sync stats
+           on the right -- side by side down to ~1024px (both columns
+           host charts, which need real width to stay readable, so this
+           breaks earlier than the 900px used elsewhere in the app for
+           plainer stat-card grids), collapsing to a single stacked
+           column (right under left) below that for phones/tablets. */
+        .stats-two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+        @media (max-width: 1024px) {
+            .stats-two-col {
+                grid-template-columns: 1fr;
+            }
+        }
+        #cloud-history-body tr.failed td {
+            color: var(--error-text);
+        }
     </style>
 </head>
 <body class="bg-[var(--bg)] text-[var(--text)] font-sans antialiased">
@@ -124,74 +144,125 @@
             &middot; {{ t('stats_summary_processed', mb=(summary.total_size_processed / 1048576) | round(1)) }}
         </p>
 
-        <div id="empty-state" class="hidden text-[var(--text-muted)] py-12 text-center">
-            {{ t('stats_empty') }}
-        </div>
-
-        <div id="charts-root">
-            <div class="flex items-center gap-2 mb-6" role="group" aria-label="{{ t('stats_filter_type_aria') }}">
-                <span class="text-sm text-[var(--text-muted)] mr-1">{{ t('stats_backup_type_label') }}</span>
-                <button class="filter-pill active" data-filter-type="all">{{ t('stats_filter_all') }}</button>
-                <button class="filter-pill" data-filter-type="full">{{ t('history_type_full') }}</button>
-                {# Only the currently configured method can actually appear in
-                   recorded history -- switching BACKUP_METHOD resets backup
-                   history (see /submit in server.py), so the other one is
-                   never just "not shown yet," it's guaranteed empty. #}
-                {% if backup_method == 'incremental' %}
-                <button class="filter-pill" data-filter-type="incremental">{{ t('settings_backup_method_incremental') }}</button>
-                {% else %}
-                <button class="filter-pill" data-filter-type="differential">{{ t('settings_backup_method_differential') }}</button>
-                {% endif %}
-            </div>
-
-            <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
-                <h2 class="text-lg font-semibold mb-1">{{ t('stats_storage_title') }}</h2>
-                <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_storage_desc') }}</p>
-                <div class="relative" id="storage-chart-container">
-                    <svg id="storage-chart" width="100%" height="220" role="img" aria-label="{{ t('stats_storage_aria') }}"></svg>
-                    <div class="chart-tooltip" id="storage-tooltip"></div>
+        <div class="stats-two-col">
+            <div class="stats-col-left">
+                <div id="empty-state" class="hidden text-[var(--text-muted)] py-12 text-center">
+                    {{ t('stats_empty') }}
                 </div>
-            </div>
 
-            <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
-                <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
-                    <h2 class="text-lg font-semibold">{{ t('stats_activity_title') }}</h2>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <div class="flex items-center gap-2" role="group" aria-label="{{ t('stats_metric_aria') }}">
-                            <button class="filter-pill active" data-metric="files_changed">{{ t('stats_metric_files_changed') }}</button>
-                            <button class="filter-pill" data-metric="size_processed">{{ t('stats_metric_data_added') }}</button>
-                        </div>
-                        <div class="flex items-center gap-2" role="group" aria-label="{{ t('stats_scale_aria') }}">
-                            <button class="filter-pill" data-scale="linear" title="{{ t('stats_scale_linear_title') }}">{{ t('stats_scale_linear') }}</button>
-                            <button class="filter-pill active" data-scale="log" title="{{ t('stats_scale_log_title') }}">{{ t('stats_scale_log') }}</button>
+                <div id="charts-root">
+                    <div class="flex items-center gap-2 mb-6" role="group" aria-label="{{ t('stats_filter_type_aria') }}">
+                        <span class="text-sm text-[var(--text-muted)] mr-1">{{ t('stats_backup_type_label') }}</span>
+                        <button class="filter-pill active" data-filter-type="all">{{ t('stats_filter_all') }}</button>
+                        <button class="filter-pill" data-filter-type="full">{{ t('history_type_full') }}</button>
+                        {# Only the currently configured method can actually appear in
+                           recorded history -- switching BACKUP_METHOD resets backup
+                           history (see /submit in server.py), so the other one is
+                           never just "not shown yet," it's guaranteed empty. #}
+                        {% if backup_method == 'incremental' %}
+                        <button class="filter-pill" data-filter-type="incremental">{{ t('settings_backup_method_incremental') }}</button>
+                        {% else %}
+                        <button class="filter-pill" data-filter-type="differential">{{ t('settings_backup_method_differential') }}</button>
+                        {% endif %}
+                    </div>
+
+                    <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
+                        <h2 class="text-lg font-semibold mb-1">{{ t('stats_storage_title') }}</h2>
+                        <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_storage_desc') }}</p>
+                        <div class="relative" id="storage-chart-container">
+                            <svg id="storage-chart" width="100%" height="220" role="img" aria-label="{{ t('stats_storage_aria') }}"></svg>
+                            <div class="chart-tooltip" id="storage-tooltip"></div>
                         </div>
                     </div>
-                </div>
-                <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_activity_desc') }}</p>
-                <div class="relative" id="activity-chart-container">
-                    <svg id="activity-chart" width="100%" height="240" role="img" aria-label="{{ t('stats_activity_aria') }}"></svg>
-                    <div class="chart-tooltip" id="activity-tooltip"></div>
-                </div>
-                <div class="flex items-center gap-4 mt-3 text-sm" id="activity-legend">
-                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-full)"></span>{{ t('history_type_full') }}</span>
-                    {% if backup_method == 'incremental' %}
-                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-incremental)"></span>{{ t('settings_backup_method_incremental') }}</span>
-                    {% else %}
-                    <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-differential)"></span>{{ t('settings_backup_method_differential') }}</span>
-                    {% endif %}
+
+                    <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
+                        <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                            <h2 class="text-lg font-semibold">{{ t('stats_activity_title') }}</h2>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <div class="flex items-center gap-2" role="group" aria-label="{{ t('stats_metric_aria') }}">
+                                    <button class="filter-pill active" data-metric="files_changed">{{ t('stats_metric_files_changed') }}</button>
+                                    <button class="filter-pill" data-metric="size_processed">{{ t('stats_metric_data_added') }}</button>
+                                </div>
+                                <div class="flex items-center gap-2" role="group" aria-label="{{ t('stats_scale_aria') }}">
+                                    <button class="filter-pill" data-scale="linear" title="{{ t('stats_scale_linear_title') }}">{{ t('stats_scale_linear') }}</button>
+                                    <button class="filter-pill active" data-scale="log" title="{{ t('stats_scale_log_title') }}">{{ t('stats_scale_log') }}</button>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_activity_desc') }}</p>
+                        <div class="relative" id="activity-chart-container">
+                            <svg id="activity-chart" width="100%" height="240" role="img" aria-label="{{ t('stats_activity_aria') }}"></svg>
+                            <div class="chart-tooltip" id="activity-tooltip"></div>
+                        </div>
+                        <div class="flex items-center gap-4 mt-3 text-sm" id="activity-legend">
+                            <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-full)"></span>{{ t('history_type_full') }}</span>
+                            {% if backup_method == 'incremental' %}
+                            <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-incremental)"></span>{{ t('settings_backup_method_incremental') }}</span>
+                            {% else %}
+                            <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-differential)"></span>{{ t('settings_backup_method_differential') }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
+                        <h2 class="text-lg font-semibold mb-1">{{ t('stats_duration_title') }}</h2>
+                        <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_duration_desc') }}</p>
+                        <div class="relative" id="duration-chart-container">
+                            <svg id="duration-chart" width="100%" height="200" role="img" aria-label="{{ t('stats_duration_aria') }}"></svg>
+                            <div class="chart-tooltip" id="duration-tooltip"></div>
+                        </div>
+                        <p class="hidden text-sm text-[var(--text-muted)] py-8 text-center" id="duration-empty">
+                            {{ t('stats_duration_empty') }}
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
-                <h2 class="text-lg font-semibold mb-1">{{ t('stats_duration_title') }}</h2>
-                <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_duration_desc') }}</p>
-                <div class="relative" id="duration-chart-container">
-                    <svg id="duration-chart" width="100%" height="200" role="img" aria-label="{{ t('stats_duration_aria') }}"></svg>
-                    <div class="chart-tooltip" id="duration-tooltip"></div>
+            <div class="stats-col-right">
+                <h2 class="text-lg font-semibold mb-1">{{ t('stats_cloud_heading') }}</h2>
+
+                {% if not cloud_sync_enabled %}
+                <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 text-[var(--text-muted)] text-center text-sm">
+                    {{ t('stats_cloud_disabled') | safe }}
                 </div>
-                <p class="hidden text-sm text-[var(--text-muted)] py-8 text-center" id="duration-empty">
-                    {{ t('stats_duration_empty') }}
+                {% elif not cloud_sync_summary.total_runs %}
+                <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 text-[var(--text-muted)] text-center text-sm">
+                    {{ t('stats_cloud_empty') }}
+                </div>
+                {% else %}
+                <p class="text-sm text-[var(--text-muted)] mb-6">
+                    {{ t('stats_cloud_summary_one', n=cloud_sync_summary.total_runs) if cloud_sync_summary.total_runs == 1 else t('stats_cloud_summary_other', n=cloud_sync_summary.total_runs) }}
+                    {% if cloud_sync_summary.success_rate is not none %}&middot; {{ t('stats_summary_success_rate', pct=cloud_sync_summary.success_rate) }}{% endif %}
+                    &middot; {{ t('stats_cloud_summary_transferred', mb=(cloud_sync_summary.total_bytes_transferred / 1048576) | round(1)) }}
                 </p>
+
+                <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
+                    <h3 class="text-lg font-semibold mb-1">{{ t('stats_cloud_chart_title') }}</h3>
+                    <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_cloud_chart_desc') }}</p>
+                    <div class="relative" id="cloud-chart-container">
+                        <svg id="cloud-chart" width="100%" height="220" role="img" aria-label="{{ t('stats_cloud_chart_aria') }}"></svg>
+                        <div class="chart-tooltip" id="cloud-tooltip"></div>
+                    </div>
+                </div>
+
+                <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+                    <h3 class="text-lg font-semibold mb-3">{{ t('stats_cloud_history_title') }}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-[var(--text-muted)] border-b border-[var(--border)]">
+                                    <th class="py-1 pr-3 font-medium">{{ t('stats_cloud_col_when') }}</th>
+                                    <th class="py-1 pr-3 font-medium">{{ t('stats_cloud_col_status') }}</th>
+                                    <th class="py-1 pr-3 font-medium">{{ t('stats_cloud_col_files') }}</th>
+                                    <th class="py-1 pr-3 font-medium">{{ t('stats_cloud_col_data') }}</th>
+                                    <th class="py-1 font-medium">{{ t('stats_cloud_col_duration') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cloud-history-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -214,8 +285,10 @@
     </div>
 
     <script id="stats-data" type="application/json">{{ series_json | safe }}</script>
+    <script id="cloud-stats-data" type="application/json">{{ cloud_sync_series_json | safe }}</script>
     <script>
         const allRuns = JSON.parse(document.getElementById('stats-data').textContent);
+        const allCloudRuns = JSON.parse(document.getElementById('cloud-stats-data').textContent);
         let typeFilter = 'all';
         let activityMetric = 'files_changed';
         // Defaults to log: backup activity data routinely spans several
@@ -239,6 +312,10 @@
 
         function statusLabel(status) {
             return status === 'completed' ? t('history_status_completed') : status;
+        }
+
+        function cloudStatusLabel(status) {
+            return status === 'success' ? t('cloud_history_status_success') : t('cloud_history_status_failed');
         }
 
         function seriesColor(type) {
@@ -523,6 +600,76 @@
             });
         }
 
+        // ---- Cloud Sync chart: data transferred per sync, colored by status --
+
+        function renderCloudChart() {
+            const svg = document.getElementById('cloud-chart');
+            if (!svg || allCloudRuns.length === 0) return;
+            const container = document.getElementById('cloud-chart-container');
+            const tooltip = document.getElementById('cloud-tooltip');
+            clearSvg(svg);
+            const width = container.clientWidth || 600;
+            const height = 220;
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+            const maxY = niceMax(Math.max(...allCloudRuns.map(r => r.bytes_transferred || 0), 1));
+            const { innerW, innerH } = drawAxes(svg, width, height, maxY, formatBytes);
+
+            const n = allCloudRuns.length;
+            const slot = innerW / n;
+            const barWidth = Math.min(24, slot * 0.6);
+            const styles = getComputedStyle(document.querySelector('.viz-root'));
+            const color = styles.getPropertyValue('--series-size').trim();
+
+            allCloudRuns.forEach((r, i) => {
+                const value = r.bytes_transferred || 0;
+                const barH = maxY > 0 ? (innerH * value / maxY) : 0;
+                const x = PAD.left + slot * i + (slot - barWidth) / 2;
+                const y = PAD.top + innerH - barH;
+
+                const hit = svgEl('rect', { x: x - 4, y: PAD.top, width: barWidth + 8, height: innerH, fill: 'transparent', class: 'mark-hit' });
+                const bar = svgEl('rect', { x, y, width: barWidth, height: Math.max(1, barH), fill: color, rx: 4, ry: 4, class: 'mark-visible' });
+                if (r.status !== 'success') {
+                    bar.setAttribute('stroke', 'var(--status-critical)');
+                    bar.setAttribute('stroke-width', 2);
+                }
+                hit.addEventListener('pointerenter', () => {
+                    showTooltip(tooltip, container, x, y,
+                        `<strong>${formatBytes(value)}</strong><br>${formatTimestamp(r.timestamp)}${r.status !== 'success' ? '<br><span style="color:var(--status-critical)">' + cloudStatusLabel(r.status) + '</span>' : ''}`);
+                });
+                hit.addEventListener('pointerleave', () => hideTooltip(tooltip));
+                svg.appendChild(hit);
+                svg.appendChild(bar);
+            });
+        }
+
+        function renderCloudHistoryTable() {
+            const body = document.getElementById('cloud-history-body');
+            if (!body) return;
+            body.innerHTML = '';
+            // Newest first, matching the dashboard's own Recent Syncs list --
+            // allCloudRuns itself stays oldest-first for the chart above.
+            [...allCloudRuns].reverse().forEach(r => {
+                const tr = document.createElement('tr');
+                if (r.status !== 'success') tr.className = 'failed';
+                if (r.error_message) tr.title = r.error_message;
+                const cells = [
+                    formatTimestamp(r.timestamp),
+                    cloudStatusLabel(r.status),
+                    (r.files_transferred || 0).toLocaleString(),
+                    formatBytes(r.bytes_transferred),
+                    formatDuration(r.duration_seconds),
+                ];
+                cells.forEach((text, i) => {
+                    const td = document.createElement('td');
+                    td.className = i < cells.length - 1 ? 'py-1 pr-3' : 'py-1';
+                    td.textContent = text;
+                    tr.appendChild(td);
+                });
+                body.appendChild(tr);
+            });
+        }
+
         function renderAll() {
             renderStorageChart();
             renderActivityChart();
@@ -621,6 +768,16 @@
         } else {
             renderAll();
             window.addEventListener('resize', renderAll);
+        }
+
+        // Independent of the local-backup dataset above (allRuns) --
+        // rendered/resized on its own so a source with cloud syncs but
+        // zero local backup history (or vice versa) still shows whichever
+        // column actually has data.
+        if (allCloudRuns.length > 0) {
+            renderCloudChart();
+            renderCloudHistoryTable();
+            window.addEventListener('resize', renderCloudChart);
         }
     </script>
 </body>

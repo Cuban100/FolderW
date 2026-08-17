@@ -274,7 +274,7 @@ def wipe_database_for_fresh_start(database):
     try:
         conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
-        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'restore_runs', 'settings'):
+        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'restore_runs', 'cloud_sync_runs', 'settings'):
             cursor.execute(f"DELETE FROM {table}")
         conn.commit()
         conn.close()
@@ -587,6 +587,65 @@ def list_cloud_sync_runs(limit=10):
     except sqlite3.Error as e:
         logger.error(f"Error listing cloud sync runs: {e}")
         return []
+
+def get_cloud_sync_stats_series(limit=200):
+    """Chronological (oldest-first) series for the Statistics page's Cloud
+    Sync chart -- one entry per cloud_sync_runs row. Same id/DESC-then-
+    reverse pattern as get_backup_stats_series(), for the same reason:
+    capped at `limit` most recent runs since cloud_sync_runs grows
+    forever, but still returned oldest-first within that window so the
+    chart reads left-to-right chronologically.
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database, timeout=10.0)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message
+            FROM cloud_sync_runs ORDER BY id DESC LIMIT ?
+        ''', (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        rows.reverse()
+        return [
+            {
+                "id": r[0],
+                "timestamp": r[1],
+                "remote": r[2],
+                "status": r[3],
+                "files_transferred": r[4],
+                "bytes_transferred": r[5],
+                "duration_seconds": r[6],
+                "avg_speed_bps": r[7],
+                "error_message": r[8],
+            }
+            for r in rows
+        ]
+    except sqlite3.Error as e:
+        logger.error(f"Error fetching cloud sync stats series: {e}")
+        return []
+
+def get_cloud_sync_stats_summary():
+    """All-time KPI row for the Statistics page's Cloud Sync column --
+    total syncs, success rate, and total data transferred across every
+    sync ever recorded (not scoped to the `limit`-capped series above).
+    Same shape/reasoning as get_backup_stats_summary().
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database, timeout=10.0)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*), SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), SUM(bytes_transferred) FROM cloud_sync_runs")
+        total, succeeded, total_bytes = cursor.fetchone()
+        conn.close()
+        return {
+            "total_runs": total or 0,
+            "success_rate": round(100 * succeeded / total, 1) if total else None,
+            "total_bytes_transferred": total_bytes or 0,
+        }
+    except sqlite3.Error as e:
+        logger.error(f"Error fetching cloud sync stats summary: {e}")
+        return {"total_runs": 0, "success_rate": None, "total_bytes_transferred": 0}
 
 def get_backup_stats_series(limit=200):
     """Chronological (oldest-first) series for the Statistics page's charts

@@ -17,7 +17,7 @@ from backup_hooks import run_hook_script
 from cloud_backup import list_rclone_remotes, test_cloud_connection, get_remote_type, renew_remote_token, start_remote_authorize, get_authorize_job_status, create_remote, KNOWN_REMOTE_TYPES, get_cloud_sync_dashboard_stats
 from translations import t, t_or_raw, current_language, LANGUAGES
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
-from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs
+from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs, get_cloud_sync_stats_series, get_cloud_sync_stats_summary
 from restore_operations import list_backups, get_backup_path, list_files_in_backup, restore_backup, set_snapshot_note, COMPLETION_MARKER, compile_latest_snapshot, search_all_backups, restore_single_path, summarize_folder
 from auth import hash_password, verify_password, get_or_create_secret_key
 from loguru import logger
@@ -1703,6 +1703,8 @@ async def recovery_history(request: Request, page: int = 1):
 async def statistics_page(request: Request):
     series = get_backup_stats_series()
     summary = get_backup_stats_summary()
+    cloud_sync_series = get_cloud_sync_stats_series()
+    cloud_sync_summary = get_cloud_sync_stats_summary()
     return templates.TemplateResponse("statistics.html", {
         "request": request,
         "logo": logo,
@@ -1714,6 +1716,9 @@ async def statistics_page(request: Request):
         # filter click.
         "series_json": _json_for_script(series),
         "summary": summary,
+        "cloud_sync_series_json": _json_for_script(cloud_sync_series),
+        "cloud_sync_summary": cloud_sync_summary,
+        "cloud_sync_enabled": load_env_value('CLOUD_SYNC_ENABLED') == '1',
         "backup_method": load_env_value('BACKUP_METHOD') or 'differential',
     })
 
