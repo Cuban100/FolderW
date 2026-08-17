@@ -7,6 +7,8 @@
 
 > **Source scope:** For now, `SRC_DIR` must be a local path — either on the machine's internal drive or an external/USB drive, as long as it's already mounted before FolderW starts. Network shares and remote/cloud sources aren't currently supported.
 
+<p align="center"> <img src="https://github.com/Cuban100/FolderW/blob/main/screenshot-dashboard.png" alt="FolderW dashboard screenshot" width="800"> </p>
+
 ## Features
 
 1. **Graphical User Interface (GUI):** Tkinter-based setup — select directories, enable/disable event-driven backups, no config file editing required.
