@@ -214,6 +214,21 @@ def create_all_tables(database):
         ''')
         logger.info("Table 'restore_runs' created successfully.")
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cloud_sync_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                remote TEXT,
+                status TEXT,
+                files_transferred INTEGER,
+                bytes_transferred INTEGER,
+                duration_seconds REAL,
+                avg_speed_bps REAL,
+                error_message TEXT
+            );
+        ''')
+        logger.info("Table 'cloud_sync_runs' created successfully.")
+
         connection.commit()
         connection.close()
         logger.info("All tables created successfully.")
@@ -232,7 +247,7 @@ def reset_backup_history(database):
     try:
         conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
-        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'restore_runs'):
+        for table in ('changes', 'statistics', 'performance_metrics', 'backup_runs', 'restore_runs', 'cloud_sync_runs'):
             cursor.execute(f"DELETE FROM {table}")
         conn.commit()
         conn.close()
@@ -508,6 +523,69 @@ def list_restore_runs(limit, offset):
         ]
     except sqlite3.Error as e:
         logger.error(f"Error listing restore runs: {e}")
+        return []
+
+def record_cloud_sync_run(remote, status, files_transferred=0, bytes_transferred=0, duration_seconds=0.0, avg_speed_bps=0.0, error_message=None):
+    """Log one sync_to_cloud() attempt -- success or failure -- so the
+    dashboard's Cloud Sync section has real history to show instead of
+    just the single CLOUD_SYNC_LAST_STATUS/TIME settings values (which
+    only ever reflect the most recent attempt, with no record of what
+    happened before it or how much data actually moved).
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database, timeout=10.0)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO cloud_sync_runs (timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            remote,
+            status,
+            files_transferred,
+            bytes_transferred,
+            duration_seconds,
+            avg_speed_bps,
+            error_message,
+        ))
+        conn.commit()
+        conn.close()
+        logger.success(f"Recorded cloud sync run: {status} to {remote} ({files_transferred} file(s), {bytes_transferred} byte(s)).")
+    except sqlite3.Error as e:
+        logger.error(f"Error recording cloud sync run: {e}")
+
+def list_cloud_sync_runs(limit=10):
+    """Newest-first list of the last `limit` cloud sync attempts -- not
+    paginated like list_backup_runs/list_restore_runs, since this only
+    ever backs a short "recent activity" list on the dashboard, not a
+    dedicated history page.
+    """
+    database = load_env_value('DATABASE')
+    try:
+        conn = sqlite3.connect(database, timeout=10.0)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message
+            FROM cloud_sync_runs ORDER BY id DESC LIMIT ?
+        ''', (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                "timestamp": r[0],
+                "remote": r[1],
+                "status": r[2],
+                "files_transferred": r[3],
+                "bytes_transferred": r[4],
+                "duration_seconds": r[5],
+                "avg_speed_bps": r[6],
+                "error_message": r[7],
+            }
+            for r in rows
+        ]
+    except sqlite3.Error as e:
+        logger.error(f"Error listing cloud sync runs: {e}")
         return []
 
 def get_backup_stats_series(limit=200):

@@ -210,6 +210,44 @@
             font-weight: 700;
             color: var(--text);
         }
+        .cloud-sync-history {
+            margin-top: 16px;
+            background-color: var(--surface);
+            border-radius: 10px;
+            box-shadow: 0 2px 10px var(--shadow);
+            padding: 16px 20px;
+            overflow-x: auto;
+        }
+        .cloud-sync-history h3 {
+            font-size: 15px;
+            color: var(--text);
+            margin: 0 0 10px;
+        }
+        .cloud-sync-history table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .cloud-sync-history th {
+            text-align: left;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 4px 8px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+        .cloud-sync-history td {
+            padding: 6px 8px;
+            color: var(--text);
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+        .cloud-sync-history tr:last-child td {
+            border-bottom: none;
+        }
+        .cloud-sync-history tr.failed td {
+            color: var(--error-text);
+        }
         .right-section {
             margin: 24px 0 0;
             padding: 20px;
@@ -686,14 +724,67 @@
                         <div class="stat-value">{{ {'hourly': t('interval_hourly'), 'half-day': t('interval_half_day'), 'daily': t('interval_daily'), 'weekly': t('interval_weekly')}.get(interval, interval) }}</div>
                     </div>
                     {% endif %}
-                    {% if cloud_sync_enabled %}
+                </div>
+            </div>
+
+            {% if cloud_sync_enabled %}
+            <div class="stats-section">
+                <h2>{{ t('dashboard_cloud_sync_heading') }}</h2>
+                <div class="stats-grid stats-grid-4col">
                     <div class="stat-card">
                         <div class="stat-label">{{ t('dashboard_last_cloud_sync') }}</div>
                         <div class="stat-value" id="cloud-sync-value">{{ cloud_sync_last_display }}</div>
                     </div>
-                    {% endif %}
+                    <div class="stat-card">
+                        <div class="stat-label">{{ t('dashboard_cloud_sync_files') }}</div>
+                        <div class="stat-value">{{ cloud_sync_last_files if cloud_sync_last_files is not none else t('common_not_available') }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">{{ t('dashboard_cloud_sync_data') }}</div>
+                        <div class="stat-value">{{ cloud_sync_last_bytes_display or t('common_not_available') }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">{{ t('dashboard_cloud_sync_duration') }}</div>
+                        <div class="stat-value">{{ cloud_sync_last_duration_display or t('common_not_available') }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">{{ t('dashboard_cloud_sync_speed') }}</div>
+                        <div class="stat-value">
+                            {{ cloud_sync_last_speed_display or t('common_not_available') }}
+                            {% if cloud_sync_bwlimit_display %}<div style="font-size:12px;color:var(--text-muted);font-weight:400;margin-top:2px;">{{ t('dashboard_cloud_sync_bwlimit_note', limit=cloud_sync_bwlimit_display) }}</div>{% endif %}
+                        </div>
+                    </div>
                 </div>
+
+                {% if cloud_sync_history %}
+                <div class="cloud-sync-history">
+                    <h3>{{ t('dashboard_cloud_sync_history_heading') }}</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>{{ t('dashboard_cloud_sync_col_when') }}</th>
+                                <th>{{ t('dashboard_cloud_sync_col_status') }}</th>
+                                <th>{{ t('dashboard_cloud_sync_col_files') }}</th>
+                                <th>{{ t('dashboard_cloud_sync_col_data') }}</th>
+                                <th>{{ t('dashboard_cloud_sync_col_duration') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for run in cloud_sync_history %}
+                            <tr class="{{ 'failed' if run.status != 'success' else '' }}" {% if run.error_message %}title="{{ run.error_message }}"{% endif %}>
+                                <td>{{ run.timestamp }}</td>
+                                <td>{{ t('cloud_history_status_success') if run.status == 'success' else t('cloud_history_status_failed') }}</td>
+                                <td>{{ run.files_transferred }}</td>
+                                <td>{{ run.bytes_display }}</td>
+                                <td>{{ run.duration_display }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
             </div>
+            {% endif %}
 
         </div>
 

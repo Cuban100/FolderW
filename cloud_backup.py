@@ -7,8 +7,9 @@ import subprocess
 import threading
 import time
 import uuid
-from db_operations import load_env_value, load_other_variables, set_database_value
+from db_operations import load_env_value, load_other_variables, set_database_value, record_cloud_sync_run, list_cloud_sync_runs
 from notifications import notify, _notify_desktop
+from statistics_operations import human_readable_size
 from translations import t
 from loguru import logger
 
@@ -376,29 +377,30 @@ def get_authorize_job_status(job_id):
     return {'status': job['status'], 'message': job['message']}
 
 
-def _notify_synced_files(log_file, start_offset):
-    """Fires one desktop notify-send per file the last sync_to_cloud()
-    call actually copied -- explicitly requested (per-file, not a single
-    summary), and desktop-only by design: routing this through notify()
-    would also fan it out to every configured Apprise URL, which would
-    turn a big sync into a phone-buzzing storm on Pushover/ntfy. Gated on
-    NOTIFY_SEND_ALWAYS like every other desktop notification, so enabling
-    cloud sync alone can't surprise someone who's opted out of desktop
-    notifications.
+def _parse_sync_log(log_file, start_offset):
+    """(copied_files, stats) parsed from the slice of `log_file` appended
+    since `start_offset` -- this run's own output only. rclone's
+    --log-file APPENDS across runs rather than truncating (confirmed
+    directly), so reading the whole file every time would pick up every
+    previous run's files and stats too, not just this one's.
 
-    Reads only the bytes appended to `log_file` since `start_offset` --
-    rclone's --log-file APPENDS across runs rather than truncating
-    (confirmed directly), so reading the whole file every time would
-    re-notify about every previous sync's files too.
+    `stats` is rclone's own periodic transfer-summary object (bytes,
+    transfers, elapsedTime, speed, ...) -- keeps the LAST one seen in
+    this slice, which is the final tally for the run, since rclone logs
+    it more than once as the sync progresses. None if the run produced
+    no stats line at all (e.g. it failed before rclone got that far).
+
+    Shared by _notify_synced_files() and sync_to_cloud()'s history
+    recording so the log is only read and parsed once per run.
     """
-    if load_env_value('NOTIFY_SEND_ALWAYS') != '1':
-        return
     try:
         with open(log_file, 'r') as f:
             f.seek(start_offset)
             new_content = f.read()
     except OSError:
-        return
+        return [], None
+    copied = []
+    stats = None
     for line in new_content.splitlines():
         line = line.strip()
         if not line:
@@ -408,7 +410,26 @@ def _notify_synced_files(log_file, start_offset):
         except ValueError:
             continue
         if entry.get('msg') in ('Copied (new)', 'Copied (replaced existing)'):
-            _notify_desktop("FolderW: Cloud sync", f"Sent: {entry.get('object', '?')}", 'low')
+            copied.append(entry.get('object', '?'))
+        if isinstance(entry.get('stats'), dict):
+            stats = entry['stats']
+    return copied, stats
+
+
+def _notify_synced_files(copied_files):
+    """Fires one desktop notify-send per file sync_to_cloud() actually
+    copied -- explicitly requested (per-file, not a single summary), and
+    desktop-only by design: routing this through notify() would also fan
+    it out to every configured Apprise URL, which would turn a big sync
+    into a phone-buzzing storm on Pushover/ntfy. Gated on
+    NOTIFY_SEND_ALWAYS like every other desktop notification, so enabling
+    cloud sync alone can't surprise someone who's opted out of desktop
+    notifications.
+    """
+    if load_env_value('NOTIFY_SEND_ALWAYS') != '1':
+        return
+    for name in copied_files:
+        _notify_desktop("FolderW: Cloud sync", f"Sent: {name}", 'low')
 
 
 def sync_to_cloud():
@@ -443,11 +464,26 @@ def sync_to_cloud():
     remote_path = (load_env_value('CLOUD_SYNC_REMOTE_PATH') or '').strip()
     bwlimit = (load_env_value('CLOUD_SYNC_BWLIMIT') or '').strip()
 
+    try:
+        log_start_offset = os.path.getsize(CLOUD_SYNC_LOG_FILE)
+    except OSError:
+        log_start_offset = 0
+
     def _fail(message):
         logger.error(message)
         notify("FolderW: Cloud sync failed", message, level='critical')
         set_database_value('CLOUD_SYNC_LAST_STATUS', 'failed')
         set_database_value('CLOUD_SYNC_LAST_TIME', str(time.time()))
+        _, stats = _parse_sync_log(CLOUD_SYNC_LOG_FILE, log_start_offset)
+        stats = stats or {}
+        record_cloud_sync_run(
+            remote or '(none)', 'failed',
+            files_transferred=stats.get('transfers', 0),
+            bytes_transferred=stats.get('bytes', 0),
+            duration_seconds=stats.get('elapsedTime', 0.0),
+            avg_speed_bps=stats.get('speed', 0.0),
+            error_message=message,
+        )
         return False, message
 
     rclone_path = rclone_binary_path()
@@ -461,10 +497,6 @@ def sync_to_cloud():
     target = f"{remote}:{remote_path}" if remote_path else f"{remote}:"
 
     os.makedirs(os.path.dirname(CLOUD_SYNC_LOG_FILE), exist_ok=True)
-    try:
-        log_start_offset = os.path.getsize(CLOUD_SYNC_LOG_FILE)
-    except OSError:
-        log_start_offset = 0
     cmd = [
         rclone_path, 'sync', destination_root, target,
         '--transfers', '4', '--checkers', '8',
@@ -484,9 +516,81 @@ def sync_to_cloud():
         logger.info(message)
         set_database_value('CLOUD_SYNC_LAST_STATUS', 'success')
         set_database_value('CLOUD_SYNC_LAST_TIME', str(time.time()))
-        _notify_synced_files(CLOUD_SYNC_LOG_FILE, log_start_offset)
+        copied_files, stats = _parse_sync_log(CLOUD_SYNC_LOG_FILE, log_start_offset)
+        stats = stats or {}
+        record_cloud_sync_run(
+            remote, 'success',
+            files_transferred=stats.get('transfers', len(copied_files)),
+            bytes_transferred=stats.get('bytes', 0),
+            duration_seconds=stats.get('elapsedTime', 0.0),
+            avg_speed_bps=stats.get('speed', 0.0),
+        )
+        _notify_synced_files(copied_files)
         return True, message
     except OSError as e:
         return _fail(f"Could not run rclone: {e}")
     finally:
         set_database_value('CLOUD_SYNC_RUNNING', '')
+
+
+def _format_duration_seconds(seconds):
+    """'2h 44m 34s' style string for a completed sync's duration -- a
+    dedicated formatter rather than reusing server.py's
+    _format_delay_seconds() (that one's scoped to the Watchdog Delay
+    config value, which is never more than a few minutes; a real sync
+    against a slow upload link routinely runs for hours, confirmed
+    directly in this install's own cloud_sync.log).
+    """
+    try:
+        seconds = int(seconds or 0)
+    except (TypeError, ValueError):
+        seconds = 0
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return t('cloud_duration_hms', h=hours, m=minutes, s=secs)
+    if minutes:
+        return t('cloud_duration_ms', m=minutes, s=secs)
+    return t('cloud_duration_s', s=secs)
+
+
+def get_cloud_sync_dashboard_stats():
+    """Everything the dashboard's dedicated Cloud Sync section needs --
+    last-run summary (files/data/duration/speed) plus a short recent-
+    history list -- pulled from cloud_sync_runs (see db_operations.
+    record_cloud_sync_run()), which actually distinguishes "the last
+    attempt succeeded with real numbers" from "nothing has run since the
+    last failure" the way the older CLOUD_SYNC_LAST_STATUS/_TIME
+    settings values alone can't.
+    """
+    runs = list_cloud_sync_runs(limit=10)
+    bwlimit_display = (load_env_value('CLOUD_SYNC_BWLIMIT') or '').strip() or None
+    if not runs:
+        return {
+            "cloud_sync_last_files": None,
+            "cloud_sync_last_bytes_display": None,
+            "cloud_sync_last_duration_display": None,
+            "cloud_sync_last_speed_display": None,
+            "cloud_sync_bwlimit_display": bwlimit_display,
+            "cloud_sync_history": [],
+        }
+    last = runs[0]
+    history = [
+        {
+            "timestamp": run["timestamp"],
+            "status": run["status"],
+            "files_transferred": run["files_transferred"],
+            "bytes_display": human_readable_size(run["bytes_transferred"] or 0),
+            "duration_display": _format_duration_seconds(run["duration_seconds"]),
+            "error_message": run["error_message"],
+        }
+        for run in runs
+    ]
+    return {
+        "cloud_sync_last_files": last["files_transferred"],
+        "cloud_sync_last_bytes_display": human_readable_size(last["bytes_transferred"] or 0),
+        "cloud_sync_last_duration_display": _format_duration_seconds(last["duration_seconds"]),
+        "cloud_sync_last_speed_display": f"{human_readable_size(last['avg_speed_bps'] or 0)}/s",
+        "cloud_sync_bwlimit_display": bwlimit_display,
+        "cloud_sync_history": history,
+    }
