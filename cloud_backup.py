@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 import uuid
+import psutil
 from db_operations import load_env_value, load_other_variables, set_database_value, record_cloud_sync_run, list_cloud_sync_runs
 from notifications import notify, _notify_desktop
 from statistics_operations import human_readable_size
@@ -507,7 +508,6 @@ def sync_to_cloud():
         cmd += ['--bwlimit', bwlimit]
 
     logger.info(f"Starting cloud sync: {destination_root} -> {target}")
-    set_database_value('CLOUD_SYNC_RUNNING', '1')
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -529,8 +529,32 @@ def sync_to_cloud():
         return True, message
     except OSError as e:
         return _fail(f"Could not run rclone: {e}")
-    finally:
-        set_database_value('CLOUD_SYNC_RUNNING', '')
+
+
+def is_cloud_sync_running():
+    """Whether an `rclone sync` launched by sync_to_cloud() is actually
+    alive right now, for the dashboard's live indicator -- checked
+    against the real process list (psutil), the same way server.py's
+    is_backup_running() cross-checks rsync_incremental.py, rather than a
+    DB flag set at start and cleared at the end.
+
+    That flag approach was tried first here (CLOUD_SYNC_RUNNING) and
+    removed after confirming live exactly the failure mode is_backup_
+    running()'s docstring already warned about: this session's first
+    real cloud sync got killed mid-transfer by an unrelated `systemctl
+    restart` of the backup service, and the flag was left stuck at '1'
+    with nothing actually running -- it would have shown "syncing"
+    forever. Checking the real process instead is self-healing: a dead
+    process is just absent from the list, no cleanup needed.
+    """
+    for proc in psutil.process_iter(['cmdline']):
+        try:
+            cmdline = proc.info['cmdline'] or []
+            if any('rclone' in part for part in cmdline) and 'sync' in cmdline:
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    return False
 
 
 def _format_duration_seconds(seconds):

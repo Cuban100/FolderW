@@ -740,6 +740,10 @@
             {% if cloud_sync_enabled %}
             <div class="stats-section">
                 <h2>{{ t('dashboard_cloud_sync_heading') }}</h2>
+                <p id="cloud-sync-running-indicator" style="display: {% if cloud_sync_running %}block{% else %}none{% endif %}; margin: -8px 0 12px;">
+                    <span class="status-dot green"></span>
+                    <span style="color: var(--text-muted);">{{ t('dashboard_cloud_sync_in_progress') }}</span>
+                </p>
                 <div class="stats-grid stats-grid-5col">
                     <div class="stat-card">
                         <div class="stat-label">{{ t('dashboard_last_cloud_sync') }}</div>
@@ -1016,6 +1020,8 @@
                 setStatIfPresent('last-session-files-value', data.last_session_files, '0');
                 setStatIfPresent('snapshot-count-value', data.snapshot_count, '0');
                 setStatIfPresent('cloud-sync-value', data.cloud_sync_last_display, t('common_never'));
+                const runningIndicator = document.getElementById('cloud-sync-running-indicator');
+                if (runningIndicator) runningIndicator.style.display = data.cloud_sync_running ? 'block' : 'none';
             } catch (error) {
                 console.error('Error refreshing dashboard stats:', error);
             }

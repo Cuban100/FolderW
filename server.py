@@ -14,7 +14,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 from notifications import _notify_desktop
 from backup_hooks import run_hook_script
-from cloud_backup import list_rclone_remotes, test_cloud_connection, get_remote_type, renew_remote_token, start_remote_authorize, get_authorize_job_status, create_remote, KNOWN_REMOTE_TYPES, get_cloud_sync_dashboard_stats
+from cloud_backup import list_rclone_remotes, test_cloud_connection, get_remote_type, renew_remote_token, start_remote_authorize, get_authorize_job_status, create_remote, KNOWN_REMOTE_TYPES, get_cloud_sync_dashboard_stats, is_cloud_sync_running
 from translations import t, t_or_raw, current_language, LANGUAGES
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs, get_cloud_sync_stats_series, get_cloud_sync_stats_summary
@@ -426,6 +426,7 @@ def get_backup_stats_context(database):
         **_watchdog_timing_context(),
         **_cloud_sync_timing_context(),
         **get_cloud_sync_dashboard_stats(),
+        "cloud_sync_running": is_cloud_sync_running(),
     }
 
 
@@ -1681,6 +1682,7 @@ async def dashboard_stats():
         "last_session_files": stats["last_session_files"],
         "snapshot_count": stats["snapshot_count"],
         "cloud_sync_last_display": stats["cloud_sync_last_display"],
+        "cloud_sync_running": stats["cloud_sync_running"],
     })
 
 

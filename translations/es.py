@@ -86,6 +86,7 @@ TRANSLATIONS = {
     "dashboard_backup_interval": "Intervalo de copia",
     "dashboard_last_cloud_sync": "Última sincronización en la nube",
     "dashboard_cloud_sync_heading": "Sincronización en la Nube",
+    "dashboard_cloud_sync_in_progress": "Sincronizando con la nube ahora…",
     "dashboard_cloud_sync_files": "Archivos Transferidos",
     "dashboard_cloud_sync_data": "Datos Transferidos",
     "dashboard_cloud_sync_duration": "Duración",
