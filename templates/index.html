@@ -189,8 +189,18 @@
         .stats-grid-4col {
             grid-template-columns: repeat(4, 1fr);
         }
+        /* Same fixed-columns reasoning as -4col, sized for the Cloud
+           Sync section's 5 cards specifically -- reusing -4col there
+           left the 5th card alone on its own row instead of all 5
+           inline. */
+        .stats-grid-5col {
+            grid-template-columns: repeat(5, 1fr);
+        }
         @media (max-width: 900px) {
             .stats-grid-4col {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .stats-grid-5col {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
@@ -730,7 +740,7 @@
             {% if cloud_sync_enabled %}
             <div class="stats-section">
                 <h2>{{ t('dashboard_cloud_sync_heading') }}</h2>
-                <div class="stats-grid stats-grid-4col">
+                <div class="stats-grid stats-grid-5col">
                     <div class="stat-card">
                         <div class="stat-label">{{ t('dashboard_last_cloud_sync') }}</div>
                         <div class="stat-value" id="cloud-sync-value">{{ cloud_sync_last_display }}</div>
