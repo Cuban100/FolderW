@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 import psutil
-from db_operations import load_env_value, load_other_variables, set_database_value, record_cloud_sync_run, list_cloud_sync_runs
+from db_operations import load_env_value, load_other_variables, set_database_value, get_database_value, record_cloud_sync_run, list_cloud_sync_runs
 from notifications import notify, _notify_desktop
 from statistics_operations import human_readable_size
 from translations import t
@@ -23,6 +23,12 @@ CLOUD_SYNC_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '
 # no data moved in 5 minutes, or the initial connection itself hangs.
 RCLONE_TIMEOUT = '300s'
 RCLONE_CONTIMEOUT = '30s'
+
+# How often rclone writes a progress snapshot (bytes/eta/speed/current
+# files) to --log-file -- rclone's own default is 60s, too coarse for a
+# dashboard progress bar that only gets checked this often anyway (see
+# get_cloud_sync_progress(), polled from /dashboard-stats every 30s).
+PROGRESS_STATS_INTERVAL = '15s'
 
 # How long to wait for the user to finish logging in in the browser tab
 # before giving up on a "Log In via Browser" job and killing the rclone
@@ -503,11 +509,17 @@ def sync_to_cloud():
         '--transfers', '4', '--checkers', '8',
         '--timeout', RCLONE_TIMEOUT, '--contimeout', RCLONE_CONTIMEOUT,
         '--log-file', CLOUD_SYNC_LOG_FILE, '--log-level', 'INFO', '--use-json-log',
+        '--stats', PROGRESS_STATS_INTERVAL,
     ]
     if bwlimit:
         cmd += ['--bwlimit', bwlimit]
 
     logger.info(f"Starting cloud sync: {destination_root} -> {target}")
+    # So get_cloud_sync_progress() (running in the OTHER process -- the
+    # web dashboard, not this backup worker) knows where THIS run's own
+    # log output starts, the same reason log_start_offset exists at all:
+    # --log-file appends across runs rather than truncating.
+    set_database_value('CLOUD_SYNC_CURRENT_LOG_OFFSET', str(log_start_offset))
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -555,6 +567,68 @@ def is_cloud_sync_running():
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
     return False
+
+
+def get_cloud_sync_progress():
+    """Live progress for the dashboard's Cloud Sync indicator while
+    is_cloud_sync_running() is True -- percent complete, ETA, current
+    speed, and which file(s) are transferring right now. Parsed from
+    rclone's own periodic stats snapshot (--stats, see PROGRESS_STATS_
+    INTERVAL) in this run's slice of the log -- the same "confirmed the
+    sync wasn't actually stuck, just silent" data already used to debug
+    this live, now surfaced instead of needing a manual log check.
+
+    Only reads the tail of the file, not the whole slice from
+    CLOUD_SYNC_CURRENT_LOG_OFFSET (which could be many MB into a long
+    first sync) -- the periodic stats line recurs often enough that the
+    last 64KB comfortably contains one.
+    """
+    if not is_cloud_sync_running():
+        return {"cloud_sync_progress_running": False}
+
+    try:
+        start_offset = int(get_database_value('CLOUD_SYNC_CURRENT_LOG_OFFSET', 'settings') or 0)
+    except (TypeError, ValueError):
+        start_offset = 0
+
+    try:
+        file_size = os.path.getsize(CLOUD_SYNC_LOG_FILE)
+        read_from = max(start_offset, file_size - 65536)
+        with open(CLOUD_SYNC_LOG_FILE, 'r') as f:
+            f.seek(read_from)
+            tail = f.read()
+    except OSError:
+        return {"cloud_sync_progress_running": True, "cloud_sync_progress_percent": None}
+
+    stats = None
+    for line in tail.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry.get('stats'), dict):
+            stats = entry['stats']
+
+    if not stats:
+        return {"cloud_sync_progress_running": True, "cloud_sync_progress_percent": None}
+
+    bytes_done = stats.get('bytes', 0)
+    total_bytes = stats.get('totalBytes', 0)
+    eta_seconds = stats.get('eta')
+    current_files = [os.path.basename(f['name']) for f in (stats.get('transferring') or []) if f.get('name')]
+
+    return {
+        "cloud_sync_progress_running": True,
+        "cloud_sync_progress_percent": round(100 * bytes_done / total_bytes, 1) if total_bytes else None,
+        "cloud_sync_progress_files_display": f"{stats.get('transfers', 0)} / {stats.get('totalTransfers', 0)}",
+        "cloud_sync_progress_bytes_display": f"{human_readable_size(bytes_done)} / {human_readable_size(total_bytes)}" if total_bytes else human_readable_size(bytes_done),
+        "cloud_sync_progress_eta_display": _format_duration_seconds(eta_seconds) if eta_seconds else None,
+        "cloud_sync_progress_speed_display": f"{human_readable_size(stats.get('speed', 0))}/s",
+        "cloud_sync_progress_current_files": current_files[:3],
+    }
 
 
 def _format_duration_seconds(seconds):
