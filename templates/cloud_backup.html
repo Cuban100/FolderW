@@ -69,12 +69,10 @@
             </p>
             <p class="text-sm text-[var(--text-muted)] mb-6">{{ t('cloud_last_sync', display=cloud_sync_last_display) }}</p>
 
-            {% if backup_method == 'incremental' %}
             <div class="bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text)] px-4 py-3 rounded relative mb-6 text-sm" role="alert">
                 <strong>{{ t('cloud_size_warning_title') }}</strong>
                 {{ t('cloud_size_warning_body') | safe }}
             </div>
-            {% endif %}
 
             {% if error %}
             <div class="bg-[var(--error-bg)] border border-[var(--border)] text-[var(--error-text)] px-4 py-3 rounded relative mb-6" role="alert">

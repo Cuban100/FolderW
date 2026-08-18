@@ -571,15 +571,33 @@ def _notify_synced_files(copied_files):
 
 
 def sync_to_cloud():
-    """Mirrors the backup destination (Full Backup + every Snapshot --
-    BASE_DIR/FULL_NAME, same root restore_operations.py's
-    total_destination_size_bytes() measures) to the configured rclone
-    remote via `rclone sync`. Called unconditionally right after every
-    SUCCESSFUL local backup (main_backup.py's run_regular_backup(),
-    rsync_event_handler.py's run_backup_script()) -- no-ops if the
-    feature isn't enabled, so callers never need their own enabled
-    check, matching how run_backup_script_with_hooks() already handles
-    unset PRE_BACKUP_SCRIPT/POST_BACKUP_SCRIPT internally.
+    """Mirrors ONLY the Full Backup folder (the single always-current,
+    de-duplicated mirror of SRC_DIR) to the configured rclone remote via
+    `rclone sync` -- deliberately NOT the Snapshots folder alongside it.
+
+    That exclusion is the actual fix for the sync that used to take
+    hours and exhaust Google's API quota well before bandwidth became
+    the limit: Snapshots are cheap locally because unchanged files are
+    hardlinked (near-zero extra disk space per snapshot), but rclone has
+    no concept of a hardlink -- it would upload every snapshot as a
+    completely independent full copy (confirmed live: ~23x inflation,
+    tens of thousands of files for what was actually a 70MB source).
+    Syncing only Full Backup means rclone's own diff against the remote
+    does exactly what it should: transfer only what's genuinely new or
+    changed since the last sync, not every historical version of it.
+
+    The real tradeoff: the cloud copy only ever holds CURRENT state, not
+    historical point-in-time snapshots the way the local Snapshots
+    folder does. That's intentional -- local retention already covers
+    version history; the cloud's job here is offsite disaster recovery
+    of current state, not a second copy of the whole snapshot history.
+
+    Called unconditionally right after every SUCCESSFUL local backup
+    (main_backup.py's run_regular_backup(), rsync_event_handler.py's
+    run_backup_script()) -- no-ops if the feature isn't enabled, so
+    callers never need their own enabled check, matching how run_
+    backup_script_with_hooks() already handles unset PRE_BACKUP_SCRIPT/
+    POST_BACKUP_SCRIPT internally.
 
     Never raises -- any failure is logged + notify(level='critical') and
     returned as (False, message), same contract as run_hook_script(),
@@ -588,7 +606,7 @@ def sync_to_cloud():
     failed.
 
     `rclone sync` makes the remote match the source EXACTLY, including
-    deleting remote files/folders no longer present locally -- same
+    deleting remote files no longer present in Full Backup -- same
     mirroring philosophy as the local backup's own `rsync --delete`.
     This is why CLOUD_SYNC_REMOTE_PATH should always be a dedicated
     subfolder, never bare remote root (see cloud_backup.html's help
@@ -644,12 +662,11 @@ def sync_to_cloud():
         return _fail("Cloud sync is enabled but no remote is configured.")
 
     full_backup = load_other_variables('full_backup')
-    destination_root = os.path.dirname(full_backup)
     target = f"{remote}:{remote_path}" if remote_path else f"{remote}:"
 
     os.makedirs(os.path.dirname(CLOUD_SYNC_LOG_FILE), exist_ok=True)
     cmd = [
-        rclone_path, 'sync', destination_root, target,
+        rclone_path, 'sync', full_backup, target,
         '--transfers', RCLONE_TRANSFERS, '--checkers', RCLONE_CHECKERS,
         '--timeout', RCLONE_TIMEOUT, '--contimeout', RCLONE_CONTIMEOUT,
         '--log-file', CLOUD_SYNC_LOG_FILE, '--log-level', 'INFO', '--use-json-log',
@@ -669,7 +686,7 @@ def sync_to_cloud():
     if bwlimit:
         cmd += ['--bwlimit', bwlimit]
 
-    logger.info(f"Starting cloud sync: {destination_root} -> {target}")
+    logger.info(f"Starting cloud sync: {full_backup} -> {target}")
     # So get_cloud_sync_progress() (running in the OTHER process -- the
     # web dashboard, not this backup worker) knows where THIS run's own
     # log output starts, the same reason log_start_offset exists at all:
