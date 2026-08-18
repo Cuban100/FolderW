@@ -536,6 +536,17 @@ def sync_to_cloud():
         '--timeout', RCLONE_TIMEOUT, '--contimeout', RCLONE_CONTIMEOUT,
         '--log-file', CLOUD_SYNC_LOG_FILE, '--log-level', 'INFO', '--use-json-log',
         '--stats', PROGRESS_STATS_INTERVAL,
+        # Confirmed live: the real bottleneck wasn't upload bandwidth or
+        # even --transfers concurrency -- it was rclone walking the
+        # destination's deep Snapshot/Day/Time tree with one API call
+        # per directory just to compare against source, which alone was
+        # enough to hit Google Drive's "Queries per minute" quota
+        # (actual 403 errors seen in the log) on a tree this size.
+        # --fast-list replaces that with a handful of bulk paginated
+        # listings instead of one request per directory -- far fewer
+        # transactions, at the cost of holding the full listing in
+        # memory (trivial for a tree this size).
+        '--fast-list',
     ]
     if bwlimit:
         cmd += ['--bwlimit', bwlimit]
