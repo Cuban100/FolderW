@@ -30,6 +30,19 @@ RCLONE_CONTIMEOUT = '30s'
 # get_cloud_sync_progress(), polled from /dashboard-stats every 30s).
 PROGRESS_STATS_INTERVAL = '15s'
 
+# --transfers/--checkers: how many files rclone uploads/checks in
+# parallel. Confirmed live this matters far more than bandwidth for this
+# workload -- incremental snapshots mean thousands of small individual
+# files (this session's real first sync averaged ~45 KB/file), and each
+# one costs close to a full Google Drive API round-trip (~1.5s) more
+# than actual transfer time. At the old --transfers 4, that caps
+# throughput at ~2.7 files/sec REGARDLESS of upload bandwidth, which is
+# exactly what made a fast connection look stuck at the same few percent
+# for hours. Higher concurrency directly attacks that ceiling; rclone
+# handles any resulting rate-limit backoff itself.
+RCLONE_TRANSFERS = '16'
+RCLONE_CHECKERS = '32'
+
 # How long to wait for the user to finish logging in in the browser tab
 # before giving up on a "Log In via Browser" job and killing the rclone
 # process holding the local OAuth callback port open.
@@ -506,7 +519,7 @@ def sync_to_cloud():
     os.makedirs(os.path.dirname(CLOUD_SYNC_LOG_FILE), exist_ok=True)
     cmd = [
         rclone_path, 'sync', destination_root, target,
-        '--transfers', '4', '--checkers', '8',
+        '--transfers', RCLONE_TRANSFERS, '--checkers', RCLONE_CHECKERS,
         '--timeout', RCLONE_TIMEOUT, '--contimeout', RCLONE_CONTIMEOUT,
         '--log-file', CLOUD_SYNC_LOG_FILE, '--log-level', 'INFO', '--use-json-log',
         '--stats', PROGRESS_STATS_INTERVAL,
