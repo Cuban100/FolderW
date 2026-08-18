@@ -205,6 +205,10 @@
                         <button type="button" onclick="startBrowserAuthorize()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition whitespace-nowrap">
                             {{ t('cloud_authorize_button') }}
                         </button>
+                        <button type="button" onclick="cancelBrowserAuthorize()" id="authorize-cancel-button"
+                                class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition whitespace-nowrap hidden">
+                            {{ t('cloud_authorize_cancel_button') }}
+                        </button>
                         <div id="authorize-result" class="text-sm mt-2"></div>
                         <p class="text-xs text-[var(--text-muted)] mt-2">{{ t('cloud_authorize_same_machine_note') }}</p>
                     </div>
@@ -387,10 +391,12 @@
         }
 
         let authorizePollTimer = null;
+        let currentAuthorizeJobId = null;
 
         async function startBrowserAuthorize() {
             const remote = document.getElementById('cloud_sync_remote').value;
             const resultEl = document.getElementById('authorize-result');
+            const cancelBtn = document.getElementById('authorize-cancel-button');
             if (!remote) {
                 resultEl.textContent = t('cloud_renew_no_remote_selected');
                 resultEl.className = 'text-sm mt-2 text-red-500';
@@ -411,6 +417,8 @@
                     resultEl.className = 'text-sm mt-2 text-red-500';
                     return;
                 }
+                currentAuthorizeJobId = data.job_id;
+                cancelBtn.classList.remove('hidden');
                 // window.open() must be called synchronously from the click
                 // handler to avoid the popup blocker -- this await chain
                 // still counts as "user-initiated" in every major browser,
@@ -432,8 +440,33 @@
             }
         }
 
+        async function cancelBrowserAuthorize() {
+            const cancelBtn = document.getElementById('authorize-cancel-button');
+            const resultEl = document.getElementById('authorize-result');
+            if (!currentAuthorizeJobId) {
+                cancelBtn.classList.add('hidden');
+                return;
+            }
+            try {
+                await fetch('/cloud-backup/authorize/cancel', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'job_id=' + encodeURIComponent(currentAuthorizeJobId)
+                });
+                // The poll loop already running for this job picks up the
+                // resulting 'error' status on its own next tick and does
+                // the cleanup (stopping the timer, hiding this button,
+                // closing the popup if still open) -- no need to duplicate
+                // that here.
+            } catch (error) {
+                resultEl.textContent = t('cloud_error_running_test');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+            }
+        }
+
         function pollAuthorizeStatus(jobId, popup) {
             const resultEl = document.getElementById('authorize-result');
+            const cancelBtn = document.getElementById('authorize-cancel-button');
             authorizePollTimer = setInterval(async () => {
                 try {
                     const response = await fetch('/cloud-backup/authorize/status?job_id=' + encodeURIComponent(jobId));
@@ -441,12 +474,16 @@
                     if (data.status === 'waiting') return;
                     clearInterval(authorizePollTimer);
                     authorizePollTimer = null;
+                    currentAuthorizeJobId = null;
+                    cancelBtn.classList.add('hidden');
                     resultEl.textContent = data.message;
                     resultEl.className = 'text-sm mt-2 ' + (data.status === 'success' ? 'text-green-500' : 'text-red-500');
                     if (popup && !popup.closed) popup.close();
                 } catch (error) {
                     clearInterval(authorizePollTimer);
                     authorizePollTimer = null;
+                    currentAuthorizeJobId = null;
+                    cancelBtn.classList.add('hidden');
                     resultEl.textContent = t('cloud_error_running_test');
                     resultEl.className = 'text-sm mt-2 text-red-500';
                 }

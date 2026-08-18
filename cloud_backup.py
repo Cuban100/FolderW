@@ -425,11 +425,40 @@ def start_remote_authorize(remote):
 
     job_id = uuid.uuid4().hex
     with _authorize_jobs_lock:
-        _authorize_jobs[job_id] = {'status': 'waiting', 'message': '', 'remote': remote}
+        # `process` is kept here (not just its pid) specifically so
+        # cancel_authorize_job() can kill it directly -- rclone's local
+        # OAuth listener has no way to know the browser tab was closed,
+        # so without an explicit cancel it just sits there blocking
+        # until AUTHORIZE_JOB_TIMEOUT, holding the "already running"
+        # lock the whole time. Confirmed live this is a real gap, not a
+        # theoretical one.
+        _authorize_jobs[job_id] = {'status': 'waiting', 'message': '', 'remote': remote, 'process': process}
 
     thread = threading.Thread(target=_finish_authorize_job, args=(job_id, process, remote, lines), daemon=True)
     thread.start()
     return job_id, auth_url, None
+
+
+def cancel_authorize_job(job_id):
+    """(success, message) for the Cloud Backup page's Cancel button --
+    kills the rclone process behind a "waiting" Log In via Browser job
+    immediately, instead of leaving it to block the OAuth port (and the
+    already-running lock) until AUTHORIZE_JOB_TIMEOUT. _finish_
+    authorize_job()'s own communicate() call unblocks as soon as the
+    process dies and takes care of moving the job to a terminal status
+    from there -- this only needs to kill the process.
+    """
+    with _authorize_jobs_lock:
+        job = _authorize_jobs.get(job_id)
+        if not job or job['status'] != 'waiting':
+            return False, t('cloud_authorize_error_no_token')
+        process = job.get('process')
+    if process:
+        try:
+            process.kill()
+        except OSError:
+            pass
+    return True, t('cloud_authorize_cancelled')
 
 
 def _finish_authorize_job(job_id, process, remote, lines):

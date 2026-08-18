@@ -14,7 +14,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 from notifications import _notify_desktop
 from backup_hooks import run_hook_script
-from cloud_backup import list_rclone_remotes, test_cloud_connection, get_remote_type, renew_remote_token, start_remote_authorize, get_authorize_job_status, create_remote, KNOWN_REMOTE_TYPES, get_cloud_sync_dashboard_stats, is_cloud_sync_running, get_cloud_sync_progress, get_remote_client_id, update_remote_credentials
+from cloud_backup import list_rclone_remotes, test_cloud_connection, get_remote_type, renew_remote_token, start_remote_authorize, get_authorize_job_status, cancel_authorize_job, create_remote, KNOWN_REMOTE_TYPES, get_cloud_sync_dashboard_stats, is_cloud_sync_running, get_cloud_sync_progress, get_remote_client_id, update_remote_credentials
 from translations import t, t_or_raw, current_language, LANGUAGES
 from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_space
 from db_operations import load_env_value, load_other_variables, save_env_values, create_all_tables, get_last_session_number, list_items_by_session, get_database_value, set_database_value, reset_backup_history, has_completed_backup, count_backup_runs, list_backup_runs, wipe_database_for_fresh_start, get_backup_stats_series, get_backup_stats_summary, get_changes_by_session, record_restore_run, count_restore_runs, list_restore_runs, get_cloud_sync_stats_series, get_cloud_sync_stats_summary
@@ -1432,6 +1432,12 @@ async def cloud_backup_authorize_start(remote: str = Form("")):
 @app.get("/cloud-backup/authorize/status")
 async def cloud_backup_authorize_status(job_id: str = ""):
     return JSONResponse(get_authorize_job_status(job_id))
+
+
+@app.post("/cloud-backup/authorize/cancel")
+async def cloud_backup_authorize_cancel(job_id: str = Form("")):
+    success, message = cancel_authorize_job(job_id)
+    return JSONResponse({"success": success, "message": message})
 
 
 def _is_valid_folder_name(name):

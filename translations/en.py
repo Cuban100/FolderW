@@ -327,6 +327,8 @@ TRANSLATIONS = {
     "cloud_authorize_timeout": "Timed out waiting for the browser login. Try again, or paste a token manually below.",
     "cloud_authorize_error_starting": "Could not start the browser login: {error}",
     "cloud_authorize_error_already_running": "A browser login is already in progress -- wait for it to finish or time out before starting another.",
+    "cloud_authorize_cancel_button": "Cancel",
+    "cloud_authorize_cancelled": "Login cancelled.",
     "cloud_authorize_error_unknown_type": "Could not determine this remote's backend type.",
     "cloud_authorize_error_no_url": "rclone didn't produce a login link -- check the server logs.",
     "cloud_authorize_error_no_token": "The login window closed without completing authorization (denied, or closed too early).",

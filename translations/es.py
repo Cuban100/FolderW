@@ -329,6 +329,8 @@ TRANSLATIONS = {
     "cloud_authorize_timeout": "Se agotó el tiempo esperando el inicio de sesión en el navegador. Intenta de nuevo, o pega un token manualmente abajo.",
     "cloud_authorize_error_starting": "No se pudo iniciar el inicio de sesión en el navegador: {error}",
     "cloud_authorize_error_already_running": "Ya hay un inicio de sesión en el navegador en curso -- espera a que termine o expire antes de iniciar otro.",
+    "cloud_authorize_cancel_button": "Cancelar",
+    "cloud_authorize_cancelled": "Inicio de sesión cancelado.",
     "cloud_authorize_error_unknown_type": "No se pudo determinar el tipo de backend de este remoto.",
     "cloud_authorize_error_no_url": "rclone no produjo un enlace de inicio de sesión -- revisa los logs del servidor.",
     "cloud_authorize_error_no_token": "La ventana de inicio de sesión se cerró sin completar la autorización (denegada, o cerrada demasiado pronto).",
