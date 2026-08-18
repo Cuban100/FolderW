@@ -118,10 +118,21 @@
                                    class="border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
                                    placeholder="{{ t('cloud_create_name_placeholder') }}">
                         </div>
+                        <div>
+                            <label for="create_client_id" class="text-sm text-[var(--text-muted)] block mb-1">{{ t('cloud_create_client_id_label') }}</label>
+                            <input type="text" id="create_client_id" name="client_id"
+                                   class="border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]">
+                        </div>
+                        <div>
+                            <label for="create_client_secret" class="text-sm text-[var(--text-muted)] block mb-1">{{ t('cloud_create_client_secret_label') }}</label>
+                            <input type="text" id="create_client_secret" name="client_secret"
+                                   class="border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]">
+                        </div>
                         <button type="submit" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition whitespace-nowrap">
                             {{ t('cloud_create_button') }}
                         </button>
                     </form>
+                    <p class="text-xs text-[var(--text-muted)] mt-2">{{ t('cloud_create_own_client_help') | safe }}</p>
                 </div>
             </details>
             {% endif %}
@@ -215,6 +226,32 @@
                         {{ t('cloud_renew_button') }}
                     </button>
                     <div id="renew-token-result" class="text-sm mt-2"></div>
+
+                    <div class="mt-6 pt-6 border-t border-[var(--border)]">
+                        <h3 class="text-[var(--text)] font-medium mb-2">{{ t('cloud_credentials_title') }}</h3>
+                        {% if remote_has_custom_client %}
+                        <p class="text-sm text-[var(--text-muted)]">{{ t('cloud_credentials_using_custom') }}</p>
+                        {% else %}
+                        <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('cloud_credentials_desc') }}</p>
+                        <div class="flex flex-wrap gap-3 items-end">
+                            <div>
+                                <label for="credentials_client_id" class="text-sm text-[var(--text-muted)] block mb-1">{{ t('cloud_credentials_id_label') }}</label>
+                                <input type="text" id="credentials_client_id"
+                                       class="border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]">
+                            </div>
+                            <div>
+                                <label for="credentials_client_secret" class="text-sm text-[var(--text-muted)] block mb-1">{{ t('cloud_credentials_secret_label') }}</label>
+                                <input type="text" id="credentials_client_secret"
+                                       class="border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]">
+                            </div>
+                            <button type="button" onclick="saveCloudCredentials()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition whitespace-nowrap">
+                                {{ t('cloud_credentials_button') }}
+                            </button>
+                        </div>
+                        <div id="credentials-result" class="text-sm mt-2"></div>
+                        <p class="text-xs text-[var(--text-muted)] mt-2">{{ t('cloud_create_own_client_help') | safe }}</p>
+                        {% endif %}
+                    </div>
                 </div>
             </details>
         </div>
@@ -311,6 +348,38 @@
                 resultEl.textContent = data.message;
                 resultEl.className = 'text-sm mt-2 ' + (data.success ? 'text-green-500' : 'text-red-500');
                 if (data.success) document.getElementById('renew_token_json').value = '';
+            } catch (error) {
+                resultEl.textContent = t('cloud_error_running_test');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+            }
+        }
+
+        async function saveCloudCredentials() {
+            const remote = document.getElementById('cloud_sync_remote').value;
+            const clientId = document.getElementById('credentials_client_id').value.trim();
+            const clientSecret = document.getElementById('credentials_client_secret').value.trim();
+            const resultEl = document.getElementById('credentials-result');
+            if (!remote) {
+                resultEl.textContent = t('cloud_renew_no_remote_selected');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+                return;
+            }
+            if (!clientId || !clientSecret) {
+                resultEl.textContent = t('cloud_credentials_empty');
+                resultEl.className = 'text-sm mt-2 text-red-500';
+                return;
+            }
+            resultEl.textContent = t('cloud_credentials_saving');
+            resultEl.className = 'text-sm mt-2 text-[var(--text-muted)]';
+            try {
+                const response = await fetch('/cloud-backup/update-credentials', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'remote=' + encodeURIComponent(remote) + '&client_id=' + encodeURIComponent(clientId) + '&client_secret=' + encodeURIComponent(clientSecret)
+                });
+                const data = await response.json();
+                resultEl.textContent = data.message;
+                resultEl.className = 'text-sm mt-2 ' + (data.success ? 'text-green-500' : 'text-red-500');
             } catch (error) {
                 resultEl.textContent = t('cloud_error_running_test');
                 resultEl.className = 'text-sm mt-2 text-red-500';

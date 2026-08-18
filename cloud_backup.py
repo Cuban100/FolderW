@@ -116,12 +116,14 @@ def test_cloud_connection(remote, remote_path):
         return False, t('cloud_test_could_not_run', error=str(e))
 
 
-def get_remote_type(remote):
-    """The backend type (e.g. 'drive', 'dropbox') of an already-configured
-    rclone remote, parsed from `rclone config show` -- used by the Cloud
-    Backup page's Renew Token section to tell the user exactly which
-    `rclone authorize "<type>"` command to run for the remote they have
-    selected.
+def _get_remote_config_field(remote, field):
+    """One field (e.g. 'type', 'client_id') from `rclone config show
+    <remote>` -- shared by get_remote_type() and the custom OAuth client
+    credential lookup start_remote_authorize() uses to avoid rclone's
+    shared default client. rclone does NOT obscure client_secret in this
+    output (confirmed directly) -- it's an OAuth "installed app" secret,
+    not a traditional one, so this is expected rclone behavior, not a
+    leak on our part.
     """
     rclone_path = rclone_binary_path()
     if not rclone_path or not remote:
@@ -134,25 +136,50 @@ def get_remote_type(remote):
         return None
     for line in result.stdout.splitlines():
         key, _, value = line.partition('=')
-        if key.strip() == 'type':
+        if key.strip() == field:
             return value.strip()
     return None
+
+
+def get_remote_type(remote):
+    """The backend type (e.g. 'drive', 'dropbox') of an already-configured
+    rclone remote -- used by the Cloud Backup page's Renew Token section
+    to tell the user exactly which `rclone authorize "<type>"` command
+    applies to the remote they have selected.
+    """
+    return _get_remote_config_field(remote, 'type')
+
+
+def get_remote_client_id(remote):
+    """The custom OAuth client_id configured on a remote, if any -- used
+    by the Cloud Backup page to show whether a remote is still on
+    rclone's shared default client (see start_remote_authorize()'s
+    docstring for why that matters) or has its own.
+    """
+    return _get_remote_config_field(remote, 'client_id')
 
 
 _REMOTE_NAME_RE = re.compile(r'[A-Za-z0-9_-]+')
 
 
-def create_remote(name, backend_type):
+def create_remote(name, backend_type, client_id=None, client_secret=None):
     """(success, message) for the Cloud Backup page's "Add a New Remote"
     form -- the other half of the zero-terminal setup story alongside
-    start_remote_authorize(): this registers a bare remote entry (just a
-    name and backend type, no credentials yet) via `rclone config
-    create`, so "Log In via Browser" has something to authenticate right
-    after. Never contacts the provider itself -- confirmed directly that
-    `rclone config create <name> <type> --non-interactive` writes a
-    minimal `[name]\\ntype = <type>` entry and returns even for backends
-    that would normally ask more setup questions (e.g. onedrive), since
+    start_remote_authorize(): this registers a bare remote entry (name +
+    backend type, no token yet) via `rclone config create`, so "Log In
+    via Browser" has something to authenticate right after. Never
+    contacts the provider itself -- confirmed directly that `rclone
+    config create <name> <type> --non-interactive` writes a minimal
+    `[name]\\ntype = <type>` entry and returns even for backends that
+    would normally ask more setup questions (e.g. onedrive), since
     --non-interactive just leaves those unanswered rather than blocking.
+
+    client_id/client_secret are optional -- when given, they're stored
+    on the remote too, so start_remote_authorize() picks them up
+    automatically and runs the OAuth flow against the user's OWN
+    registered app instead of rclone's shared default one (see that
+    function's docstring for why that matters: the shared client's
+    quota is pooled across every rclone install worldwide).
     """
     rclone_path = rclone_binary_path()
     if not rclone_path:
@@ -172,9 +199,54 @@ def create_remote(name, backend_type):
     if name in remotes:
         return False, t('cloud_create_error_exists', name=name)
 
+    client_id = (client_id or '').strip()
+    client_secret = (client_secret or '').strip()
+    if bool(client_id) != bool(client_secret):
+        return False, t('cloud_create_error_partial_credentials')
+
+    cmd = [rclone_path, 'config', 'create', name, backend_type]
+    if client_id:
+        cmd += [f'client_id={client_id}', f'client_secret={client_secret}']
+    cmd += ['--non-interactive']
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return False, t('cloud_create_error_could_not_run', error=str(e))
+    if result.returncode != 0:
+        return False, t('cloud_create_error_rclone_failed', error=(result.stderr.strip() or result.stdout.strip() or t('hooks_no_error_output')))
+
+    return True, t('cloud_create_success', name=name)
+
+
+def update_remote_credentials(remote, client_id, client_secret):
+    """(success, message) for the Cloud Backup page's Renew Token
+    section -- attaches a custom OAuth client_id/secret to an ALREADY-
+    EXISTING remote (e.g. one connected before this feature existed,
+    still on rclone's shared default client). Doesn't touch the token --
+    the existing connection keeps working until the next "Log In via
+    Browser", which will then pick up these credentials automatically
+    (see start_remote_authorize()).
+    """
+    rclone_path = rclone_binary_path()
+    if not rclone_path:
+        return False, t('cloud_test_not_found')
+
+    remote = (remote or '').strip()
+    if not remote:
+        return False, t('cloud_renew_error_no_remote')
+    _, remotes = list_rclone_remotes()
+    if remote not in remotes:
+        return False, t('cloud_renew_error_unknown_remote', remote=remote)
+
+    client_id = (client_id or '').strip()
+    client_secret = (client_secret or '').strip()
+    if not client_id or not client_secret:
+        return False, t('cloud_create_error_partial_credentials')
+
     try:
         result = subprocess.run(
-            [rclone_path, 'config', 'create', name, backend_type, '--non-interactive'],
+            [rclone_path, 'config', 'update', remote, 'client_id', client_id, 'client_secret', client_secret, '--non-interactive'],
             capture_output=True, text=True, timeout=20,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
@@ -182,7 +254,7 @@ def create_remote(name, backend_type):
     if result.returncode != 0:
         return False, t('cloud_create_error_rclone_failed', error=(result.stderr.strip() or result.stdout.strip() or t('hooks_no_error_output')))
 
-    return True, t('cloud_create_success', name=name)
+    return True, t('cloud_credentials_updated', remote=remote)
 
 
 def renew_remote_token(remote, token_json):
@@ -294,9 +366,26 @@ def start_remote_authorize(remote):
         if any(j['status'] == 'waiting' for j in _authorize_jobs.values()):
             return None, None, t('cloud_authorize_error_already_running')
 
+    authorize_cmd = [rclone_path, 'authorize', backend_type, '--auth-no-open-browser']
+    # `rclone authorize <type>` alone always runs against rclone's own
+    # shared default OAuth client for that backend -- it has no idea
+    # which named remote this is for, so it can't pick up a custom
+    # client_id/secret on its own even if one is stored on the remote.
+    # Confirmed live this matters: that shared client's request quota is
+    # pooled across every rclone install worldwide, and a sync with
+    # enough files (this session's real one) can exhaust it on its own
+    # well before bandwidth becomes the limit. Passing these backend-
+    # specific flags (confirmed they exist: --drive-client-id, --
+    # dropbox-client-id, etc., one per KNOWN_REMOTE_TYPES entry) is what
+    # actually routes the OAuth flow through the user's own app instead.
+    client_id = get_remote_client_id(remote)
+    client_secret = _get_remote_config_field(remote, 'client_secret')
+    if client_id and client_secret:
+        authorize_cmd += [f'--{backend_type}-client-id={client_id}', f'--{backend_type}-client-secret={client_secret}']
+
     try:
         process = subprocess.Popen(
-            [rclone_path, 'authorize', backend_type, '--auth-no-open-browser'],
+            authorize_cmd,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
         )
     except OSError as e:
