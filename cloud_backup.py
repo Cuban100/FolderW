@@ -480,6 +480,19 @@ def sync_to_cloud():
     if load_env_value('CLOUD_SYNC_ENABLED') != '1':
         return True, "Cloud sync disabled"
 
+    if is_cloud_sync_running():
+        # Confirmed live: nothing previously stopped two calls from
+        # racing -- a manually-triggered sync was still running when a
+        # second, watchdog-triggered backup completed and called this
+        # again, launching a SECOND rclone process against the exact
+        # same source/remote at the same time. Both then spent 10+ hours
+        # fighting each other (duplicate checks, contended file state,
+        # roughly double the API request volume triggering harsher
+        # Google Drive rate-limiting) instead of one properly finishing.
+        message = "Cloud sync already in progress -- skipping this trigger rather than racing a second rclone process against the same destination."
+        logger.warning(message)
+        return True, message
+
     remote = (load_env_value('CLOUD_SYNC_REMOTE') or '').strip()
     remote_path = (load_env_value('CLOUD_SYNC_REMOTE_PATH') or '').strip()
     bwlimit = (load_env_value('CLOUD_SYNC_BWLIMIT') or '').strip()
