@@ -788,7 +788,7 @@
                                 <th>{{ t('dashboard_cloud_sync_col_duration') }}</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="cloud-sync-history-body">
                             {% for run in cloud_sync_history %}
                             <tr class="{{ 'failed' if run.status != 'success' else '' }}" {% if run.error_message %}title="{{ run.error_message }}"{% endif %}>
                                 <td>{{ run.timestamp }}</td>
@@ -1029,6 +1029,25 @@
                 setStatIfPresent('cloud-sync-data-value', data.cloud_sync_last_bytes_display, t('common_not_available'));
                 setStatIfPresent('cloud-sync-duration-value', data.cloud_sync_last_duration_display, t('common_not_available'));
                 setStatIfPresent('cloud-sync-speed-value', data.cloud_sync_last_speed_display, t('common_not_available'));
+                const historyBody = document.getElementById('cloud-sync-history-body');
+                if (historyBody && Array.isArray(data.cloud_sync_history)) {
+                    historyBody.innerHTML = '';
+                    data.cloud_sync_history.forEach(run => {
+                        const tr = document.createElement('tr');
+                        if (run.status !== 'success') tr.className = 'failed';
+                        if (run.error_message) tr.title = run.error_message;
+                        [run.timestamp,
+                         run.status === 'success' ? t('cloud_history_status_success') : t('cloud_history_status_failed'),
+                         run.files_transferred,
+                         run.bytes_display,
+                         run.duration_display].forEach(text => {
+                            const td = document.createElement('td');
+                            td.textContent = text;
+                            tr.appendChild(td);
+                        });
+                        historyBody.appendChild(tr);
+                    });
+                }
                 const runningIndicator = document.getElementById('cloud-sync-running-indicator');
                 if (runningIndicator) runningIndicator.style.display = data.cloud_sync_running ? 'block' : 'none';
 
