@@ -1076,6 +1076,19 @@
             }
         }
 
+        // Self-rescheduling rather than a fixed setInterval: while a
+        // cloud sync is running, poll every 3s so the bar/indicator
+        // clear promptly once it exits -- confirmed live, the desktop
+        // notification fires the instant rclone exits, but a flat 30s
+        // poll left the bar showing "syncing" for up to 30s afterward,
+        // a confusing gap between the two. Idle stays at 30s.
+        async function scheduleDashboardStatsRefresh() {
+            await refreshDashboardStats();
+            const runningIndicator = document.getElementById('cloud-sync-running-indicator');
+            const stillRunning = runningIndicator && runningIndicator.style.display !== 'none';
+            setTimeout(scheduleDashboardStatsRefresh, stillRunning ? 3000 : 30000);
+        }
+
         // Watchdog live status: "instant" detection feedback (a brief
         // pulse on the dot when a new change comes in) plus a countdown
         // to when the pending backup will actually run. The countdown
@@ -1369,10 +1382,9 @@
 
         checkForUpdates();
 
-        // 30s: frequent enough that a background backup's effect on the
-        // numbers shows up promptly, cheap enough not to matter (a few
-        // DB reads, no disk scans) -- see /dashboard-stats.
-        setInterval(refreshDashboardStats, 30000);
+        // 30s idle / 3s while a cloud sync is running -- see
+        // scheduleDashboardStatsRefresh() above.
+        scheduleDashboardStatsRefresh();
 
         // Watchdog line: 1s local tick for a smooth countdown, 3s server
         // poll (much cheaper than /dashboard-stats -- just 3 DB reads)
