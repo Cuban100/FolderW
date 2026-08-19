@@ -5,7 +5,8 @@ import fnmatch
 import threading
 from db_operations import load_env_value, load_other_variables, set_database_value
 from backup_hooks import run_backup_script_with_hooks
-from cloud_backup import sync_to_cloud
+from cloud_backup import sync_to_cloud, notify_backup_complete
+from notifications import notify
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from loguru import logger
@@ -101,9 +102,10 @@ def run_backup_script():
         script_path = os.path.join(os.path.dirname(__file__), script_name)
         result = run_backup_script_with_hooks([python_path, script_path], check=True, capture_output=True, text=True)
         logger.info(f"Backup script output: {result.stdout}")
-        sync_to_cloud()
+        notify_backup_complete(sync_to_cloud())
     except subprocess.CalledProcessError as e:
         logger.error(f"Backup script failed with error: {e.stderr}")
+        notify("FolderW: Backup Failed", f"A backup run failed (exit code {e.returncode}). Check the FolderW logs for details.", level='critical')
 
 def run_hourly_backup():
     logger.info("Running hourly backup")

@@ -635,8 +635,11 @@ def sync_to_cloud():
         log_start_offset = 0
 
     def _fail(message):
+        # Not notified here -- the caller (run_backup_script()/
+        # run_regular_backup()) sends one combined notification covering
+        # both the local backup and this result, via notify_backup_
+        # complete(), instead of a separate popup per step.
         logger.error(message)
-        notify("FolderW: Cloud sync failed", message, level='critical')
         set_database_value('CLOUD_SYNC_LAST_STATUS', 'failed')
         set_database_value('CLOUD_SYNC_LAST_TIME', str(time.time()))
         _, stats = _parse_sync_log(CLOUD_SYNC_LOG_FILE, log_start_offset)
@@ -721,10 +724,35 @@ def sync_to_cloud():
             duration_seconds=stats.get('elapsedTime', 0.0),
             avg_speed_bps=stats.get('speed', 0.0),
         )
-        notify("FolderW: Cloud sync", message, level='normal')
         return True, message
     except OSError as e:
         return _fail(f"Could not run rclone: {e}")
+
+
+def notify_backup_complete(cloud_sync_result):
+    """One notification per completed backup cycle -- covers the local
+    backup (only called after it's already known to have succeeded) and
+    cloud sync together, since sync_to_cloud() itself no longer notifies
+    on its own. Replaces what used to be either a missing local-backup
+    notification (rsync_event_handler.py's watchdog path had none at
+    all) or two separate popups for one cycle -- confirmed live as
+    exactly the "only hearing about rclone, backup itself is silent"
+    complaint this was built to fix.
+
+    cloud_sync_result: sync_to_cloud()'s own (success, message) return
+    value. Ignored (treated as local-only) when cloud sync is disabled,
+    since sync_to_cloud() itself returns a no-op (True, "disabled")
+    rather than None in that case -- checked here rather than trusting
+    the message text, which would be fragile.
+    """
+    if cloud_sync_result is None or load_env_value('CLOUD_SYNC_ENABLED') != '1':
+        notify("FolderW: Backup", "Backup completed successfully.", level='normal')
+        return
+    cloud_success, cloud_message = cloud_sync_result
+    if cloud_success:
+        notify("FolderW: Backup", "Backup completed successfully. Cloud sync succeeded.", level='normal')
+    else:
+        notify("FolderW: Backup", f"Backup completed successfully, but cloud sync failed: {cloud_message}", level='critical')
 
 
 def is_cloud_sync_running():
