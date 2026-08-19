@@ -1744,6 +1744,31 @@ async def statistics_page(request: Request):
     })
 
 
+@app.get("/statistics/cloud-sync-refresh")
+async def statistics_cloud_sync_refresh():
+    # Statistics page had no refresh mechanism at all for this section --
+    # confirmed live: a tab left open across newly-completed syncs kept
+    # showing whatever was true at page load. Summary text is pre-
+    # formatted server-side (same pattern as cloud_sync_last_display)
+    # rather than shipping i18n.js to this page just for one pluralized
+    # line.
+    summary = get_cloud_sync_stats_summary()
+    summary_text = None
+    if summary["total_runs"]:
+        summary_text = (
+            t('stats_cloud_summary_one', n=summary["total_runs"]) if summary["total_runs"] == 1
+            else t('stats_cloud_summary_other', n=summary["total_runs"])
+        )
+        if summary["success_rate"] is not None:
+            summary_text += f" · {t('stats_summary_success_rate', pct=summary['success_rate'])}"
+        summary_text += f" · {t('stats_cloud_summary_transferred', mb=round(summary['total_bytes_transferred'] / 1048576, 1))}"
+    return JSONResponse({
+        "has_runs": bool(summary["total_runs"]),
+        "series": get_cloud_sync_stats_series(),
+        "summary_text": summary_text,
+    })
+
+
 @app.get("/statistics/session-detail")
 async def statistics_session_detail(session: int):
     # Drill-down target: clicking a point/bar on the Statistics page asks

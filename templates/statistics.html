@@ -230,7 +230,7 @@
                     {{ t('stats_cloud_empty') }}
                 </div>
                 {% else %}
-                <p class="text-sm text-[var(--text-muted)] mb-6">
+                <p class="text-sm text-[var(--text-muted)] mb-6" id="cloud-summary-text">
                     {{ t('stats_cloud_summary_one', n=cloud_sync_summary.total_runs) if cloud_sync_summary.total_runs == 1 else t('stats_cloud_summary_other', n=cloud_sync_summary.total_runs) }}
                     {% if cloud_sync_summary.success_rate is not none %}&middot; {{ t('stats_summary_success_rate', pct=cloud_sync_summary.success_rate) }}{% endif %}
                     &middot; {{ t('stats_cloud_summary_transferred', mb=(cloud_sync_summary.total_bytes_transferred / 1048576) | round(1)) }}
@@ -248,14 +248,14 @@
                 <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
                     <h3 class="text-lg font-semibold mb-3">{{ t('stats_cloud_history_title') }}</h3>
                     <div class="overflow-x-auto">
-                        <table class="min-w-full text-sm">
+                        <table class="w-full text-sm table-fixed">
                             <thead>
                                 <tr class="text-[var(--text-muted)] border-b border-[var(--border)]">
-                                    <th class="py-1 pr-3 font-medium text-left">{{ t('stats_cloud_col_when') }}</th>
-                                    <th class="py-1 pr-3 font-medium text-left">{{ t('stats_cloud_col_status') }}</th>
-                                    <th class="py-1 pr-3 font-medium text-left">{{ t('stats_cloud_col_files') }}</th>
-                                    <th class="py-1 pr-3 font-medium text-left">{{ t('stats_cloud_col_data') }}</th>
-                                    <th class="py-1 font-medium text-left">{{ t('stats_cloud_col_duration') }}</th>
+                                    <th class="py-1 pr-3 font-medium text-left" style="width:28%">{{ t('stats_cloud_col_when') }}</th>
+                                    <th class="py-1 pr-3 font-medium text-left" style="width:14%">{{ t('stats_cloud_col_status') }}</th>
+                                    <th class="py-1 pr-3 font-medium text-left" style="width:12%">{{ t('stats_cloud_col_files') }}</th>
+                                    <th class="py-1 pr-3 font-medium text-left" style="width:16%">{{ t('stats_cloud_col_data') }}</th>
+                                    <th class="py-1 font-medium text-left" style="width:30%">{{ t('stats_cloud_col_duration') }}</th>
                                 </tr>
                             </thead>
                             <tbody id="cloud-history-body"></tbody>
@@ -662,7 +662,7 @@
                 ];
                 cells.forEach((text, i) => {
                     const td = document.createElement('td');
-                    td.className = i < cells.length - 1 ? 'py-1 pr-3' : 'py-1';
+                    td.className = (i < cells.length - 1 ? 'py-1 pr-3' : 'py-1') + ' text-left truncate';
                     td.textContent = text;
                     tr.appendChild(td);
                 });
@@ -778,6 +778,31 @@
             renderCloudChart();
             renderCloudHistoryTable();
             window.addEventListener('resize', renderCloudChart);
+
+            // Page has no other refresh mechanism -- confirmed live: a
+            // tab left open across new completed syncs kept showing the
+            // data from whenever it was first loaded. Only wired up when
+            // the section actually rendered (cloud_sync_enabled and at
+            // least one run already existed at load time) -- a source
+            // that goes from zero runs to its first one still needs a
+            // manual reload, since the empty-state markup has no chart/
+            // table container for this to populate.
+            async function refreshCloudStats() {
+                try {
+                    const response = await fetch('/statistics/cloud-sync-refresh');
+                    const data = await response.json();
+                    if (!data.has_runs) return;
+                    allCloudRuns.length = 0;
+                    allCloudRuns.push(...data.series);
+                    renderCloudChart();
+                    renderCloudHistoryTable();
+                    const summaryEl = document.getElementById('cloud-summary-text');
+                    if (summaryEl && data.summary_text) summaryEl.textContent = data.summary_text;
+                } catch (e) {
+                    // Transient fetch failure -- next poll tries again.
+                }
+            }
+            setInterval(refreshCloudStats, 30000);
         }
     </script>
 </body>
