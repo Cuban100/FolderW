@@ -674,7 +674,14 @@ def sync_to_cloud():
         # Without this, rclone refuses to follow symlinks (e.g. a venv's
         # bin/python3 -> python3.12) and just skips them with a NOTICE --
         # silently incomplete instead of a byte-for-byte restorable copy.
-        '--copy-links',
+        # --copy-links was tried first but follows symlinks by copying
+        # their target's full content -- for a self-referential symlink
+        # like a venv's lib64 -> lib, that means uploading everything
+        # under lib/ a second time under lib64/. --links instead stores
+        # the symlink itself as a small .rclonelink text file (just the
+        # target path), no duplication, and it restores back into a real
+        # symlink with `rclone copy -l`.
+        '--links',
         # Confirmed live: the real bottleneck wasn't upload bandwidth or
         # even --transfers concurrency -- it was rclone walking the
         # destination's deep Snapshot/Day/Time tree with one API call
