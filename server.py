@@ -77,7 +77,7 @@ STATIC_VERSION = int(max(
 
 # Shown in templates/_footer.html on every page. Bump by hand on releases --
 # there's no build/tag step in this project that could derive it automatically.
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 
 def _global_template_context(request):
