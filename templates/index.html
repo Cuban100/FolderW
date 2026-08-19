@@ -756,20 +756,20 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">{{ t('dashboard_cloud_sync_files') }}</div>
-                        <div class="stat-value">{{ cloud_sync_last_files if cloud_sync_last_files is not none else t('common_not_available') }}</div>
+                        <div class="stat-value" id="cloud-sync-files-value">{{ cloud_sync_last_files if cloud_sync_last_files is not none else t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">{{ t('dashboard_cloud_sync_data') }}</div>
-                        <div class="stat-value">{{ cloud_sync_last_bytes_display or t('common_not_available') }}</div>
+                        <div class="stat-value" id="cloud-sync-data-value">{{ cloud_sync_last_bytes_display or t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">{{ t('dashboard_cloud_sync_duration') }}</div>
-                        <div class="stat-value">{{ cloud_sync_last_duration_display or t('common_not_available') }}</div>
+                        <div class="stat-value" id="cloud-sync-duration-value">{{ cloud_sync_last_duration_display or t('common_not_available') }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">{{ t('dashboard_cloud_sync_speed') }}</div>
                         <div class="stat-value">
-                            {{ cloud_sync_last_speed_display or t('common_not_available') }}
+                            <span id="cloud-sync-speed-value">{{ cloud_sync_last_speed_display or t('common_not_available') }}</span>
                             {% if cloud_sync_bwlimit_display %}<div style="font-size:12px;color:var(--text-muted);font-weight:400;margin-top:2px;">{{ t('dashboard_cloud_sync_bwlimit_note', limit=cloud_sync_bwlimit_display) }}</div>{% endif %}
                         </div>
                     </div>
@@ -1025,6 +1025,10 @@
                 setStatIfPresent('last-session-files-value', data.last_session_files, '0');
                 setStatIfPresent('snapshot-count-value', data.snapshot_count, '0');
                 setStatIfPresent('cloud-sync-value', data.cloud_sync_last_display, t('common_never'));
+                setStatIfPresent('cloud-sync-files-value', data.cloud_sync_last_files, t('common_not_available'));
+                setStatIfPresent('cloud-sync-data-value', data.cloud_sync_last_bytes_display, t('common_not_available'));
+                setStatIfPresent('cloud-sync-duration-value', data.cloud_sync_last_duration_display, t('common_not_available'));
+                setStatIfPresent('cloud-sync-speed-value', data.cloud_sync_last_speed_display, t('common_not_available'));
                 const runningIndicator = document.getElementById('cloud-sync-running-indicator');
                 if (runningIndicator) runningIndicator.style.display = data.cloud_sync_running ? 'block' : 'none';
 

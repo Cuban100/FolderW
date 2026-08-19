@@ -1696,6 +1696,10 @@ async def dashboard_stats():
         "last_session_files": stats["last_session_files"],
         "snapshot_count": stats["snapshot_count"],
         "cloud_sync_last_display": stats["cloud_sync_last_display"],
+        "cloud_sync_last_files": stats["cloud_sync_last_files"],
+        "cloud_sync_last_bytes_display": stats["cloud_sync_last_bytes_display"],
+        "cloud_sync_last_duration_display": stats["cloud_sync_last_duration_display"],
+        "cloud_sync_last_speed_display": stats["cloud_sync_last_speed_display"],
         "cloud_sync_running": stats["cloud_sync_running"],
         **get_cloud_sync_progress(),
     })
