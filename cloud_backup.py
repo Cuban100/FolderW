@@ -621,10 +621,9 @@ def sync_to_cloud():
     `rclone sync` makes the remote match the source EXACTLY, including
     deleting remote files no longer present in SRC_DIR -- same
     mirroring philosophy as the local backup's own `rsync --delete`.
-    This is why CLOUD_SYNC_REMOTE_PATH should always be a dedicated
-    subfolder, never bare remote root (see cloud_backup.html's help
-    text) -- nothing here validates that at sync time, only at save
-    time (see server.py's /cloud-backup/save).
+    The remote folder is always a dedicated subfolder named after
+    SRC_DIR itself (never bare remote root), so this can safely delete
+    without ever touching anything else on the remote.
     """
     if load_env_value('CLOUD_SYNC_ENABLED') != '1':
         return True, "Cloud sync disabled"
@@ -643,7 +642,6 @@ def sync_to_cloud():
         return True, message
 
     remote = (load_env_value('CLOUD_SYNC_REMOTE') or '').strip()
-    remote_path = (load_env_value('CLOUD_SYNC_REMOTE_PATH') or '').strip()
     bwlimit = (load_env_value('CLOUD_SYNC_BWLIMIT') or '').strip()
 
     try:
@@ -675,7 +673,12 @@ def sync_to_cloud():
         return _fail("Cloud sync is enabled but no remote is configured.")
 
     src_dir = load_env_value('SRC_DIR')
-    target = f"{remote}:{remote_path}" if remote_path else f"{remote}:"
+    # The remote folder name always matches the source folder's own name --
+    # never separately configured, so there's no way for it to drift from
+    # what's actually being backed up (confirmed live: a user-editable path
+    # here caused real confusion about which folder was the source).
+    remote_path = os.path.basename(src_dir.rstrip('/'))
+    target = f"{remote}:{remote_path}"
 
     os.makedirs(os.path.dirname(CLOUD_SYNC_LOG_FILE), exist_ok=True)
     cmd = [

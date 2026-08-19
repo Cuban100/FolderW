@@ -1302,7 +1302,7 @@ def _cloud_backup_page_context():
     return {
         "cloud_sync_enabled": load_env_value('CLOUD_SYNC_ENABLED') == '1',
         "cloud_sync_remote": saved_remote,
-        "cloud_sync_remote_path": load_env_value('CLOUD_SYNC_REMOTE_PATH') or '',
+        "cloud_sync_remote_path": os.path.basename((load_env_value('SRC_DIR') or '').rstrip('/')),
         "cloud_sync_bwlimit": load_env_value('CLOUD_SYNC_BWLIMIT') or '',
         "rclone_installed": rclone_installed,
         "rclone_remotes": remotes,
@@ -1359,7 +1359,6 @@ async def cloud_backup_update_credentials(remote: str = Form(""), client_id: str
 async def cloud_backup_save(request: Request,
                              cloud_sync_enabled: str = Form(None),
                              cloud_sync_remote: str = Form(""),
-                             cloud_sync_remote_path: str = Form(""),
                              cloud_sync_bwlimit: str = Form("")):
     enabled = cloud_sync_enabled is not None
     remote = cloud_sync_remote.strip()
@@ -1389,7 +1388,6 @@ async def cloud_backup_save(request: Request,
     save_env_values({
         "CLOUD_SYNC_ENABLED": "1" if enabled else "0",
         "CLOUD_SYNC_REMOTE": remote,
-        "CLOUD_SYNC_REMOTE_PATH": cloud_sync_remote_path.strip(),
         "CLOUD_SYNC_BWLIMIT": cloud_sync_bwlimit.strip(),
     })
     return templates.TemplateResponse("cloud_backup.html", {

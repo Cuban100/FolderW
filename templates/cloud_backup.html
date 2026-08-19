@@ -165,10 +165,9 @@
                             {{ t('cloud_remote_path_help') | safe }}
                         </div>
                     </div>
-                    <input type="text" id="cloud_sync_remote_path" name="cloud_sync_remote_path"
-                           class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)]"
-                           value="{{ cloud_sync_remote_path if cloud_sync_remote_path else (full_name or 'FolderW-Backup') }}"
-                           placeholder="{{ t('cloud_remote_path_placeholder') }}">
+                    <input type="text" id="cloud_sync_remote_path"
+                           class="w-full border-2 border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)] opacity-75 cursor-not-allowed"
+                           value="{{ cloud_sync_remote_path }}" readonly>
                 </div>
 
                 <div>
