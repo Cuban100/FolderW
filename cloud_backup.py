@@ -671,6 +671,10 @@ def sync_to_cloud():
         '--timeout', RCLONE_TIMEOUT, '--contimeout', RCLONE_CONTIMEOUT,
         '--log-file', CLOUD_SYNC_LOG_FILE, '--log-level', 'INFO', '--use-json-log',
         '--stats', PROGRESS_STATS_INTERVAL,
+        # Without this, rclone refuses to follow symlinks (e.g. a venv's
+        # bin/python3 -> python3.12) and just skips them with a NOTICE --
+        # silently incomplete instead of a byte-for-byte restorable copy.
+        '--copy-links',
         # Confirmed live: the real bottleneck wasn't upload bandwidth or
         # even --transfers concurrency -- it was rclone walking the
         # destination's deep Snapshot/Day/Time tree with one API call
