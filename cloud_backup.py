@@ -818,6 +818,8 @@ def get_cloud_sync_progress():
     total_bytes = stats.get('totalBytes', 0)
     eta_seconds = stats.get('eta')
     current_files = [os.path.basename(f['name']) for f in (stats.get('transferring') or []) if f.get('name')]
+    deletes = stats.get('deletes', 0)
+    deleted_dirs = stats.get('deletedDirs', 0)
 
     return {
         "cloud_sync_progress_running": True,
@@ -827,6 +829,10 @@ def get_cloud_sync_progress():
         "cloud_sync_progress_eta_display": _format_duration_seconds(eta_seconds) if eta_seconds else None,
         "cloud_sync_progress_speed_display": f"{human_readable_size(stats.get('speed', 0))}/s",
         "cloud_sync_progress_current_files": current_files[:3],
+        # rclone tracks deletes separately from transfers -- surfaced so
+        # a cleanup-heavy run (removing stale remote files) doesn't look
+        # stalled at 100% while it's still doing real, uncounted work.
+        "cloud_sync_progress_deletes_display": f"{deletes} file(s), {deleted_dirs} folder(s) deleted" if (deletes or deleted_dirs) else None,
     }
 
 
