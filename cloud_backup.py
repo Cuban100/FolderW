@@ -9,7 +9,7 @@ import time
 import uuid
 import psutil
 from db_operations import load_env_value, set_database_value, get_database_value, record_cloud_sync_run, list_cloud_sync_runs
-from notifications import notify, _notify_desktop
+from notifications import notify
 from statistics_operations import human_readable_size
 from translations import t
 from loguru import logger
@@ -528,8 +528,9 @@ def _parse_sync_log(log_file, start_offset):
     it more than once as the sync progresses. None if the run produced
     no stats line at all (e.g. it failed before rclone got that far).
 
-    Shared by _notify_synced_files() and sync_to_cloud()'s history
-    recording so the log is only read and parsed once per run.
+    `copied_files` is used as a files_transferred fallback (see
+    sync_to_cloud()) for the rare case rclone's own stats line is
+    missing.
     """
     try:
         with open(log_file, 'r') as f:
@@ -552,22 +553,6 @@ def _parse_sync_log(log_file, start_offset):
         if isinstance(entry.get('stats'), dict):
             stats = entry['stats']
     return copied, stats
-
-
-def _notify_synced_files(copied_files):
-    """Fires one desktop notify-send per file sync_to_cloud() actually
-    copied -- explicitly requested (per-file, not a single summary), and
-    desktop-only by design: routing this through notify() would also fan
-    it out to every configured Apprise URL, which would turn a big sync
-    into a phone-buzzing storm on Pushover/ntfy. Gated on
-    NOTIFY_SEND_ALWAYS like every other desktop notification, so enabling
-    cloud sync alone can't surprise someone who's opted out of desktop
-    notifications.
-    """
-    if load_env_value('NOTIFY_SEND_ALWAYS') != '1':
-        return
-    for name in copied_files:
-        _notify_desktop("FolderW: Cloud sync", f"Sent: {name}", 'low')
 
 
 def sync_to_cloud():
@@ -736,7 +721,7 @@ def sync_to_cloud():
             duration_seconds=stats.get('elapsedTime', 0.0),
             avg_speed_bps=stats.get('speed', 0.0),
         )
-        _notify_synced_files(copied_files)
+        notify("FolderW: Cloud sync", message, level='normal')
         return True, message
     except OSError as e:
         return _fail(f"Could not run rclone: {e}")
