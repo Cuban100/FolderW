@@ -1044,7 +1044,14 @@
                             parts.push(data.cloud_sync_progress_current_files[0]);
                         }
                         const suffix = parts.length ? ` (${parts.join(', ')})` : '';
-                        if (data.cloud_sync_progress_percent !== null && data.cloud_sync_progress_percent !== undefined) {
+                        // Deletions have no known total up front (rclone
+                        // discovers them while walking, unlike transfers),
+                        // so a 100%-full bar while deletes are still
+                        // climbing looks finished when it isn't -- shown
+                        // as active/animated instead, same as the no-
+                        // percent-yet case, until the process actually exits.
+                        const stillDeleting = data.cloud_sync_progress_deletes_display && data.cloud_sync_progress_percent >= 100;
+                        if (data.cloud_sync_progress_percent !== null && data.cloud_sync_progress_percent !== undefined && !stillDeleting) {
                             cloudBar.classList.add('determinate');
                             cloudBar.style.width = data.cloud_sync_progress_percent + '%';
                             cloudText.textContent = `${data.cloud_sync_progress_percent}%${suffix}`;
