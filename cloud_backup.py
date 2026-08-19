@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 import psutil
-from db_operations import load_env_value, load_other_variables, set_database_value, get_database_value, record_cloud_sync_run, list_cloud_sync_runs
+from db_operations import load_env_value, set_database_value, get_database_value, record_cloud_sync_run, list_cloud_sync_runs
 from notifications import notify, _notify_desktop
 from statistics_operations import human_readable_size
 from translations import t
@@ -571,26 +571,39 @@ def _notify_synced_files(copied_files):
 
 
 def sync_to_cloud():
-    """Mirrors ONLY the Full Backup folder (the single always-current,
-    de-duplicated mirror of SRC_DIR) to the configured rclone remote via
-    `rclone sync` -- deliberately NOT the Snapshots folder alongside it.
+    """Mirrors SRC_DIR directly to the configured rclone remote via
+    `rclone sync` -- NOT the Full Backup or Snapshots folders under
+    BASE_DIR.
 
-    That exclusion is the actual fix for the sync that used to take
-    hours and exhaust Google's API quota well before bandwidth became
-    the limit: Snapshots are cheap locally because unchanged files are
-    hardlinked (near-zero extra disk space per snapshot), but rclone has
-    no concept of a hardlink -- it would upload every snapshot as a
-    completely independent full copy (confirmed live: ~23x inflation,
-    tens of thousands of files for what was actually a 70MB source).
-    Syncing only Full Backup means rclone's own diff against the remote
-    does exactly what it should: transfer only what's genuinely new or
-    changed since the last sync, not every historical version of it.
+    Only syncing the current source (not Snapshots) is the actual fix
+    for the sync that used to take hours and exhaust Google's API quota
+    well before bandwidth became the limit: Snapshots are cheap locally
+    because unchanged files are hardlinked (near-zero extra disk space
+    per snapshot), but rclone has no concept of a hardlink -- it would
+    upload every snapshot as a completely independent full copy
+    (confirmed live: ~23x inflation, tens of thousands of files for what
+    was actually a 70MB source). Syncing only the current state means
+    rclone's own diff against the remote does exactly what it should:
+    transfer only what's genuinely new or changed since the last sync.
 
     The real tradeoff: the cloud copy only ever holds CURRENT state, not
     historical point-in-time snapshots the way the local Snapshots
     folder does. That's intentional -- local retention already covers
     version history; the cloud's job here is offsite disaster recovery
     of current state, not a second copy of the whole snapshot history.
+
+    SRC_DIR over Full Backup is a deliberate choice, made after Full
+    Backup produced two real bugs live: 1,600+ stale files that no
+    longer exist in SRC_DIR but were never pruned from Full Backup
+    (incremental retention doesn't delete), and Full Backup inheriting
+    SRC_DIR's own symlinks (rsync preserves them), which duplicated data
+    under --copy-links. Syncing SRC_DIR is what the user actually wants
+    backed up. Caveat: unlike Full Backup (normalized to mode 775 by the
+    local backup step), SRC_DIR can contain root-owned/restrictive-
+    permission files on some installs (see docs/permissions.md) that
+    this process -- running as the regular user, not root -- won't be
+    able to read; those are silently skipped by rclone, same as any
+    local tool without root's elevated read access.
 
     Called unconditionally right after every SUCCESSFUL local backup
     (main_backup.py's run_regular_backup(), rsync_event_handler.py's
@@ -606,7 +619,7 @@ def sync_to_cloud():
     failed.
 
     `rclone sync` makes the remote match the source EXACTLY, including
-    deleting remote files no longer present in Full Backup -- same
+    deleting remote files no longer present in SRC_DIR -- same
     mirroring philosophy as the local backup's own `rsync --delete`.
     This is why CLOUD_SYNC_REMOTE_PATH should always be a dedicated
     subfolder, never bare remote root (see cloud_backup.html's help
@@ -661,12 +674,12 @@ def sync_to_cloud():
     if not remote:
         return _fail("Cloud sync is enabled but no remote is configured.")
 
-    full_backup = load_other_variables('full_backup')
+    src_dir = load_env_value('SRC_DIR')
     target = f"{remote}:{remote_path}" if remote_path else f"{remote}:"
 
     os.makedirs(os.path.dirname(CLOUD_SYNC_LOG_FILE), exist_ok=True)
     cmd = [
-        rclone_path, 'sync', full_backup, target,
+        rclone_path, 'sync', src_dir, target,
         '--transfers', RCLONE_TRANSFERS, '--checkers', RCLONE_CHECKERS,
         '--timeout', RCLONE_TIMEOUT, '--contimeout', RCLONE_CONTIMEOUT,
         '--log-file', CLOUD_SYNC_LOG_FILE, '--log-level', 'INFO', '--use-json-log',
@@ -697,7 +710,7 @@ def sync_to_cloud():
     if bwlimit:
         cmd += ['--bwlimit', bwlimit]
 
-    logger.info(f"Starting cloud sync: {full_backup} -> {target}")
+    logger.info(f"Starting cloud sync: {src_dir} -> {target}")
     # So get_cloud_sync_progress() (running in the OTHER process -- the
     # web dashboard, not this backup worker) knows where THIS run's own
     # log output starts, the same reason log_start_offset exists at all:
