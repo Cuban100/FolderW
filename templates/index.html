@@ -189,8 +189,18 @@
         .stats-grid-4col {
             grid-template-columns: repeat(4, 1fr);
         }
+        /* Same fixed-columns reasoning as -4col, sized for the Cloud
+           Sync section's 5 cards specifically -- reusing -4col there
+           left the 5th card alone on its own row instead of all 5
+           inline. */
+        .stats-grid-5col {
+            grid-template-columns: repeat(5, 1fr);
+        }
         @media (max-width: 900px) {
             .stats-grid-4col {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .stats-grid-5col {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
@@ -753,7 +763,11 @@
                          style="{% if cloud_sync_progress_percent is not none %}width: {{ cloud_sync_progress_percent }}%;{% endif %}"></div>
                 </div>
                 <div class="progress-bar-text" id="cloud-sync-progress-text">{% if cloud_sync_running and cloud_sync_progress_percent is not none %}{{ cloud_sync_progress_percent }}%{% endif %}</div>
-                <div class="stats-grid stats-grid-4col">
+                <div class="stats-grid stats-grid-5col">
+                    <div class="stat-card">
+                        <div class="stat-label">{{ t('dashboard_cloud_sync_transferred') }}</div>
+                        <div class="stat-value" id="cloud-sync-transferred-value">{{ cloud_sync_last_transferred if cloud_sync_last_transferred is not none else t('common_not_available') }}</div>
+                    </div>
                     <div class="stat-card">
                         <div class="stat-label">{{ t('dashboard_cloud_sync_files') }}</div>
                         <div class="stat-value" id="cloud-sync-files-value">{{ cloud_sync_last_files if cloud_sync_last_files is not none else t('common_not_available') }}</div>
@@ -1024,6 +1038,7 @@
                 setStatIfPresent('last-session-value', '#' + data.last_session, '#0');
                 setStatIfPresent('last-session-files-value', data.last_session_files, '0');
                 setStatIfPresent('snapshot-count-value', data.snapshot_count, '0');
+                setStatIfPresent('cloud-sync-transferred-value', data.cloud_sync_last_transferred, t('common_not_available'));
                 setStatIfPresent('cloud-sync-files-value', data.cloud_sync_last_files, t('common_not_available'));
                 setStatIfPresent('cloud-sync-data-value', data.cloud_sync_last_bytes_display, t('common_not_available'));
                 setStatIfPresent('cloud-sync-duration-value', data.cloud_sync_last_duration_display, t('common_not_available'));

@@ -885,6 +885,7 @@ def get_cloud_sync_dashboard_stats():
     bwlimit_display = (load_env_value('CLOUD_SYNC_BWLIMIT') or '').strip() or None
     if not runs:
         return {
+            "cloud_sync_last_transferred": None,
             "cloud_sync_last_files": None,
             "cloud_sync_last_bytes_display": None,
             "cloud_sync_last_duration_display": None,
@@ -893,16 +894,17 @@ def get_cloud_sync_dashboard_stats():
             "cloud_sync_history": [],
         }
     last = runs[0]
-    # The "Files Transferred" stat card shows an added/deleted breakdown
-    # (t('dashboard_cloud_sync_added_deleted')) rather than one combined
-    # number -- explicitly requested, since "5" alone doesn't say whether
-    # that was 5 uploads, 5 deletions, or some mix. The two Recent Syncs
-    # tables (dashboard + Statistics) keep showing one combined "Files"
-    # count instead -- there's no room for a breakdown per row there, and
-    # a deletion-only sync showing files_transferred alone as 0 (reading
-    # as "nothing happened" despite rclone genuinely deleting a file)
-    # was the actual bug that mattered for those. The two stay separate
-    # columns in the DB regardless (see db_operations.
+    # Two separate stat cards: "Transferred" (cloud_sync_last_transferred,
+    # a plain upload count) and "Added / Deleted" (cloud_sync_last_files,
+    # a formatted t('dashboard_cloud_sync_added_deleted') breakdown) --
+    # explicitly requested split, since one combined number couldn't say
+    # whether a run was uploads, deletions, or a mix. The two Recent
+    # Syncs tables (dashboard + Statistics) keep showing one combined
+    # "Files" count instead -- there's no room for a breakdown per row
+    # there, and a deletion-only sync showing files_transferred alone as
+    # 0 (reading as "nothing happened" despite rclone genuinely deleting
+    # a file) was the actual bug that mattered for those. The two stay
+    # separate columns in the DB regardless (see db_operations.
     # record_cloud_sync_run()), since rclone reports them as distinct
     # counters; only the display combines or formats them.
     history = [
@@ -917,6 +919,7 @@ def get_cloud_sync_dashboard_stats():
         for run in runs
     ]
     return {
+        "cloud_sync_last_transferred": last["files_transferred"] or 0,
         "cloud_sync_last_files": t(
             'dashboard_cloud_sync_added_deleted',
             added=last["files_transferred"] or 0,
