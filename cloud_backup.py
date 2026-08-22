@@ -530,15 +530,22 @@ def _parse_sync_log(log_file, start_offset):
 
     `copied_files` is used as a files_transferred fallback (see
     sync_to_cloud()) for the rare case rclone's own stats line is
-    missing.
+    missing. `new_count` is the subset of `copied_files` rclone logged
+    as "Copied (new)" specifically, not "Copied (replaced existing)" --
+    genuinely new files, distinct from ones that already existed on the
+    remote and just got overwritten with a changed version. Confirmed
+    live: the Added/Deleted stat card was showing files_transferred
+    (new + replaced combined) as "added," which overcounted whenever a
+    run modified existing files rather than adding brand new ones.
     """
     try:
         with open(log_file, 'r') as f:
             f.seek(start_offset)
             new_content = f.read()
     except OSError:
-        return [], None
+        return [], 0, None
     copied = []
+    new_count = 0
     stats = None
     for line in new_content.splitlines():
         line = line.strip()
@@ -548,11 +555,14 @@ def _parse_sync_log(log_file, start_offset):
             entry = json.loads(line)
         except ValueError:
             continue
-        if entry.get('msg') in ('Copied (new)', 'Copied (replaced existing)'):
+        if entry.get('msg') == 'Copied (new)':
+            copied.append(entry.get('object', '?'))
+            new_count += 1
+        elif entry.get('msg') == 'Copied (replaced existing)':
             copied.append(entry.get('object', '?'))
         if isinstance(entry.get('stats'), dict):
             stats = entry['stats']
-    return copied, stats
+    return copied, new_count, stats
 
 
 def sync_to_cloud():
@@ -642,7 +652,7 @@ def sync_to_cloud():
         logger.error(message)
         set_database_value('CLOUD_SYNC_LAST_STATUS', 'failed')
         set_database_value('CLOUD_SYNC_LAST_TIME', str(time.time()))
-        _, stats = _parse_sync_log(CLOUD_SYNC_LOG_FILE, log_start_offset)
+        _, new_count, stats = _parse_sync_log(CLOUD_SYNC_LOG_FILE, log_start_offset)
         stats = stats or {}
         record_cloud_sync_run(
             remote or '(none)', 'failed',
@@ -652,6 +662,7 @@ def sync_to_cloud():
             avg_speed_bps=stats.get('speed', 0.0),
             error_message=message,
             files_deleted=stats.get('deletes', 0),
+            files_added=new_count,
         )
         return False, message
 
@@ -716,7 +727,7 @@ def sync_to_cloud():
         logger.info(message)
         set_database_value('CLOUD_SYNC_LAST_STATUS', 'success')
         set_database_value('CLOUD_SYNC_LAST_TIME', str(time.time()))
-        copied_files, stats = _parse_sync_log(CLOUD_SYNC_LOG_FILE, log_start_offset)
+        copied_files, new_count, stats = _parse_sync_log(CLOUD_SYNC_LOG_FILE, log_start_offset)
         stats = stats or {}
         record_cloud_sync_run(
             remote, 'success',
@@ -725,6 +736,7 @@ def sync_to_cloud():
             duration_seconds=stats.get('elapsedTime', 0.0),
             avg_speed_bps=stats.get('speed', 0.0),
             files_deleted=stats.get('deletes', 0),
+            files_added=new_count,
         )
         return True, message
     except OSError as e:
@@ -895,18 +907,22 @@ def get_cloud_sync_dashboard_stats():
         }
     last = runs[0]
     # Two separate stat cards: "Transferred" (cloud_sync_last_transferred,
-    # a plain upload count) and "Added / Deleted" (cloud_sync_last_files,
-    # a formatted t('dashboard_cloud_sync_added_deleted') breakdown) --
-    # explicitly requested split, since one combined number couldn't say
-    # whether a run was uploads, deletions, or a mix. The two Recent
+    # ALL uploads -- new files plus ones that already existed and just
+    # got overwritten) and "Added / Deleted" (cloud_sync_last_files, a
+    # formatted t('dashboard_cloud_sync_added_deleted') breakdown using
+    # files_added -- genuinely NEW files only, not the modified-existing
+    # ones "Transferred" also counts). Confirmed live: using
+    # files_transferred for "added" overcounted whenever a run modified
+    # existing files rather than adding brand new ones. The two Recent
     # Syncs tables (dashboard + Statistics) keep showing one combined
-    # "Files" count instead -- there's no room for a breakdown per row
-    # there, and a deletion-only sync showing files_transferred alone as
-    # 0 (reading as "nothing happened" despite rclone genuinely deleting
-    # a file) was the actual bug that mattered for those. The two stay
-    # separate columns in the DB regardless (see db_operations.
-    # record_cloud_sync_run()), since rclone reports them as distinct
-    # counters; only the display combines or formats them.
+    # "Files" count (transferred + deleted) instead -- there's no room
+    # for a 3-way breakdown per row there, and a deletion-only sync
+    # showing files_transferred alone as 0 (reading as "nothing
+    # happened" despite rclone genuinely deleting a file) was the actual
+    # bug that mattered for those. files_transferred/files_deleted/
+    # files_added all stay separate columns in the DB regardless (see
+    # db_operations.record_cloud_sync_run()), since rclone reports them
+    # as distinct counters; only the display combines or formats them.
     history = [
         {
             "timestamp": run["timestamp"],
@@ -922,7 +938,7 @@ def get_cloud_sync_dashboard_stats():
         "cloud_sync_last_transferred": last["files_transferred"] or 0,
         "cloud_sync_last_files": t(
             'dashboard_cloud_sync_added_deleted',
-            added=last["files_transferred"] or 0,
+            added=last["files_added"] or 0,
             deleted=last["files_deleted"] or 0,
         ),
         "cloud_sync_last_bytes_display": human_readable_size(last["bytes_transferred"] or 0),
