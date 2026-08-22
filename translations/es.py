@@ -87,7 +87,7 @@ TRANSLATIONS = {
     "dashboard_cloud_sync_heading": "Sincronización en la Nube",
     "dashboard_cloud_sync_in_progress": "Sincronizando con la nube ahora…",
     "dashboard_cloud_sync_banner_status": "Sincronización en la nube: {status}",
-    "dashboard_cloud_sync_transferred": "Transferidos",
+    "dashboard_cloud_sync_transferred": "Sincronizados",
     "dashboard_cloud_sync_files": "Agregados / Eliminados",
     "dashboard_cloud_sync_added_deleted": "{added} / {deleted}",
     "dashboard_cloud_sync_data": "Datos Transferidos",
