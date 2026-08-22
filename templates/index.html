@@ -618,14 +618,28 @@
             {% if ready_for_manual_snapshot %}
             <div class="manual-snapshot-banner" id="manual-snapshot-banner" {% if backup_active %}style="display: none;"{% endif %}>
                 <button class="manual-snapshot-button" onclick="startBackup(false)">{{ t('dashboard_create_manual_snapshot') }}</button>
+                {# Lives here, not as its own line below the banner, since a
+                   detected change is what both the local backup (rsync) and
+                   cloud sync (rclone) are about to act on together -- one
+                   trigger, not something specific to just one of them. #}
+                {% if monitor == '1' %}
+                <p class="show" style="text-align: center; margin: 14px 0 0;">
+                    <span class="status-dot" id="watchdog-live-dot"></span>
+                    <span id="watchdog-live-text" style="color: var(--success-text);">{{ t('dashboard_watching_for_changes') }}</span>
+                </p>
+                {% endif %}
+                {# Cloud sync's own outcome, also here rather than only in the
+                   Cloud Sync section further down -- same reasoning as the
+                   watchdog line above: this banner is the one place for
+                   "what just happened as a result of that detected change,"
+                   covering both rsync and rclone. #}
+                {% if cloud_sync_enabled %}
+                <p class="show" style="text-align: center; margin: 6px 0 0;">
+                    <span class="status-dot {{ 'green' if cloud_sync_running else '' }}" id="cloud-sync-banner-dot"></span>
+                    <span id="cloud-sync-banner-text" style="color: var(--success-text);">{{ t('dashboard_cloud_sync_in_progress') if cloud_sync_running else t('dashboard_cloud_sync_banner_status', status=cloud_sync_last_display) }}</span>
+                </p>
+                {% endif %}
             </div>
-            {% endif %}
-            {# Stop Watchdog / Backup Service controls moved to the sidebar -- see templates/_sidebar.html #}
-            {% if monitor == '1' %}
-            <p class="show" style="text-align: center;">
-                <span class="status-dot" id="watchdog-live-dot"></span>
-                <span id="watchdog-live-text" style="color: var(--text-muted);">{{ t('dashboard_watching_for_changes') }}</span>
-            </p>
             {% endif %}
             {% if not ready_for_manual_snapshot %}
             <div class="progress-container">
@@ -1050,6 +1064,15 @@
                 }
                 const runningIndicator = document.getElementById('cloud-sync-running-indicator');
                 if (runningIndicator) runningIndicator.style.display = data.cloud_sync_running ? 'block' : 'none';
+
+                const bannerDot = document.getElementById('cloud-sync-banner-dot');
+                const bannerText = document.getElementById('cloud-sync-banner-text');
+                if (bannerDot && bannerText) {
+                    bannerDot.classList.toggle('green', !!data.cloud_sync_running);
+                    bannerText.textContent = data.cloud_sync_running
+                        ? t('dashboard_cloud_sync_in_progress')
+                        : t('dashboard_cloud_sync_banner_status', {status: data.cloud_sync_last_display || t('common_never')});
+                }
 
                 const cloudBar = document.getElementById('cloud-sync-progress-bar');
                 const cloudBarContainer = document.getElementById('cloud-sync-progress-container');

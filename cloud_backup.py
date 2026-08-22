@@ -893,13 +893,18 @@ def get_cloud_sync_dashboard_stats():
             "cloud_sync_history": [],
         }
     last = runs[0]
-    # "Files" everywhere on the dashboard means transferred + deleted
-    # combined -- confirmed live: a deletion-only sync (source file
-    # removed, nothing to upload) showed files_transferred alone as 0,
-    # reading as "nothing happened" despite rclone genuinely deleting
-    # the file from the remote. The two stay separate columns in the DB
-    # (see db_operations.record_cloud_sync_run()) since rclone reports
-    # them as distinct counters; only the display combines them.
+    # The "Files Transferred" stat card shows an added/deleted breakdown
+    # (t('dashboard_cloud_sync_added_deleted')) rather than one combined
+    # number -- explicitly requested, since "5" alone doesn't say whether
+    # that was 5 uploads, 5 deletions, or some mix. The two Recent Syncs
+    # tables (dashboard + Statistics) keep showing one combined "Files"
+    # count instead -- there's no room for a breakdown per row there, and
+    # a deletion-only sync showing files_transferred alone as 0 (reading
+    # as "nothing happened" despite rclone genuinely deleting a file)
+    # was the actual bug that mattered for those. The two stay separate
+    # columns in the DB regardless (see db_operations.
+    # record_cloud_sync_run()), since rclone reports them as distinct
+    # counters; only the display combines or formats them.
     history = [
         {
             "timestamp": run["timestamp"],
@@ -912,7 +917,11 @@ def get_cloud_sync_dashboard_stats():
         for run in runs
     ]
     return {
-        "cloud_sync_last_files": (last["files_transferred"] or 0) + (last["files_deleted"] or 0),
+        "cloud_sync_last_files": t(
+            'dashboard_cloud_sync_added_deleted',
+            added=last["files_transferred"] or 0,
+            deleted=last["files_deleted"] or 0,
+        ),
         "cloud_sync_last_bytes_display": human_readable_size(last["bytes_transferred"] or 0),
         "cloud_sync_last_duration_display": _format_duration_seconds(last["duration_seconds"]),
         "cloud_sync_last_speed_display": f"{human_readable_size(last['avg_speed_bps'] or 0)}/s",
