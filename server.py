@@ -1755,16 +1755,20 @@ async def recovery_history(request: Request, page: int = 1):
 
 
 def _cloud_sync_series_for_display():
-    # "Files" everywhere on the dashboard/Statistics means transferred +
-    # deleted combined -- same reasoning as cloud_backup.py's
-    # get_cloud_sync_dashboard_stats(): rclone reports them as distinct
-    # counters (a deletion moves no bytes, isn't a "transfer"), but a
-    # deletion-only sync showing files_transferred alone as 0 reads as
-    # "nothing happened" despite real work. get_cloud_sync_stats_series()
-    # itself stays raw/precise; only this display-facing wrapper combines.
+    # Adds files_combined (transferred + deleted) for the Recent Syncs
+    # table's "Files" column -- same reasoning as cloud_backup.py's
+    # get_cloud_sync_dashboard_stats(): rclone reports transfers/deletes
+    # as distinct counters (a deletion moves no bytes, isn't a
+    # "transfer"), but a deletion-only sync showing files_transferred
+    # alone as 0 reads as "nothing happened" despite real work.
+    # files_transferred/files_added/files_deleted all stay in the
+    # series too (unlike an earlier version that popped files_deleted
+    # out) -- the Cloud Sync chart's Added/Deleted view needs them raw
+    # and separate, not combined. get_cloud_sync_stats_series() itself
+    # stays raw/precise; only this display-facing wrapper adds fields.
     series = get_cloud_sync_stats_series()
     for run in series:
-        run["files_transferred"] = (run["files_transferred"] or 0) + (run.pop("files_deleted", 0) or 0)
+        run["files_combined"] = (run["files_transferred"] or 0) + (run["files_deleted"] or 0)
     return series
 
 

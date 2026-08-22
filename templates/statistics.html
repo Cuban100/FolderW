@@ -238,11 +238,21 @@
                 </p>
 
                 <div class="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 mb-6">
-                    <h3 class="text-lg font-semibold mb-1">{{ t('stats_cloud_chart_title') }}</h3>
-                    <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('stats_cloud_chart_desc') }}</p>
+                    <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                        <h3 class="text-lg font-semibold">{{ t('stats_cloud_chart_title') }}</h3>
+                        <div class="flex items-center gap-2" role="group" aria-label="{{ t('stats_cloud_metric_aria') }}">
+                            <button class="filter-pill active" data-cloud-metric="bytes">{{ t('stats_cloud_metric_data') }}</button>
+                            <button class="filter-pill" data-cloud-metric="added_deleted">{{ t('stats_cloud_metric_added_deleted') }}</button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-[var(--text-muted)] mb-3" id="cloud-chart-desc">{{ t('stats_cloud_chart_desc') }}</p>
                     <div class="relative" id="cloud-chart-container">
                         <svg id="cloud-chart" width="100%" height="220" role="img" aria-label="{{ t('stats_cloud_chart_aria') }}"></svg>
                         <div class="chart-tooltip" id="cloud-tooltip"></div>
+                    </div>
+                    <div class="flex items-center gap-4 mt-3 text-sm hidden" id="cloud-chart-legend">
+                        <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--series-differential)"></span>{{ t('stats_cloud_legend_added') }}</span>
+                        <span class="flex items-center gap-1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--status-critical)"></span>{{ t('stats_cloud_legend_deleted') }}</span>
                     </div>
                 </div>
 
@@ -299,6 +309,7 @@
         // smaller run's bar to a 1px sliver. See valueToBarHeight/
         // drawAxes' scale param.
         let activityScale = 'log';
+        let cloudMetric = 'bytes';
 
         function filteredRuns() {
             return typeFilter === 'all' ? allRuns : allRuns.filter(r => r.backup_type === typeFilter);
@@ -613,13 +624,19 @@
             const height = 220;
             svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
+            const n = allCloudRuns.length;
+            const styles = getComputedStyle(document.querySelector('.viz-root'));
+
+            if (cloudMetric === 'added_deleted') {
+                renderCloudAddedDeletedChart(svg, container, tooltip, width, height, styles, n);
+                return;
+            }
+
             const maxY = niceMax(Math.max(...allCloudRuns.map(r => r.bytes_transferred || 0), 1));
             const { innerW, innerH } = drawAxes(svg, width, height, maxY, formatBytes);
 
-            const n = allCloudRuns.length;
             const slot = innerW / n;
             const barWidth = Math.min(24, slot * 0.6);
-            const styles = getComputedStyle(document.querySelector('.viz-root'));
             const color = styles.getPropertyValue('--series-size').trim();
 
             allCloudRuns.forEach((r, i) => {
@@ -644,6 +661,59 @@
             });
         }
 
+        // Stacked bar per run: added (bottom, green) + deleted (top, red) --
+        // stacked rather than side-by-side pairs so each run still reads as
+        // one column even with many runs packed into a narrow slot, same
+        // density the bytes view already handles.
+        function renderCloudAddedDeletedChart(svg, container, tooltip, width, height, styles, n) {
+            const addedColor = styles.getPropertyValue('--series-differential').trim();
+            const deletedColor = styles.getPropertyValue('--status-critical').trim();
+            const maxY = niceMax(Math.max(...allCloudRuns.map(r => (r.files_added || 0) + (r.files_deleted || 0)), 1));
+            const { innerW, innerH } = drawAxes(svg, width, height, maxY, v => Math.round(v).toLocaleString());
+
+            const slot = innerW / n;
+            const barWidth = Math.min(24, slot * 0.6);
+
+            allCloudRuns.forEach((r, i) => {
+                const added = r.files_added || 0;
+                const deleted = r.files_deleted || 0;
+                const total = added + deleted;
+                const addedH = maxY > 0 ? (innerH * added / maxY) : 0;
+                const deletedH = maxY > 0 ? (innerH * deleted / maxY) : 0;
+                const x = PAD.left + slot * i + (slot - barWidth) / 2;
+                const baseY = PAD.top + innerH;
+
+                const hit = svgEl('rect', { x: x - 4, y: PAD.top, width: barWidth + 8, height: innerH, fill: 'transparent', class: 'mark-hit' });
+                svg.appendChild(hit);
+
+                if (added > 0) {
+                    const addedBar = svgEl('rect', {
+                        x, y: baseY - addedH, width: barWidth, height: Math.max(1, addedH),
+                        fill: addedColor, rx: 4, ry: 4, class: 'mark-visible',
+                    });
+                    svg.appendChild(addedBar);
+                }
+                if (deleted > 0) {
+                    const deletedBar = svgEl('rect', {
+                        x, y: baseY - addedH - deletedH, width: barWidth, height: Math.max(1, deletedH),
+                        fill: deletedColor, rx: 4, ry: 4, class: 'mark-visible',
+                    });
+                    svg.appendChild(deletedBar);
+                }
+                if (total === 0) {
+                    // Nothing to stack -- still show a thin marker at the
+                    // floor so the run isn't invisible in the chart.
+                    svg.appendChild(svgEl('rect', { x, y: baseY - 1, width: barWidth, height: 1, fill: 'var(--chart-axis)' }));
+                }
+
+                hit.addEventListener('pointerenter', () => {
+                    showTooltip(tooltip, container, x, baseY - addedH - deletedH,
+                        `<strong>${added.toLocaleString()}</strong> ${t('stats_cloud_legend_added')} · <strong>${deleted.toLocaleString()}</strong> ${t('stats_cloud_legend_deleted')}<br>${formatTimestamp(r.timestamp)}${r.status !== 'success' ? '<br><span style="color:var(--status-critical)">' + cloudStatusLabel(r.status) + '</span>' : ''}`);
+                });
+                hit.addEventListener('pointerleave', () => hideTooltip(tooltip));
+            });
+        }
+
         function renderCloudHistoryTable() {
             const body = document.getElementById('cloud-history-body');
             if (!body) return;
@@ -657,7 +727,7 @@
                 const cells = [
                     formatTimestamp(r.timestamp),
                     cloudStatusLabel(r.status),
-                    (r.files_transferred || 0).toLocaleString(),
+                    (r.files_combined || 0).toLocaleString(),
                     formatBytes(r.bytes_transferred),
                     formatDuration(r.duration_seconds),
                 ];
@@ -760,6 +830,18 @@
                 btn.classList.add('active');
                 activityScale = btn.dataset.scale;
                 renderActivityChart();
+            });
+        });
+
+        document.querySelectorAll('[data-cloud-metric]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-cloud-metric]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                cloudMetric = btn.dataset.cloudMetric;
+                document.getElementById('cloud-chart-desc').textContent =
+                    cloudMetric === 'bytes' ? t('stats_cloud_chart_desc') : t('stats_cloud_chart_added_deleted_desc');
+                document.getElementById('cloud-chart-legend').classList.toggle('hidden', cloudMetric !== 'added_deleted');
+                renderCloudChart();
             });
         });
 
