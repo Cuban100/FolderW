@@ -1897,9 +1897,9 @@ async def reset_active_database(request: Request, confirm_name: str = Form(...))
     })
 
 
-def open_dashboard_in_browser(port):
+def open_dashboard_in_browser(port, path="/"):
     try:
-        webbrowser.open(f"http://127.0.0.1:{port}")
+        webbrowser.open(f"http://127.0.0.1:{port}{path}")
     except Exception as e:
         logger.warning(f"Could not auto-open the dashboard in a browser: {e}")
 
@@ -1912,6 +1912,14 @@ if __name__ == "__main__":
     # without this check, ANY restart (including every cycle of a restart
     # loop) opened a new browser window.
     if os.environ.get("FOLDERW_OPEN_BROWSER") == "1":
+        # FOLDERW_OPEN_PATH: also only set by setup.py, when Cloud Backup
+        # was configured during setup -- create_remote() itself needs no
+        # server (see cloud_backup.py), but the actual OAuth "Log In via
+        # Browser" step does, so it can't be finished until this process
+        # exists. Landing straight on /cloud-backup instead of / means
+        # the next thing the user sees is exactly the button they need,
+        # not a dashboard homepage with an extra click to find it.
+        open_path = os.environ.get("FOLDERW_OPEN_PATH", "/")
         # Give uvicorn a moment to bind before opening the dashboard in the browser
-        threading.Timer(1.0, open_dashboard_in_browser, args=[server_port]).start()
+        threading.Timer(1.0, open_dashboard_in_browser, args=[server_port, open_path]).start()
     uvicorn.run(app, host="0.0.0.0", port=int(server_port))

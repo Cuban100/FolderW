@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 from db_operations import create_all_tables, set_database_value, reset_backup_history
 from auth import hash_password
+from cloud_backup import create_remote, KNOWN_REMOTE_TYPES
 import tkinter as tk
 from tkinter import filedialog, Label, PhotoImage, messagebox
 from tkinter import ttk, StringVar
@@ -481,10 +482,38 @@ def save_paths():
         )
         return
 
+    # Cloud Backup: validated (and the remote actually created) before
+    # anything below is written, same "fail before the point of no
+    # return" pattern as every check above -- create_remote() itself
+    # never fails for a bad client_id/client_secret pairing until the
+    # first real login attempt, so catching it here means an OAuth typo
+    # doesn't quietly get carried all the way to the dashboard.
+    cloud_backup_enabled = cloud_backup_enabled_var.get() == 1
+    cloud_remote_name = ""
+    if cloud_backup_enabled:
+        cloud_remote_name = cloud_remote_name_entry.get().strip()
+        if "e.g." in cloud_remote_name:  # untouched placeholder text
+            cloud_remote_name = ""
+        if not cloud_remote_name:
+            result_label.config(text="Error: Remote Name is required when Cloud Backup is enabled.", foreground='#FF0000')
+            return
+        label_to_key = {label: key for key, label in KNOWN_REMOTE_TYPES}
+        cloud_backend_type = label_to_key.get(cloud_remote_type_var.get())
+        cloud_client_id = cloud_client_id_entry.get().strip()
+        cloud_client_secret = cloud_client_secret_entry.get().strip()
+        cloud_success, cloud_message = create_remote(cloud_remote_name, cloud_backend_type, cloud_client_id or None, cloud_client_secret or None)
+        if not cloud_success:
+            result_label.config(text=f"Error: {cloud_message}", foreground='#FF0000')
+            return
+
     # Save values to .env file
     for key, value in paths.items():
         set_key(env_path, key.upper(), value)
     set_key(env_path, 'MAX_SNAPSHOTS', max_snapshots)
+
+    set_key(env_path, 'CLOUD_SYNC_ENABLED', '1' if cloud_backup_enabled else '0')
+    if cloud_backup_enabled:
+        set_key(env_path, 'CLOUD_SYNC_REMOTE', cloud_remote_name)
 
     # Blank means "leave unchanged" (existing install) or "no login"
     # (fresh install) — either way, never touch ADMIN_PASSWORD_HASH.
@@ -564,12 +593,17 @@ def save_paths():
     # this distinction, server.py opened a browser window on every single
     # restart, and during any restart loop (a crash loop, or update.sh
     # hitting one) that meant a new browser window every few seconds.
+    # FOLDERW_OPEN_PATH: when Cloud Backup was just configured, land on
+    # /cloud-backup instead of the dashboard homepage -- that's exactly
+    # where "Log In via Browser" lives, the one step this wizard can't
+    # do itself (see the Cloud Backup section above).
+    open_path = "/cloud-backup" if cloud_backup_enabled else "/"
     subprocess.Popen(
         [sys.executable, os.path.join(APP_DIR, "server.py")],
         stdout=server_log,
         stderr=server_log,
         start_new_session=True,
-        env={**os.environ, "FOLDERW_OPEN_BROWSER": "1"},
+        env={**os.environ, "FOLDERW_OPEN_BROWSER": "1", "FOLDERW_OPEN_PATH": open_path},
     )
     root.destroy()
 
@@ -841,11 +875,76 @@ notify_send_always_checkbox.grid(row=len(labels) + 9, column=1, padx=10, pady=4,
 notify_send_always_hint = tk.Label(root, text="Uses notify-send to show a notification on this machine's own desktop.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
 notify_send_always_hint.grid(row=len(labels) + 9, column=2, padx=10, pady=4, sticky='w')
 
+# Cloud Backup: optional, mirrors the dashboard's own "Add a New Remote"
+# form (cloud_backup.html) so setup can register the remote itself --
+# create_remote() is a plain `rclone config create`, no web server
+# needed. The actual OAuth "Log In via Browser" step is deliberately
+# NOT reimplemented here: it needs a local HTTP listener catching the
+# provider's redirect, tracked via server.py's own in-memory job state
+# (see cloud_backup.py's start_remote_authorize()/_authorize_jobs),
+# which doesn't exist until server.py is actually running -- which
+# only happens at the very end of save_paths(), after this whole
+# window closes. So this just gets the remote CREATED and enabled;
+# save_paths() opens the first-launch browser straight to /cloud-backup
+# instead of / when this was used, landing the user exactly where they
+# need to finish logging in.
+cloud_backup_enabled_var = tk.IntVar(value=0)
+cloud_backup_checkbox = tk.Checkbutton(root, text="Enable Cloud Backup", variable=cloud_backup_enabled_var, background='#1a1a1a', foreground='#ffffff', selectcolor='#2ecc71', command=lambda: toggle_cloud_backup_options())
+cloud_backup_checkbox.grid(row=len(labels) + 10, column=1, padx=10, pady=4, sticky='w')
+
+cloud_backup_label = tk.Label(root, text="Cloud Backup:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+cloud_backup_label.grid(row=len(labels) + 10, column=0, padx=0, pady=4, sticky='e')
+
+cloud_backup_hint = tk.Label(root, text="Mirrors the source folder to a cloud remote after every backup.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+cloud_backup_hint.grid(row=len(labels) + 10, column=2, padx=10, pady=4, sticky='w')
+
+cloud_remote_type_label = tk.Label(root, text="Cloud Provider:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+cloud_remote_type_var = StringVar(value=KNOWN_REMOTE_TYPES[0][0])
+cloud_remote_type_dropdown = ttk.Combobox(root, textvariable=cloud_remote_type_var, state='readonly',
+                                           values=[label for _key, label in KNOWN_REMOTE_TYPES])
+cloud_remote_type_dropdown.current(0)
+cloud_remote_type_hint = tk.Label(root, text="Which service to back up to.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+
+cloud_remote_name_label = tk.Label(root, text="Remote Name:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+cloud_remote_name_entry = ttk.Entry(root, width=50)
+cloud_remote_name_hint = tk.Label(root, text="Just a label for this connection -- letters, numbers, - and _.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+set_placeholder(cloud_remote_name_entry, "e.g. Google-Drive", 'CLOUD_SYNC_REMOTE')
+
+cloud_client_id_label = tk.Label(root, text="Client ID:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+cloud_client_id_entry = ttk.Entry(root, width=50)
+cloud_client_id_hint = tk.Label(root, text="Optional -- your own OAuth app instead of rclone's shared one. Leave both blank to use rclone's.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+
+cloud_client_secret_label = tk.Label(root, text="Client Secret:", foreground='#ffffff', bg='#1a1a1a', padx=0, pady=0)
+cloud_client_secret_entry = ttk.Entry(root, width=50, show='*')
+cloud_client_secret_hint = tk.Label(root, text="Optional, goes with the Client ID above.", font=('TkDefaultFont', 8), foreground='#888888', bg='#1a1a1a')
+
+cloud_backup_option_widgets = [
+    (cloud_remote_type_label, cloud_remote_type_dropdown, cloud_remote_type_hint, len(labels) + 11),
+    (cloud_remote_name_label, cloud_remote_name_entry, cloud_remote_name_hint, len(labels) + 12),
+    (cloud_client_id_label, cloud_client_id_entry, cloud_client_id_hint, len(labels) + 13),
+    (cloud_client_secret_label, cloud_client_secret_entry, cloud_client_secret_hint, len(labels) + 14),
+]
+for lbl, widget, hint, row in cloud_backup_option_widgets:
+    lbl.grid(row=row, column=0, padx=10, pady=4, sticky='e')
+    widget.grid(row=row, column=1, padx=10, pady=4)
+    hint.grid(row=row, column=2, padx=10, pady=4, sticky='w')
+
+def toggle_cloud_backup_options():
+    for lbl, widget, hint, _row in cloud_backup_option_widgets:
+        if cloud_backup_enabled_var.get() == 1:
+            lbl.grid()
+            widget.grid()
+            hint.grid()
+        else:
+            lbl.grid_remove()
+            widget.grid_remove()
+            hint.grid_remove()
+
 save_button = ttk.Button(root, text="Save Configuration", command=save_paths)
-save_button.grid(row=len(labels) + 10, column=1, pady=4)
+save_button.grid(row=len(labels) + 15, column=1, pady=4)
 
 result_label = ttk.Label(root, text="", background='#1a1a1a', foreground='#ffffff')
-result_label.grid(row=len(labels) + 11, column=1, pady=4)
+result_label.grid(row=len(labels) + 16, column=1, pady=4)
 
 # Safely set the monitor variable
 monitor_value = os.getenv('MONITOR')
@@ -866,8 +965,17 @@ backup_method_var.set(backup_method_value if backup_method_value in ('incrementa
 notify_send_always_value = os.getenv('NOTIFY_SEND_ALWAYS')
 notify_send_always_var.set(int(notify_send_always_value)) if notify_send_always_value is not None else notify_send_always_var.set(0)
 
+# Safely set the cloud backup enabled variable -- remote TYPE isn't
+# pre-selected on reopen even if CLOUD_SYNC_REMOTE is already set: it
+# isn't stored in .env at all (it lives in rclone's own config), and
+# an existing install with cloud backup already configured would
+# manage it from the dashboard's Cloud Backup page, not this wizard.
+cloud_backup_enabled_value = os.getenv('CLOUD_SYNC_ENABLED')
+cloud_backup_enabled_var.set(int(cloud_backup_enabled_value)) if cloud_backup_enabled_value == '1' else cloud_backup_enabled_var.set(0)
+
 # Sync the interval widgets' visibility with the loaded monitor value
 toggle_backup_options()
+toggle_cloud_backup_options()
 
 # Configure the root window background color
 root.configure(bg='#1a1a1a')
