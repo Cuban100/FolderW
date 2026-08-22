@@ -35,6 +35,7 @@
 19. **Cloud Backup:** Optionally mirror your source folder to any [rclone](https://rclone.org)-supported remote (Google Drive, Amazon, Dropbox, Backblaze, and 40+ others) right after each successful local backup — scheduled, watchdog, or manual. Only the current state syncs, not the local Snapshot history (cloud storage doesn't understand the hardlinks that make Snapshots cheap locally, so this keeps the cloud copy fast and small instead of re-uploading every snapshot as a full independent copy). Add a new remote and connect it with a "Log In via Browser" button — no terminal or manual `rclone config` needed for supported services (Google Drive, Dropbox, OneDrive, Box, pCloud); FolderW never handles cloud credentials itself, it just drives rclone's own login flow.
 20. **English/Spanish Language Switching:** Switch the entire dashboard between English and Spanish from the footer, no restart needed — a global setting for the whole install.
 21. **Cloud Sync Stats:** A dedicated Cloud Sync section on both the Dashboard and Statistics pages — files transferred, data transferred, duration, average speed, and a history of recent syncs, separate from local backup stats.
+22. **Dark/Light Theme:** Switch the whole dashboard's appearance from Settings, no restart needed — a global setting for the whole install, same instant-switch pattern as the language buttons.
 
 ## FolderW vs. Timeshift
 
