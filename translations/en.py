@@ -86,7 +86,7 @@ TRANSLATIONS = {
     "dashboard_cloud_sync_banner_status": "Cloud sync: {status}",
     "dashboard_cloud_sync_transferred": "Transferred",
     "dashboard_cloud_sync_files": "Added / Deleted",
-    "dashboard_cloud_sync_added_deleted": "{added} added · {deleted} deleted",
+    "dashboard_cloud_sync_added_deleted": "{added} / {deleted}",
     "dashboard_cloud_sync_data": "Data Transferred",
     "dashboard_cloud_sync_duration": "Duration",
     "dashboard_cloud_sync_speed": "Avg Speed",
