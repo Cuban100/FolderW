@@ -2,8 +2,8 @@ import os
 import sys
 from db_operations import load_env_value, load_other_variables, set_database_value, get_database_value
 from notifications import notify
-from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources
-from backup_hooks import run_backup_script_with_hooks
+from statistics_operations import check_env_variables, validate_all_conditions, evaluation_of_resources, destination_has_minimum_space
+from backup_hooks import run_backup_script_with_hooks, backup_failure_message
 from cloud_backup import sync_to_cloud, notify_backup_complete
 import subprocess
 import schedule
@@ -21,11 +21,22 @@ def _backup_script_name():
     return "rsync_incremental.py" if load_env_value('BACKUP_METHOD') == 'incremental' else "rsync_differential.py"
 
 def run_regular_backup():
+    # Cheap pre-flight check, run before EVERY backup attempt -- not just
+    # once at service startup (backup_prerequisites_met() below only runs
+    # when this service starts). The destination filling up gradually
+    # between restarts previously went completely unchecked until rsync
+    # itself failed mid-transfer with no clear explanation.
+    if not destination_has_minimum_space():
+        message = "Backup skipped: destination is nearly full."
+        logger.error(message)
+        notify("FolderW: Backup Skipped", message, level='critical')
+        return
     script_name = _backup_script_name()
     logger.info(f"Running regular backup with {script_name}")
     try:
         result, cloud_sync_result = run_backup_script_with_hooks(
             [sys.executable, os.path.join(BASE_DIR, script_name)], check=True,
+            capture_output=True, text=True,
             concurrent_fn=sync_to_cloud,
         )
         logger.info(f"Backup result: {result}")
@@ -37,7 +48,7 @@ def run_regular_backup():
         # unhandled crash in that script too, since both surface the same
         # way: a non-zero exit.
         logger.error(f"Error running {script_name}: {e}")
-        notify("FolderW: Backup Failed", f"A backup run failed (exit code {e.returncode}). Check the FolderW logs for details.", level='critical')
+        notify("FolderW: Backup Failed", backup_failure_message(e.returncode, e.stderr), level='critical')
 
 def start_event_backup():
     # rsync_event_handler.py blocks here for as long as it runs successfully

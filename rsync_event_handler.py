@@ -4,9 +4,10 @@ import time
 import fnmatch
 import threading
 from db_operations import load_env_value, load_other_variables, set_database_value
-from backup_hooks import run_backup_script_with_hooks
+from backup_hooks import run_backup_script_with_hooks, backup_failure_message
 from cloud_backup import sync_to_cloud, notify_backup_complete
 from notifications import notify
+from statistics_operations import destination_has_minimum_space
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from loguru import logger
@@ -93,6 +94,18 @@ EXCLUDE_PATTERNS = _load_exclude_patterns()
 TRIGGER_EXEMPT_PATTERNS = _load_patterns(load_other_variables('trigger_exempt_file'))
 
 def run_backup_script():
+    # Cheap pre-flight check, run before EVERY backup attempt -- not just
+    # once at service startup (see main_backup.py's backup_prerequisites_
+    # met(), which only runs when the service itself starts). A long-
+    # running watchdog service can keep firing backups for days/weeks
+    # after that one-time check passed, and the destination filling up
+    # gradually in the meantime previously went completely unchecked
+    # until rsync itself failed mid-transfer with no clear explanation.
+    if not destination_has_minimum_space():
+        message = "Backup skipped: destination is nearly full."
+        logger.error(message)
+        notify("FolderW: Backup Skipped", message, level='critical')
+        return
     try:
         python_path = sys.executable
         # See main_backup.py's _backup_script_name() for the same choice --
@@ -108,7 +121,7 @@ def run_backup_script():
         notify_backup_complete(cloud_sync_result)
     except subprocess.CalledProcessError as e:
         logger.error(f"Backup script failed with error: {e.stderr}")
-        notify("FolderW: Backup Failed", f"A backup run failed (exit code {e.returncode}). Check the FolderW logs for details.", level='critical')
+        notify("FolderW: Backup Failed", backup_failure_message(e.returncode, e.stderr), level='critical')
 
 def run_hourly_backup():
     logger.info("Running hourly backup")

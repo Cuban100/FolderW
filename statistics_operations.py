@@ -176,6 +176,33 @@ def destination_space():
         return None, None, None
 
 
+# Safety margin, not "must fit the whole backup" -- deliberately not
+# evaluation_of_resources()'s full check (that also du-scans the entire
+# source to predict whether THIS run's data will fit, too expensive to
+# repeat on every watchdog-triggered cycle, which can fire every few
+# minutes for as long as the service runs). This only catches "already
+# basically full," which is what actually causes a confusing rsync
+# failure mid-transfer -- backup_prerequisites_met() only ran the real
+# check once, at service startup, so a destination filling up gradually
+# over days/weeks of the service running went completely unchecked
+# until rsync itself failed.
+MIN_FREE_SPACE_GB = 0.1
+
+
+def destination_has_minimum_space():
+    """Cheap (psutil.disk_usage, no directory scan) pre-flight check --
+    True if there's at least MIN_FREE_SPACE_GB free, or if free space
+    couldn't be determined at all (missing/unmounted destination is a
+    different, already-covered failure mode -- validate_all_conditions()
+    catches that; this only ever returns False for "found the
+    destination, it's basically full").
+    """
+    _total, _used, free = destination_space()
+    if free is None:
+        return True
+    return free >= MIN_FREE_SPACE_GB
+
+
 
 def evaluation_of_resources():
     # get_folder_size_bytes_du with exclude_from, not the plain get_folder_size

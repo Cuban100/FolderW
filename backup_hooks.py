@@ -13,6 +13,26 @@ from loguru import logger
 HOOK_TIMEOUT_SECONDS = 300
 
 
+def backup_failure_message(returncode, stderr):
+    """Human-readable reason for a failed backup subprocess -- shared by
+    main_backup.py and rsync_event_handler.py's exception handlers so
+    both give the same specific answer instead of each falling back to
+    a bare "check the logs" (confirmed as a real gap: the previous
+    generic message never said whether a failure was actually "ran out
+    of disk space" versus anything else, and a user had no way to tell
+    without going and reading the log file themselves).
+
+    Only detects the one cause distinctive enough to catch reliably
+    from stderr text (rsync's actual `No space left on device` message,
+    the OS's own ENOSPC error) -- everything else still falls back to
+    the exit-code message rather than guessing at rsync's dozens of
+    other possible exit codes.
+    """
+    if stderr and 'No space left on device' in stderr:
+        return "Backup failed: destination ran out of disk space during the transfer."
+    return f"A backup run failed (exit code {returncode}). Check the FolderW logs for details."
+
+
 def run_hook_script(path, label):
     """Run one pre/post-backup hook script. Returns (success, message)
     -- message is a short, human-readable outcome description, used for
