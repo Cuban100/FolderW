@@ -124,6 +124,10 @@ TRANSLATIONS = {
 
     # -- settings.html --
     "settings_title": "Backup Configuration",
+    "settings_theme_heading": "Appearance",
+    "settings_theme_sub": "Switches instantly, the whole dashboard, for everyone using this install — not saved per browser.",
+    "settings_theme_dark": "Dark",
+    "settings_theme_light": "Light",
     "settings_section_other_heading": "Everything else",
     "settings_section_other_sub": "These don't identify the backup itself, so changing them never resets history or starts a new full backup.",
     "settings_log_dir_label": "Log Directory:",

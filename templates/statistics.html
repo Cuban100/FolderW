@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ lang }}">
+<html lang="{{ lang }}" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,7 +20,10 @@
            unmodified -- see palette.md; slots 1/2/3 (blue/orange/aqua)
            validated via scripts/validate_palette.js for this exact
            3-series use (full/incremental/differential), both light and
-           dark, before shipping. */
+           dark, before shipping. Driven by the same data-theme attribute
+           as index.css's tokens (see that file's comment) rather than
+           prefers-color-scheme, so the charts always match whatever
+           FolderW's own Dark/Light setting says, not the OS. */
         .viz-root {
             --chart-grid: #e1e0d9;
             --chart-axis: #c3c2b7;
@@ -31,17 +34,15 @@
             --series-differential: #1baf7a;
             --status-critical: #d03b3b;
         }
-        @media (prefers-color-scheme: dark) {
-            .viz-root {
-                --chart-grid: #2c2c2a;
-                --chart-axis: #383835;
-                --chart-muted: #898781;
-                --series-size: #3987e5;
-                --series-full: #3987e5;
-                --series-incremental: #d95926;
-                --series-differential: #199e70;
-                --status-critical: #e66767;
-            }
+        :root[data-theme="dark"] .viz-root {
+            --chart-grid: #2c2c2a;
+            --chart-axis: #383835;
+            --chart-muted: #898781;
+            --series-size: #3987e5;
+            --series-full: #3987e5;
+            --series-incremental: #d95926;
+            --series-differential: #199e70;
+            --status-critical: #e66767;
         }
         .filter-pill {
             padding: 4px 12px;

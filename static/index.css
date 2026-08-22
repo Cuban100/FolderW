@@ -1,6 +1,14 @@
 /* Shared light/dark theme variables for every page in the dashboard.
    Individual pages style themselves with these via CSS or Tailwind's
-   arbitrary-value syntax (e.g. bg-[var(--surface)]). */
+   arbitrary-value syntax (e.g. bg-[var(--surface)]). Driven by an
+   explicit data-theme="dark"/"light" attribute on <html> (set server-
+   side from the THEME setting, see server.py's current_theme() /
+   Settings' Dark/Light buttons) rather than the OS's prefers-color-
+   scheme -- a user choosing Light in FolderW shouldn't still get dark
+   styling just because their OS happens to be set to dark, and vice
+   versa. Light is the bare :root default; dark is the explicit
+   override, matching DEFAULT_THEME='dark' in server.py (existing
+   installs with no THEME set yet keep looking exactly as before). */
 :root {
     --bg: #f0f2f5;
     --surface: #ffffff;
@@ -15,23 +23,27 @@
     --error-text: #7f1d1d;
     --value-bg: #ecf0f1;
     --value-text: #2c3e50;
+    --sidebar-bg: #e4e7ec;
+    --sidebar-text: #1a1a1a;
+    --sidebar-hover: #ccd2da;
 }
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #15171a;
-        --surface: #1f2226;
-        --surface-alt: #23262b;
-        --text: #e8e8e8;
-        --text-muted: #a3a3a3;
-        --border: #33363b;
-        --shadow: rgba(0, 0, 0, 0.4);
-        --success-bg: #1e4620;
-        --success-text: #a5d6a7;
-        --error-bg: #4a1f1f;
-        --error-text: #ef9a9a;
-        --value-bg: #2c3035;
-        --value-text: #d7dde3;
-    }
+:root[data-theme="dark"] {
+    --bg: #15171a;
+    --surface: #1f2226;
+    --surface-alt: #23262b;
+    --text: #e8e8e8;
+    --text-muted: #a3a3a3;
+    --border: #33363b;
+    --shadow: rgba(0, 0, 0, 0.4);
+    --success-bg: #1e4620;
+    --success-text: #a5d6a7;
+    --error-bg: #4a1f1f;
+    --error-text: #ef9a9a;
+    --value-bg: #2c3035;
+    --value-text: #d7dde3;
+    --sidebar-bg: #2b2b2b;
+    --sidebar-text: #ffffff;
+    --sidebar-hover: #575757;
 }
 
 /* Collapsible sidebar, shared by every page. index.html's sidebar is a
@@ -82,8 +94,8 @@ html.sidebar-collapsed .content {
    plain-text, logo-less Tailwind sidebar — a real inconsistency). */
 .sidebar {
     width: 280px;
-    background-color: #2b2b2b;
-    color: white;
+    background-color: var(--sidebar-bg);
+    color: var(--sidebar-text);
     padding: 20px;
     position: fixed;
     height: 100%;
@@ -98,7 +110,7 @@ html.sidebar-collapsed .content {
 }
 .sidebar a {
     display: block;
-    color: white;
+    color: var(--sidebar-text);
     padding: 16px;
     text-decoration: none;
     margin: 5px 0;
@@ -106,10 +118,10 @@ html.sidebar-collapsed .content {
     transition: background-color 0.3s;
 }
 .sidebar a:hover {
-    background-color: #575757;
+    background-color: var(--sidebar-hover);
 }
 .sidebar a.active {
-    background-color: #575757;
+    background-color: var(--sidebar-hover);
 }
 .sidebar .mdi-icon {
     margin-right: 10px;
@@ -136,7 +148,7 @@ html.sidebar-collapsed .content {
    included on every page via templates/_sidebar.html. */
 .sidebar-divider {
     height: 1px;
-    background-color: #575757;
+    background-color: var(--sidebar-hover);
     margin: 12px 4px 16px;
 }
 .sidebar-controls {
@@ -206,8 +218,8 @@ html.sidebar-collapsed .content {
     width: 17px;
     height: 17px;
     border-radius: 50%;
-    border: 1px solid #9a9a9a;
-    color: #9a9a9a;
+    border: 1px solid var(--text-muted);
+    color: var(--text-muted);
     font-size: 11px;
     line-height: 1;
     font-weight: 700;
@@ -226,13 +238,13 @@ html.sidebar-collapsed .content {
     top: 100%;
     left: 0;
     margin-top: 6px;
-    background-color: #383838;
-    border: 1px solid #575757;
+    background-color: var(--surface-alt);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px 14px;
     font-size: 0.85em;
     line-height: 1.4;
-    color: #cfcfcf;
+    color: var(--text);
     width: max-content;
     max-width: 280px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);

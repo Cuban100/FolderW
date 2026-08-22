@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ lang }}">
+<html lang="{{ lang }}" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -188,6 +188,23 @@
                         {{ success }}
                     </div>
                     {% endif %}
+
+                    <!-- Its own small form (not the big one below) so this can
+                         switch instantly, matching the footer's EN|ES language
+                         buttons -- no reason to require the full "Save Settings"
+                         click just to flip a display preference. -->
+                    <div class="mb-6 pb-6 border-b border-[var(--border)]">
+                        <h2 class="text-lg font-semibold text-[var(--text)] mb-1">{{ t('settings_theme_heading') }}</h2>
+                        <p class="text-sm text-[var(--text-muted)] mb-3">{{ t('settings_theme_sub') }}</p>
+                        <form method="post" action="/set-theme" class="flex gap-2">
+                            <button type="submit" name="theme" value="dark"
+                                    class="px-4 py-2 rounded-lg border-2 transition {{ 'border-blue-600 bg-blue-600 text-white' if theme == 'dark' else 'border-[var(--border)] text-[var(--text)] hover:border-blue-600' }}"
+                                    {% if theme == 'dark' %}disabled{% endif %}>{{ t('settings_theme_dark') }}</button>
+                            <button type="submit" name="theme" value="light"
+                                    class="px-4 py-2 rounded-lg border-2 transition {{ 'border-blue-600 bg-blue-600 text-white' if theme == 'light' else 'border-[var(--border)] text-[var(--text)] hover:border-blue-600' }}"
+                                    {% if theme == 'light' %}disabled{% endif %}>{{ t('settings_theme_light') }}</button>
+                        </form>
+                    </div>
 
                     <form method="post" action="/submit/" class="space-y-4" autocomplete="off">
 

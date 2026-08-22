@@ -126,6 +126,10 @@ TRANSLATIONS = {
 
     # -- configuración (settings.html) --
     "settings_title": "Configuración de copias de seguridad",
+    "settings_theme_heading": "Apariencia",
+    "settings_theme_sub": "Cambia al instante, en todo el panel, para todos los que usan esta instalación — no se guarda por navegador.",
+    "settings_theme_dark": "Oscuro",
+    "settings_theme_light": "Claro",
     "settings_section_other_heading": "Todo lo demás",
     "settings_section_other_sub": "Estos ajustes no identifican la copia de seguridad en sí, así que cambiarlos nunca borra el historial ni inicia una nueva copia completa.",
     "settings_log_dir_label": "Directorio de registros:",

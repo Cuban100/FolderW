@@ -79,6 +79,20 @@ STATIC_VERSION = int(max(
 # there's no build/tag step in this project that could derive it automatically.
 APP_VERSION = "1.1.0"
 
+# Global display setting, same tier/pattern as LANGUAGE (translations/
+# __init__.py's current_language()) -- one THEME for the whole install,
+# not per-browser. 'dark' matches every existing install's actual
+# appearance before this setting existed (the CSS's own dark values were
+# the only ones ever shown, via prefers-color-scheme in practice), so an
+# unset THEME can't change how a current install looks.
+THEMES = ('dark', 'light')
+DEFAULT_THEME = 'dark'
+
+
+def current_theme():
+    theme = load_env_value('THEME')
+    return theme if theme in THEMES else DEFAULT_THEME
+
 
 def _global_template_context(request):
     """Starlette context processor -- runs for EVERY TemplateResponse
@@ -110,6 +124,7 @@ def _global_template_context(request):
         "t": t,
         "t_or_raw": t_or_raw,
         "lang": lang,
+        "theme": current_theme(),
         # Only 2 templates (index.html, settings.html) actually embed this
         # for their own client-side JS -- computed here anyway (cheap: a
         # dict already in memory, one json.dumps() of ~180 short strings)
@@ -125,11 +140,11 @@ logo = '/static/logo.png'
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"), context_processors=[_global_template_context])
 
 SESSION_MAX_AGE = 15 * 24 * 60 * 60  # 15 days
-# /set-language included: a low-sensitivity global display setting (same
-# tier as MONITOR/BACKUP_METHOD, not a security-relevant one), so the
-# footer's EN|ES switcher works even on the pre-login screen rather than
-# forcing a login first just to change the UI language.
-PUBLIC_PATHS = {"/login", "/set-language"}
+# /set-language, /set-theme included: low-sensitivity global display
+# settings (same tier as MONITOR/BACKUP_METHOD, not security-relevant),
+# so their switchers work even on the pre-login screen rather than
+# forcing a login first just to change the UI language/appearance.
+PUBLIC_PATHS = {"/login", "/set-language", "/set-theme"}
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
@@ -180,6 +195,22 @@ async def set_language(request: Request, lang: str = Form(...)):
     # straight to an arbitrary Referer could point off-site (a proxy or
     # browser extension can set/alter this header). Falls back to / if
     # there's no usable Referer at all.
+    target = "/"
+    referer = request.headers.get("referer")
+    if referer:
+        parsed = urlparse(referer)
+        if parsed.path:
+            target = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+    return RedirectResponse(url=target, status_code=303)
+
+@app.post("/set-theme")
+async def set_theme(request: Request, theme: str = Form(...)):
+    if theme not in THEMES:
+        theme = DEFAULT_THEME
+    save_env_values({"THEME": theme})
+    # Same referer-only redirect target as /set-language above -- never
+    # the raw header value, a redirect straight to an arbitrary Referer
+    # could point off-site.
     target = "/"
     referer = request.headers.get("referer")
     if referer:

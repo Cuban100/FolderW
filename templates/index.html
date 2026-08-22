@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ lang }}">
+<html lang="{{ lang }}" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
     <title>{{ t('dashboard_title') }}</title>
@@ -10,7 +10,7 @@
     <script src="/static/i18n.js?v={{ static_version }}"></script>
     <script src="/static/sidebar.js?v={{ static_version }}"></script>
     <style>
-        /* Theme variables (:root / prefers-color-scheme: dark) now live in
+        /* Theme variables (:root / [data-theme="dark"]) now live in
            /static/index.css, shared across every page. */
         * {
             box-sizing: border-box;
