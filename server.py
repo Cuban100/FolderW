@@ -77,7 +77,7 @@ STATIC_VERSION = int(max(
 
 # Shown in templates/_footer.html on every page. Bump by hand on releases --
 # there's no build/tag step in this project that could derive it automatically.
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.2"
 
 # Global display setting, same tier/pattern as LANGUAGE (translations/
 # __init__.py's current_language()) -- one THEME for the whole install,
