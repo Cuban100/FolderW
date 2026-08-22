@@ -24,7 +24,7 @@ TRANSLATIONS = {
     "sidebar_toggle": "Mostrar/ocultar barra lateral",
     "sidebar_nav_dashboard": "Panel",
     "sidebar_nav_backup_history": "Historial de copias",
-    "sidebar_nav_recovery_history": "Historial de restauraciones",
+    "sidebar_nav_recovery_history": "Recuperaciones",
     "sidebar_nav_statistics": "Estadísticas",
     "sidebar_nav_restore": "Restaurar",
     "sidebar_nav_find_file": "Buscar archivo",
