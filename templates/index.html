@@ -271,6 +271,19 @@
             .content {
                 padding: 16px;
             }
+            /* .content and .right-section are flex siblings of <body>
+               (row by default, see body's own rule above) -- confirmed
+               live: on a narrow screen that meant .right-section (the
+               Source Size/Settings panel) stayed squeezed into
+               whatever row space was left over instead of stacking
+               full-width below .content like the rest of the page
+               already does internally. */
+            body {
+                flex-direction: column;
+            }
+            .right-section {
+                max-width: 100%;
+            }
         }
 
 
