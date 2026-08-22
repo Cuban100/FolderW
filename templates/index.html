@@ -635,7 +635,7 @@
                    covering both rsync and rclone. #}
                 {% if cloud_sync_enabled %}
                 <p class="show" style="text-align: center; margin: 6px 0 0;">
-                    <span class="status-dot {{ 'green' if cloud_sync_running else '' }}" id="cloud-sync-banner-dot"></span>
+                    <span class="status-dot {{ 'green' if cloud_sync_running or cloud_sync_last_status == 'success' else '' }}" id="cloud-sync-banner-dot"></span>
                     <span id="cloud-sync-banner-text" style="color: var(--success-text);">{{ t('dashboard_cloud_sync_in_progress') if cloud_sync_running else t('dashboard_cloud_sync_banner_status', status=cloud_sync_last_display) }}</span>
                 </p>
                 {% endif %}
@@ -1068,7 +1068,7 @@
                 const bannerDot = document.getElementById('cloud-sync-banner-dot');
                 const bannerText = document.getElementById('cloud-sync-banner-text');
                 if (bannerDot && bannerText) {
-                    bannerDot.classList.toggle('green', !!data.cloud_sync_running);
+                    bannerDot.classList.toggle('green', !!data.cloud_sync_running || data.cloud_sync_last_status === 'success');
                     bannerText.textContent = data.cloud_sync_running
                         ? t('dashboard_cloud_sync_in_progress')
                         : t('dashboard_cloud_sync_banner_status', {status: data.cloud_sync_last_display || t('common_never')});

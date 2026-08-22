@@ -1727,6 +1727,7 @@ async def dashboard_stats():
         "last_session_files": stats["last_session_files"],
         "snapshot_count": stats["snapshot_count"],
         "cloud_sync_last_display": stats["cloud_sync_last_display"],
+        "cloud_sync_last_status": stats["cloud_sync_last_status"],
         "cloud_sync_last_transferred": stats["cloud_sync_last_transferred"],
         "cloud_sync_last_files": stats["cloud_sync_last_files"],
         "cloud_sync_last_bytes_display": stats["cloud_sync_last_bytes_display"],
