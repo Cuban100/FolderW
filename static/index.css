@@ -81,7 +81,7 @@ html.sidebar-collapsed .content {
    (previously index.html had this look while every other page used a
    plain-text, logo-less Tailwind sidebar — a real inconsistency). */
 .sidebar {
-    width: 250px;
+    width: 280px;
     background-color: #2b2b2b;
     color: white;
     padding: 20px;
@@ -245,7 +245,7 @@ html.sidebar-collapsed .content {
 }
 
 .content {
-    margin-left: 250px;
+    margin-left: 280px;
     box-sizing: border-box;
 }
 @media (max-width: 900px) {
