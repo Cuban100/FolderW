@@ -84,7 +84,7 @@ TRANSLATIONS = {
     "dashboard_last_cloud_sync": "Last Cloud Sync",
     "dashboard_cloud_sync_heading": "Cloud Sync",
     "dashboard_cloud_sync_in_progress": "Syncing to the cloud now…",
-    "dashboard_cloud_sync_files": "Files Transferred",
+    "dashboard_cloud_sync_files": "Files Changed",
     "dashboard_cloud_sync_data": "Data Transferred",
     "dashboard_cloud_sync_duration": "Duration",
     "dashboard_cloud_sync_speed": "Avg Speed",

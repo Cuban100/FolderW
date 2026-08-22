@@ -1752,11 +1752,25 @@ async def recovery_history(request: Request, page: int = 1):
     })
 
 
+def _cloud_sync_series_for_display():
+    # "Files" everywhere on the dashboard/Statistics means transferred +
+    # deleted combined -- same reasoning as cloud_backup.py's
+    # get_cloud_sync_dashboard_stats(): rclone reports them as distinct
+    # counters (a deletion moves no bytes, isn't a "transfer"), but a
+    # deletion-only sync showing files_transferred alone as 0 reads as
+    # "nothing happened" despite real work. get_cloud_sync_stats_series()
+    # itself stays raw/precise; only this display-facing wrapper combines.
+    series = get_cloud_sync_stats_series()
+    for run in series:
+        run["files_transferred"] = (run["files_transferred"] or 0) + (run.pop("files_deleted", 0) or 0)
+    return series
+
+
 @app.get("/statistics", response_class=HTMLResponse)
 async def statistics_page(request: Request):
     series = get_backup_stats_series()
     summary = get_backup_stats_summary()
-    cloud_sync_series = get_cloud_sync_stats_series()
+    cloud_sync_series = _cloud_sync_series_for_display()
     cloud_sync_summary = get_cloud_sync_stats_summary()
     return templates.TemplateResponse("statistics.html", {
         "request": request,
@@ -1796,7 +1810,7 @@ async def statistics_cloud_sync_refresh():
         summary_text += f" · {t('stats_cloud_summary_transferred', mb=round(summary['total_bytes_transferred'] / 1048576, 1))}"
     return JSONResponse({
         "has_runs": bool(summary["total_runs"]),
-        "series": get_cloud_sync_stats_series(),
+        "series": _cloud_sync_series_for_display(),
         "summary_text": summary_text,
     })
 

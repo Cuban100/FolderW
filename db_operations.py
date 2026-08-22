@@ -224,10 +224,23 @@ def create_all_tables(database):
                 bytes_transferred INTEGER,
                 duration_seconds REAL,
                 avg_speed_bps REAL,
-                error_message TEXT
+                error_message TEXT,
+                files_deleted INTEGER DEFAULT 0
             );
         ''')
         logger.info("Table 'cloud_sync_runs' created successfully.")
+
+        # Migration for installs where this table already existed before
+        # files_deleted was added -- CREATE TABLE IF NOT EXISTS above
+        # doesn't retroactively add columns to an existing table. First
+        # schema migration this project has needed; confirmed live: a
+        # deletion-only sync (source file removed, nothing to upload)
+        # recorded files_transferred=0, reading as "nothing happened"
+        # even though rclone genuinely deleted the file from the remote.
+        cursor.execute("PRAGMA table_info(cloud_sync_runs)")
+        if 'files_deleted' not in {row[1] for row in cursor.fetchall()}:
+            cursor.execute("ALTER TABLE cloud_sync_runs ADD COLUMN files_deleted INTEGER DEFAULT 0")
+            logger.info("Migrated cloud_sync_runs: added files_deleted column.")
 
         connection.commit()
         connection.close()
@@ -525,20 +538,28 @@ def list_restore_runs(limit, offset):
         logger.error(f"Error listing restore runs: {e}")
         return []
 
-def record_cloud_sync_run(remote, status, files_transferred=0, bytes_transferred=0, duration_seconds=0.0, avg_speed_bps=0.0, error_message=None):
+def record_cloud_sync_run(remote, status, files_transferred=0, bytes_transferred=0, duration_seconds=0.0, avg_speed_bps=0.0, error_message=None, files_deleted=0):
     """Log one sync_to_cloud() attempt -- success or failure -- so the
     dashboard's Cloud Sync section has real history to show instead of
     just the single CLOUD_SYNC_LAST_STATUS/TIME settings values (which
     only ever reflect the most recent attempt, with no record of what
     happened before it or how much data actually moved).
+
+    files_transferred/files_deleted stay separate here (rclone itself
+    reports them as distinct counters -- a deletion moves no bytes and
+    isn't a "transfer") even though the dashboard displays their sum as
+    one "Files" number -- confirmed live: a deletion-only sync (source
+    file removed, nothing to upload) recorded files_transferred=0,
+    reading as "nothing happened" despite rclone genuinely deleting the
+    file from the remote.
     """
     database = load_env_value('DATABASE')
     try:
         conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO cloud_sync_runs (timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO cloud_sync_runs (timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message, files_deleted)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             remote,
@@ -548,10 +569,11 @@ def record_cloud_sync_run(remote, status, files_transferred=0, bytes_transferred
             duration_seconds,
             avg_speed_bps,
             error_message,
+            files_deleted,
         ))
         conn.commit()
         conn.close()
-        logger.success(f"Recorded cloud sync run: {status} to {remote} ({files_transferred} file(s), {bytes_transferred} byte(s)).")
+        logger.success(f"Recorded cloud sync run: {status} to {remote} ({files_transferred} file(s) transferred, {files_deleted} deleted, {bytes_transferred} byte(s)).")
     except sqlite3.Error as e:
         logger.error(f"Error recording cloud sync run: {e}")
 
@@ -566,7 +588,7 @@ def list_cloud_sync_runs(limit=10):
         conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message
+            SELECT timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message, files_deleted
             FROM cloud_sync_runs ORDER BY id DESC LIMIT ?
         ''', (limit,))
         rows = cursor.fetchall()
@@ -581,6 +603,7 @@ def list_cloud_sync_runs(limit=10):
                 "duration_seconds": r[5],
                 "avg_speed_bps": r[6],
                 "error_message": r[7],
+                "files_deleted": r[8] or 0,
             }
             for r in rows
         ]
@@ -601,7 +624,7 @@ def get_cloud_sync_stats_series(limit=200):
         conn = sqlite3.connect(database, timeout=10.0)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT id, timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message
+            SELECT id, timestamp, remote, status, files_transferred, bytes_transferred, duration_seconds, avg_speed_bps, error_message, files_deleted
             FROM cloud_sync_runs ORDER BY id DESC LIMIT ?
         ''', (limit,))
         rows = cursor.fetchall()
@@ -618,6 +641,7 @@ def get_cloud_sync_stats_series(limit=200):
                 "duration_seconds": r[6],
                 "avg_speed_bps": r[7],
                 "error_message": r[8],
+                "files_deleted": r[9] or 0,
             }
             for r in rows
         ]

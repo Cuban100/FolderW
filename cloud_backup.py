@@ -651,6 +651,7 @@ def sync_to_cloud():
             duration_seconds=stats.get('elapsedTime', 0.0),
             avg_speed_bps=stats.get('speed', 0.0),
             error_message=message,
+            files_deleted=stats.get('deletes', 0),
         )
         return False, message
 
@@ -723,6 +724,7 @@ def sync_to_cloud():
             bytes_transferred=stats.get('bytes', 0),
             duration_seconds=stats.get('elapsedTime', 0.0),
             avg_speed_bps=stats.get('speed', 0.0),
+            files_deleted=stats.get('deletes', 0),
         )
         return True, message
     except OSError as e:
@@ -891,11 +893,18 @@ def get_cloud_sync_dashboard_stats():
             "cloud_sync_history": [],
         }
     last = runs[0]
+    # "Files" everywhere on the dashboard means transferred + deleted
+    # combined -- confirmed live: a deletion-only sync (source file
+    # removed, nothing to upload) showed files_transferred alone as 0,
+    # reading as "nothing happened" despite rclone genuinely deleting
+    # the file from the remote. The two stay separate columns in the DB
+    # (see db_operations.record_cloud_sync_run()) since rclone reports
+    # them as distinct counters; only the display combines them.
     history = [
         {
             "timestamp": run["timestamp"],
             "status": run["status"],
-            "files_transferred": run["files_transferred"],
+            "files_transferred": (run["files_transferred"] or 0) + (run["files_deleted"] or 0),
             "bytes_display": human_readable_size(run["bytes_transferred"] or 0),
             "duration_display": _format_duration_seconds(run["duration_seconds"]),
             "error_message": run["error_message"],
@@ -903,7 +912,7 @@ def get_cloud_sync_dashboard_stats():
         for run in runs
     ]
     return {
-        "cloud_sync_last_files": last["files_transferred"],
+        "cloud_sync_last_files": (last["files_transferred"] or 0) + (last["files_deleted"] or 0),
         "cloud_sync_last_bytes_display": human_readable_size(last["bytes_transferred"] or 0),
         "cloud_sync_last_duration_display": _format_duration_seconds(last["duration_seconds"]),
         "cloud_sync_last_speed_display": f"{human_readable_size(last['avg_speed_bps'] or 0)}/s",
