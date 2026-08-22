@@ -1,5 +1,6 @@
 import os
 import subprocess
+import threading
 from db_operations import load_env_value
 from notifications import notify
 from translations import t
@@ -52,7 +53,7 @@ def run_hook_script(path, label):
         return False, message
 
 
-def run_backup_script_with_hooks(*subprocess_args, **subprocess_kwargs):
+def run_backup_script_with_hooks(*subprocess_args, concurrent_fn=None, **subprocess_kwargs):
     """Wraps one backup-script invocation (rsync_incremental.py or
     rsync_differential.py) with the user's optional PRE_BACKUP_SCRIPT /
     POST_BACKUP_SCRIPT settings. Shared by main_backup.py (scheduled and
@@ -70,6 +71,24 @@ def run_backup_script_with_hooks(*subprocess_args, **subprocess_kwargs):
     stopped for the backup) -- a failed backup shouldn't leave that
     service down indefinitely just because the backup didn't succeed.
 
+    concurrent_fn: optional zero-arg callable run in a background thread
+    alongside the backup subprocess (rclone's cloud sync, in practice --
+    it reads SRC_DIR independently of rsync, so it doesn't need to wait
+    for rsync to finish). Deliberately started AFTER the pre-script and
+    joined BEFORE the post-script, not around them: both hooks can
+    change SRC_DIR's contents (a pre-script dumping a database, a post-
+    script cleaning that dump up or restarting a stopped service), so
+    concurrent_fn only gets the window where SRC_DIR is actually in its
+    finished, stable state -- the same window rsync itself gets. The
+    thread is always joined in `finally`, even if the backup subprocess
+    raises, so a slow cloud sync can never outlive this function the way
+    a detached background process could (confirmed live earlier this
+    session: an orphaned rclone process kept running for hours after its
+    Python wrapper was gone, silently blocking every later sync attempt).
+    When concurrent_fn is given, returns (subprocess_result,
+    concurrent_fn_result); otherwise just subprocess_result, unchanged
+    from before.
+
     *subprocess_args/**subprocess_kwargs are passed straight through to
     the actual subprocess.run() of the backup script -- each caller
     already builds a slightly different call (rsync_event_handler.py
@@ -78,6 +97,8 @@ def run_backup_script_with_hooks(*subprocess_args, **subprocess_kwargs):
     """
     pre_script = load_env_value('PRE_BACKUP_SCRIPT')
     post_script = load_env_value('POST_BACKUP_SCRIPT')
+    concurrent_result = [None]
+    thread = None
 
     # The pre-script check/raise is INSIDE the try, not before it --
     # found live, the hard way: post-script is supposed to run
@@ -92,7 +113,15 @@ def run_backup_script_with_hooks(*subprocess_args, **subprocess_kwargs):
             if not success:
                 logger.error("Pre-backup script failed -- aborting this backup run.")
                 raise subprocess.CalledProcessError(1, pre_script)
-        return subprocess.run(*subprocess_args, **subprocess_kwargs)
+        if concurrent_fn is not None:
+            def _run_concurrent():
+                concurrent_result[0] = concurrent_fn()
+            thread = threading.Thread(target=_run_concurrent, daemon=True)
+            thread.start()
+        result = subprocess.run(*subprocess_args, **subprocess_kwargs)
+        return (result, concurrent_result[0]) if concurrent_fn is not None else result
     finally:
+        if thread is not None:
+            thread.join()
         if post_script:
             run_hook_script(post_script, 'Post-backup')

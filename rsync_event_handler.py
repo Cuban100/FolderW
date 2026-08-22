@@ -100,9 +100,12 @@ def run_backup_script():
         # honor the same BACKUP_METHOD setting.
         script_name = "rsync_incremental.py" if load_env_value('BACKUP_METHOD') == 'incremental' else "rsync_differential.py"
         script_path = os.path.join(os.path.dirname(__file__), script_name)
-        result = run_backup_script_with_hooks([python_path, script_path], check=True, capture_output=True, text=True)
+        result, cloud_sync_result = run_backup_script_with_hooks(
+            [python_path, script_path], check=True, capture_output=True, text=True,
+            concurrent_fn=sync_to_cloud,
+        )
         logger.info(f"Backup script output: {result.stdout}")
-        notify_backup_complete(sync_to_cloud())
+        notify_backup_complete(cloud_sync_result)
     except subprocess.CalledProcessError as e:
         logger.error(f"Backup script failed with error: {e.stderr}")
         notify("FolderW: Backup Failed", f"A backup run failed (exit code {e.returncode}). Check the FolderW logs for details.", level='critical')

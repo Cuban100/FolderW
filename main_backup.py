@@ -24,9 +24,12 @@ def run_regular_backup():
     script_name = _backup_script_name()
     logger.info(f"Running regular backup with {script_name}")
     try:
-        result = run_backup_script_with_hooks([sys.executable, os.path.join(BASE_DIR, script_name)], check=True)
+        result, cloud_sync_result = run_backup_script_with_hooks(
+            [sys.executable, os.path.join(BASE_DIR, script_name)], check=True,
+            concurrent_fn=sync_to_cloud,
+        )
         logger.info(f"Backup result: {result}")
-        notify_backup_complete(sync_to_cloud())
+        notify_backup_complete(cloud_sync_result)
     except subprocess.CalledProcessError as e:
         # Centralized here rather than in rsync_incremental.py/rsync_
         # differential.py themselves so every failure mode is covered with
